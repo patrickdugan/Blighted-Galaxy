@@ -56,6 +56,21 @@ cargo test --all-targets
 
 The benchmark prints reference values for Hawking radiation, a near-light-speed 2 kg kinetic projectile, time dilation and orbital energy conservation. See [SI Physics Workpaper](workpapers/physics/SI_PHYSICS.md) for approximations and scope.
 
+## Strong-field geodesics, causal observations and self-gravitating debris
+
+The BG-PHY-04 physics milestone adds a **Schwarzschild geodesic simulator** for test particles orbiting nonspinning black holes, a recorded causal worldline solver for delayed observations, and a symmetric pair-force 2D SPH-like debris simulation with central-body recoil.
+
+~~~sh
+cargo run --release --bin strongfield_lab
+cargo run --release --bin strongfield_bench
+~~~
+
+The graphical lab has four modes: stable circular orbit, precessing eccentric orbit, radial infall toward a Schwarzschild coordinate-chart cutoff, and self-gravitating white-dwarf disruption. Switch between them with 1–4; Space pauses, Q/E changes simulation speed, mouse wheel or Z/X zooms, and R resets. It displays proper/coordinate time, geodesic energy residual, and fluid mass/momentum diagnostics.
+
+The **default combat executable** now obtains observed positions from bounded recorded histories. It withholds targeted AI fire until causal data is available, rather than extrapolating nonexistent observations.
+
+Scientific limitations: Schwarzschild geometry describes a nonrotating isolated central mass with negligible test-particle backreaction. The 2D isothermal fluid is a toy proxy for degenerate white-dwarf matter and does not model nuclear reactions or radiation. See [BG-PHY-04 workpaper](workpapers/physics/STRONG_FIELD_CAUSAL_SPH.md) for the equations, assumptions, and acceptance tests.
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.

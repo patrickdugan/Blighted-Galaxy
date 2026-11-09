@@ -431,6 +431,13 @@ mod tests {
         let mut game=SiJoust::new();
         game.opponent.pos_m=game.player.pos_m+V2::new(3e6,0.0);
         game.opponent.vel_m_s=V2::default();
+        // Reset recorded past after test-fixture placement. Real gameplay
+        // disallows discontinuous teleports between causal samples.
+        game.opponent_history=WorldlineHistory::new(8192);
+        game.opponent_history.push(WorldlineSample {
+            time_s:0.0,pos_m:game.opponent.pos_m,
+            vel_m_s:game.opponent.vel_m_s,
+        }).unwrap();
         let shield=game.opponent.shield_energy_j;
         for _ in 0..20 {
             game.step(Seconds(1.0/120.0),Control{

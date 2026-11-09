@@ -38,8 +38,14 @@ impl WorldlineHistory {
             !sample.pos_m.x.is_finite()||!sample.pos_m.y.is_finite()||
             !sample.vel_m_s.x.is_finite()||!sample.vel_m_s.y.is_finite()||
             sample.vel_m_s.len()>=C_SI {return Err("non-finite or noncausal sample");}
-        if self.samples.last().is_some_and(|s|sample.time_s<=s.time_s) {
-            return Err("worldline time must increase strictly");
+        if let Some(last)=self.samples.last() {
+            if sample.time_s<=last.time_s {
+                return Err("worldline time must increase strictly");
+            }
+            if (sample.pos_m-last.pos_m).len() >=
+                C_SI*(sample.time_s-last.time_s) {
+                return Err("worldline segment must remain subluminal");
+            }
         }
         self.samples.push(sample);
         if self.samples.len()>self.limit {self.samples.remove(0);}
@@ -186,6 +192,13 @@ mod tests {
         history.push(sample(1.0,0.0)).unwrap();
         let o=history.observe(V2::default(),1.0).unwrap();
         check(o.emitted_at_s,1.0,1e-12);
+    }
+    #[test]
+    fn teleportation_with_valid_endpoint_velocities_is_rejected() {
+        let mut history=WorldlineHistory::new(10);
+        history.push(sample(0.0,0.0)).unwrap();
+        assert!(history.push(sample(1.0,1.01*C_SI)).is_err());
+        assert_eq!(history.len(),1);
     }
     #[test]
     fn emitter_in_future_is_unavailable() {
