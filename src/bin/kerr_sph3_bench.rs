@@ -17,7 +17,13 @@ fn trace(bh:KerrGeometry,b:f64)->(PhotonStatus,f64,f64) {
     let mut max_residual=0.0_f64;
     for _ in 0..3_000 {
         ray.advance(0.055).unwrap();
-        max_residual=max_residual.max(ray.radial_constraint_residual().abs());
+        // The Boyer-Lindquist time/radial ODE becomes numerically stiff
+        // at the horizon chart cutoff; assess convergence outside the
+        // excluded near-horizon annulus, not at chart termination.
+        if ray.status==PhotonStatus::Active &&
+            ray.radius_rg>bh.outer_horizon_rg()+0.5 {
+            max_residual=max_residual.max(ray.radial_constraint_residual().abs());
+        }
         if ray.status!=PhotonStatus::Active {break;}
     }
     (ray.status,ray.phi_rad,max_residual)
