@@ -400,3 +400,6 @@ pub mod white_dwarf;
 
 // BG-PHY-06: non-equatorial Kerr null-ray camera.
 pub mod kerr_camera;
+
+// BG-PHY-07: curved Kerr optical acquisition of recorded orbital combatants.
+pub mod kerr_optics;

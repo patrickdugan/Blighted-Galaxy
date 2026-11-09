@@ -287,6 +287,105 @@ impl KerrCamera {
         image.pixels=pixels;image
     }
 }
+/// One sample of a past-directed equatorial Kerr photon path. The time offset
+/// is in seconds relative to the observer's Boyer-Lindquist coordinate time;
+/// it is zero at the observer and becomes negative toward the emission event.
+#[derive(Debug,Clone,Copy)]
+pub struct EquatorialNullSample {
+    pub t_offset_s:f64,
+    pub radius_rg:f64,
+    pub phi_rad:f64,
+    /// Cartesian chart visualization coordinates, centred on the hole.
+    pub chart_xy_m:crate::V2,
+}
+#[derive(Debug,Clone,Copy,PartialEq,Eq)]
+pub enum NullPathEnd {
+    InnerRadius,
+    Escaped,
+    HorizonChartCutoff,
+    StepLimit,
+}
+#[derive(Debug)]
+pub struct EquatorialNullPath {
+    pub samples:Vec<EquatorialNullSample>,
+    pub end:NullPathEnd,
+    pub impact_alpha_rg:f64,
+    pub max_radial_residual:f64,
+    pub max_polar_residual:f64,
+}
+impl KerrCamera {
+    /// A ray through the equatorial plane, launched from the same past-directed
+    /// ZAMO tetrad as the visual camera. Unlike render_rgba, its dense,
+    /// time-labelled samples support intersections with *recorded* moving
+    /// source histories. An optically thin/evacuated orbit is assumed; the
+    /// opaque illustrative disc of render_rgba is ignored by this diagnostic.
+    ///
+    /// The path stops at a user-defined radius, before the horizon, or at the
+    /// camera's outgoing radius. Samples are in the black hole's BL chart,
+    /// with a Euclidean x/y mapping used only to visualize chart coordinates.
+    pub fn equatorial_null_path(
+        &self,alpha_rg:f64,inner_stop_rg:f64,max_steps:usize,
+    )->Option<EquatorialNullPath> {
+        if (self.inclination_rad-std::f64::consts::FRAC_PI_2).abs()>1e-8 ||
+            !alpha_rg.is_finite()||!inner_stop_rg.is_finite()||
+            inner_stop_rg<=self.geometry.outer_horizon_rg()+0.3||
+            inner_stop_rg>=self.observer_rg||max_steps==0 {
+            return None;
+        }
+        let mut ray=self.launch(alpha_rg,0.0)?;
+        let rg=self.geometry.r_g_m;
+        let sec_per_unit=rg/crate::physics::C_SI;
+        let sample=|ray:&KerrPixelRay|EquatorialNullSample {
+            t_offset_s:ray.t_geom*sec_per_unit,
+            radius_rg:ray.radius_rg(),
+            phi_rad:ray.phi,
+            chart_xy_m:crate::V2::from_angle(ray.phi)*ray.radius_rg()*rg,
+        };
+        let mut samples=vec![sample(&ray)];
+        let cutoff=self.geometry.outer_horizon_rg()+HORIZON_MARGIN;
+        let mut end=NullPathEnd::StepLimit;
+        let mut max_radial_residual=0.0_f64;
+        let mut max_polar_residual=0.0_f64;
+        for _ in 0..max_steps {
+            if ray.radius_rg()<=inner_stop_rg {
+                end=NullPathEnd::InnerRadius;break;
+            }
+            if ray.radius_rg()<=cutoff {
+                end=NullPathEnd::HorizonChartCutoff;break;
+            }
+            if ray.u<=1.0/self.observer_rg && ray.du<0.0 {
+                end=NullPathEnd::Escaped;break;
+            }
+            // Limit each chord to <=0.65 rg of radial travel near sources,
+            // while keeping the existing Kerr camera's Mino-time cap.
+            let mut h=MAX_H.min(
+                0.65*ray.u*ray.u/ray.du.abs().max(1e-12));
+            if ray.du>0.0 {
+                h=h.min(0.28*(1.0/cutoff-ray.u)/ray.du.max(1e-12));
+            }
+            if !h.is_finite()||h<=1e-13 {
+                end=NullPathEnd::HorizonChartCutoff;break;
+            }
+            let next=self.rk4(&ray,ray.state(),h);
+            if !next.iter().all(|x|x.is_finite())||
+                next[0]>=1.0/cutoff||next[0]<=0.0 {
+                end=NullPathEnd::HorizonChartCutoff;break;
+            }
+            ray.set_state(next);
+            let (er,ep)=ray.invariant_errors(self.geometry.spin);
+            if ray.radius_rg()>self.geometry.outer_horizon_rg()+0.6 {
+                max_radial_residual=max_radial_residual.max(er.abs());
+                max_polar_residual=max_polar_residual.max(ep.abs());
+            }
+            samples.push(sample(&ray));
+        }
+        Some(EquatorialNullPath{
+            samples,end,impact_alpha_rg:alpha_rg,
+            max_radial_residual,max_polar_residual,
+        })
+    }
+}
+
 #[derive(Debug)]
 pub struct CameraImage {
     pub width:u16,
