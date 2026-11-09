@@ -384,3 +384,8 @@ pub mod physics;
 
 // SI-to-gameplay adapter, relativistic combat and tidal-breakup demo.
 pub mod si_bridge;
+
+// Schwarzschild geodesics, bounded causal histories and symmetric 2D SPH debris.
+pub mod schwarzschild;
+pub mod causal;
+pub mod debris;
