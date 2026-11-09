@@ -95,7 +95,7 @@ The new white-dwarf module solves Newtonian hydrostatic structure with the fully
 ~~~sh
 cargo run --release --bin kerr_camera_lab
 cargo run --release --bin white_dwarf_lab
-cargo run --release --bin kerr_camera_bench -- --output kerr-camera.ppm
+cargo run --release --bin kerr_camera_bench -- --output kerr-camera.png
 cargo run --release --bin white_dwarf_bench -- --output wd-mass-radius.csv
 ~~~
 

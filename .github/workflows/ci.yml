@@ -15,14 +15,14 @@ jobs:
       - run: cargo run --bin physics_bench
       - run: cargo run --bin strongfield_bench
       - run: cargo run --bin kerr_sph3_bench
-      - run: cargo run --release --bin kerr_camera_bench -- --output kerr-camera-smoke.ppm
+      - run: cargo run --release --bin kerr_camera_bench -- --output kerr-camera-smoke.png
       - run: cargo run --release --bin white_dwarf_bench -- --output wd-mass-radius.csv
       - name: Upload physics reference outputs
         uses: actions/upload-artifact@v4
         with:
           name: bg-phy06-physics-reference
           path: |
-            kerr-camera-smoke.ppm
+            kerr-camera-smoke.png
             wd-mass-radius.csv
           if-no-files-found: error
           retention-days: 30

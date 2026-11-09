@@ -42,11 +42,11 @@ For numerical stability at the observer's finite large radius, the integrator us
     (du/dlambda)² = F(u)
     d²u/dlambda² = (a²-b²-q)u+3[(b-a)²+q]u²-2a²q u³.
 
-The polar equation is
+The polar variable used by the integrator is mu=cos(theta). Its polynomial and second-order equation are
 
-    (dtheta/dlambda)² = Theta(theta)
-    d²theta/dlambda² =
-        -a² sin(theta)cos(theta)+b² cos(theta)/sin³(theta).
+    G(mu) = q+(a²-b²-q)mu²-a²mu⁴
+    (dmu/dlambda)² = G(mu)
+    d²mu/dlambda² = (a²-b²-q)mu-2a²mu³.
 
 The azimuth and coordinate-time rates carry a negative sign for past-directed tracing:
 
@@ -54,7 +54,7 @@ The azimuth and coordinate-time rates carry a negative sign for past-directed tr
     dphi/dlambda = -[a P/Delta+b/sin²(theta)-a]
     dt/dlambda = -[(r²+a²)P/Delta+a(b-a sin²(theta))].
 
-A fourth-order Runge–Kutta integrator advances six quantities (u,u',theta,theta',phi,t). Radial and polar constraint errors are measured, with a reduced step approaching the Boyer–Lindquist horizon cutoff. Polar coordinate reflection is used at the axis. This is a numerical chart treatment, pending a regular tetrad implementation for trajectories through a pole.
+A fourth-order Runge–Kutta integrator advances six quantities (u,u',mu,mu',phi,t). Radial and polar polynomial constraint errors are measured, with a reduced step approaching the Boyer–Lindquist horizon cutoff. Mu removes the polar singularity from the polar ODE itself. The azimuth rate still uses a regularized 1/sin²(theta) denominator near the axis, with future validation needed for genuinely pole-crossing rays.
 
 The rays terminate at the horizon-coordinate cutoff, at the observer radius after scattering, or on crossing an opaque equatorial thin disc between the spin-appropriate ISCO and 28 r_g. The disc illustrates gravitational redshift and circular geodesic Doppler factors through
 
@@ -150,10 +150,10 @@ The new headless programs use no graphics display:
 
 Optional generated outputs:
 
-    cargo run --release --bin kerr_camera_bench -- --output kerr-camera.ppm
+    cargo run --release --bin kerr_camera_bench -- --output kerr-camera.png
     cargo run --release --bin white_dwarf_bench -- --output wd-mass-radius.csv
 
-CI packages a small PPM Kerr camera image and a white-dwarf mass–radius CSV as build artifacts, as well as the Windows game binaries. All generated camera colors are explicitly synthetic; the nonlinear ray paths supply the physically derived part of the image.
+CI packages a small PNG Kerr camera image and a white-dwarf mass–radius CSV as build artifacts, as well as the Windows game binaries. All generated camera colors are explicitly synthetic; the nonlinear ray paths supply the physically derived part of the image.
 
 ## 6. Follow-on implementation questions
 
