@@ -1,413 +1,313 @@
-use blighted_galaxy::{
-    acceleration_at, scatter_swarm, step_bodies, step_swarm, swept_circle_hit, tidal_ratio,
-    Body, BodyKind, Duelist, HawkingBomb, SwarmNode, V2,
+//! Main executable: SI-driven combat and tidal encounter lab.
+ //! Legacy normalized prototype remains available via --bin arcade_legacy.
+use blighted_galaxy::physics::{AU_M, C_SI, SOLAR_MASS_KG};
+use blighted_galaxy::si_bridge::{
+    CameraMeters, Control, Metres, Seconds, SiJoust, SiTidalEncounter,
 };
+use blighted_galaxy::V2;
 use macroquad::prelude::*;
-use std::f64::consts::{PI, TAU};
 
-const STEP: f64 = 1.0 / 120.0;
-const MAX_SPARKS: usize = 8_000;
-
-fn window_conf() -> Conf {
+fn config()->Conf {
     Conf {
-        window_title: "Blighted Galaxy: recovered physics sandbox".to_string(),
-        window_width: 1600,
-        window_height: 900,
-        high_dpi: true,
+        window_title:"Blighted Galaxy • SI-Driven Intercept".into(),
+        window_width:1600,window_height:950,high_dpi:true,
         ..Default::default()
     }
 }
-
-#[derive(Clone, Copy)]
-struct Bolt {
-    pos: V2,
-    vel: V2,
-    life: f64,
-    friendly: bool,
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Mode { Intercept, Tidal }
+struct Effect {
+    pos_m:V2,
+    start_s:f64,
+    magnitude:f64,
+    tone:Color,
 }
-
-#[derive(Clone, Copy)]
-struct Spark {
-    pos: V2,
-    vel: V2,
-    life: f32,
-    original_life: f32,
-    radius: f32,
-    tint: Color,
-}
-
 struct Game {
-    bodies: Vec<Body>,
-    sheared: Vec<bool>,
-    player: Duelist,
-    opponent: Duelist,
-    bolts: Vec<Bolt>,
-    bombs: Vec<HawkingBomb>,
-    swarm: Vec<SwarmNode>,
-    sparks: Vec<Spark>,
-    time: f64,
-    accumulator: f64,
-    camera: V2,
-    zoom: f32,
-    player_cooldown: f64,
-    opponent_cooldown: f64,
-    punch_cooldown: f64,
-    last_event: &'static str,
+    mode:Mode,
+    intercept:SiJoust,
+    tidal:SiTidalEncounter,
+    camera:CameraMeters,
+    sim_rate:f64,
+    accumulator:f64,
+    manual_aim:bool,
+    facing_rad:f64,
+    effects:Vec<Effect>,
+    displayed_latest_time_s:f64,
 }
-
+const DELTA:f64=1.0/120.0;
+const TIDAL_STEP:f64=0.10;
 impl Game {
-    fn new() -> Self {
-        let bodies = vec![
-            Body::new(BodyKind::Star, V2::new(-200.0, -170.0), V2::new(0.0, 0.0), 70_000.0, 76.0),
-            Body::new(BodyKind::BlackHole, V2::new(650.0, -270.0), V2::new(-2.0, 8.0), 360_000.0, 30.0),
-            Body::new(BodyKind::WhiteDwarf, V2::new(870.0, -180.0), V2::new(-12.0, -25.0), 21_000.0, 24.0),
-            Body::new(BodyKind::NeutronStar, V2::new(-710.0, 340.0), V2::new(3.0, -6.0), 31_000.0, 13.0),
-        ];
-        Self {
-            sheared: vec![false; bodies.len()],
-            bodies,
-            player: Duelist::new(V2::new(-240.0, 160.0), -0.3),
-            opponent: Duelist::new(V2::new(235.0, 105.0), PI),
-            bolts: Vec::new(),
-            bombs: Vec::new(),
-            swarm: scatter_swarm(V2::new(385.0, 40.0), 1300, 0xB11947, 195.0),
-            sparks: Vec::new(),
-            time: 0.0,
-            accumulator: 0.0,
-            camera: V2::new(-180.0, 80.0),
-            zoom: 0.85,
-            player_cooldown: 0.0,
-            opponent_cooldown: 1.0,
-            punch_cooldown: 0.0,
-            last_event: "Swarm front detected",
+    fn new(mode:Mode)->Self {
+        let (center,scale)=match mode {
+            Mode::Intercept=>(V2::new(AU_M,0.0),Metres(550_000.0)),
+            Mode::Tidal=>(V2::default(),Metres(350_000.0)),
+        };
+        Self {mode,intercept:SiJoust::new(),tidal:SiTidalEncounter::new(),
+            camera:CameraMeters::new(center,scale),
+            sim_rate:1.0,accumulator:0.0,manual_aim:false,
+            facing_rad:0.0,effects:Vec::new(),displayed_latest_time_s:-1.0}
+    }
+    fn screen(&self,pos:V2)->Vec2 {
+        let p=self.camera.screen_of(pos,screen_width() as f64,screen_height() as f64);
+        vec2(p.x as f32,p.y as f32)
+    }
+    fn current_time(&self)->f64 {
+        match self.mode {
+            Mode::Intercept=>self.intercept.time_s,
+            Mode::Tidal=>self.tidal.time_s,
         }
     }
-
-    fn screen(&self, world: V2) -> Vec2 {
-        vec2(
-            (world.x - self.camera.x) as f32 * self.zoom + screen_width() * 0.5,
-            (world.y - self.camera.y) as f32 * self.zoom + screen_height() * 0.5,
-        )
-    }
-
-    fn burst(&mut self, center: V2, count: usize, tint: Color, max_speed: f32) {
-        for _ in 0..count {
-            let angle: f32 = macroquad::rand::gen_range(0.0, std::f32::consts::TAU);
-            let speed: f32 = macroquad::rand::gen_range(0.04, 1.0) * max_speed;
-            let life: f32 = macroquad::rand::gen_range(0.6, 3.2);
-            let vel = V2::new((angle.cos() * speed) as f64, (angle.sin() * speed) as f64);
-            self.sparks.push(Spark {
-                pos: center, vel, life, original_life: life,
-                radius: macroquad::rand::gen_range(0.6, 3.0), tint,
-            });
+    fn input(&mut self) {
+        if is_key_pressed(KeyCode::Key1) { *self=Self::new(Mode::Intercept); }
+        if is_key_pressed(KeyCode::Key2) { *self=Self::new(Mode::Tidal); }
+        if is_key_pressed(KeyCode::R) {
+            let mode=self.mode;*self=Self::new(mode);
         }
-        if self.sparks.len() > MAX_SPARKS {
-            let excess = self.sparks.len() - MAX_SPARKS;
-            self.sparks.drain(0..excess);
-        }
-    }
-
-    fn fire(&mut self, friendly: bool) {
-        let pilot = if friendly { self.player } else { self.opponent };
-        let heading = pilot.heading();
-        self.bolts.push(Bolt {
-            pos: pilot.pos + heading * 24.0,
-            vel: pilot.vel + heading * 690.0,
-            life: 2.4,
-            friendly,
-        });
-        if friendly { self.player_cooldown = 0.14; }
-        else { self.opponent_cooldown = 0.86; }
-    }
-
-    fn step(&mut self, dt: f64) {
-        self.time += dt;
-        self.player_cooldown = (self.player_cooldown - dt).max(0.0);
-        self.opponent_cooldown = (self.opponent_cooldown - dt).max(0.0);
-        self.punch_cooldown = (self.punch_cooldown - dt).max(0.0);
-
-        let player_before = self.player.pos;
-        let opponent_before = self.opponent.pos;
-
-        if is_key_down(KeyCode::A) { self.player.angle -= 2.8 * dt; }
-        if is_key_down(KeyCode::D) { self.player.angle += 2.8 * dt; }
-        let thrust = if is_key_down(KeyCode::W) { 155.0 }
-            else if is_key_down(KeyCode::S) { -85.0 } else { 0.0 };
-
-        step_bodies(&mut self.bodies, dt);
-        let player_g = acceleration_at(self.player.pos, &self.bodies, None);
-        self.player.tick(thrust, player_g, dt);
-        self.player.vel = self.player.vel * 0.9999;
-
-        if self.opponent.hp > 0.0 {
-            let to_player = self.player.pos - self.opponent.pos;
-            let desired = to_player.y.atan2(to_player.x);
-            let delta = (desired - self.opponent.angle + PI).rem_euclid(TAU) - PI;
-            self.opponent.angle += delta.clamp(-1.7 * dt, 1.7 * dt);
-            let enemy_g = acceleration_at(self.opponent.pos, &self.bodies, None);
-            let enemy_thrust = if to_player.len() > 170.0 { 88.0 } else { -25.0 };
-            self.opponent.tick(enemy_thrust, enemy_g, dt);
-            if self.opponent_cooldown <= 0.0 && to_player.len() < 860.0 {
-                self.fire(false);
-            }
-        }
-
-        if is_key_down(KeyCode::Space) && self.player_cooldown <= 0.0 {
-            self.fire(true);
-        }
-        if is_key_pressed(KeyCode::E) && self.punch_cooldown <= 0.0 {
-            self.punch_cooldown = 0.55;
-            let impact = self.player.pos + self.player.heading() * 34.0;
-            if self.opponent.hp > 0.0 &&
-                self.player.punch_hitbox().overlaps(self.opponent.box_hitbox()) {
-                self.opponent.hp -= 20.0;
-                self.opponent.vel += self.player.heading() * 85.0;
-                self.burst(impact, 65, SKYBLUE, 130.0);
-                self.last_event = "Transhuman contact strike";
+        if is_key_pressed(KeyCode::Q) {self.sim_rate=(self.sim_rate/2.0).max(0.125);}
+        if is_key_pressed(KeyCode::E) {self.sim_rate=(self.sim_rate*2.0).min(64.0);}
+        if is_key_pressed(KeyCode::M) {self.manual_aim=!self.manual_aim;}
+        let (_,scroll)=mouse_wheel();
+        if scroll!=0.0 {self.camera.zoom((1.0+scroll as f64*0.1).clamp(0.2,3.0));}
+        if is_key_down(KeyCode::X) {self.camera.zoom(1.03);}
+        if is_key_down(KeyCode::Z) {self.camera.zoom(1.0/1.03);}
+        if self.mode==Mode::Intercept {
+            if self.manual_aim {
+                if is_key_down(KeyCode::A) {self.facing_rad-=0.045;}
+                if is_key_down(KeyCode::D) {self.facing_rad+=0.045;}
             } else {
-                self.burst(impact, 12, SKYBLUE, 60.0);
+                let (mx,my)=mouse_position();
+                let cursor=self.camera.world_of(V2::new(mx as f64,my as f64),
+                    screen_width() as f64,screen_height() as f64);
+                let toward=cursor-self.intercept.player.pos_m;
+                if toward.len()>0.0 {self.facing_rad=toward.y.atan2(toward.x);}
             }
         }
-        if is_key_pressed(KeyCode::B) {
-            let heading = self.player.heading();
-            self.bombs.push(HawkingBomb::new(
-                self.player.pos + heading * 46.0,
-                self.player.vel + heading * 150.0,
-                1.6,
-                0.18,
-            ));
-            self.last_event = "Kugelblitz payload released";
-        }
-        if is_key_pressed(KeyCode::G) {
-            self.swarm = scatter_swarm(self.player.pos + self.player.heading() * 160.0,
-                1300, self.time.to_bits(), 175.0);
-            self.last_event = "Nanite swarm scattered";
-        }
-
-        let mut impacts = Vec::new();
-        let mut hit_player = 0.0;
-        let mut hit_opponent = 0.0;
-        for bolt in &mut self.bolts {
-            let previous = bolt.pos;
-            bolt.pos += bolt.vel * dt;
-            bolt.life -= dt;
-            if bolt.friendly && self.opponent.hp > 0.0 &&
-                swept_circle_hit(previous, bolt.pos, 3.0,
-                    opponent_before, self.opponent.pos, self.opponent.radius).is_some() {
-                hit_opponent += 8.0;
-                bolt.life = 0.0;
-                impacts.push(bolt.pos);
-            } else if !bolt.friendly &&
-                swept_circle_hit(previous, bolt.pos, 3.0,
-                    player_before, self.player.pos, self.player.radius).is_some() {
-                hit_player += 6.0;
-                bolt.life = 0.0;
-                impacts.push(bolt.pos);
+    }
+    fn advance(&mut self,real_dt:f64) {
+        let step=if self.mode==Mode::Intercept {DELTA} else {TIDAL_STEP};
+        self.accumulator=(self.accumulator+real_dt.min(0.05)*self.sim_rate).min(8.0);
+        let mut cycles=0;
+        while self.accumulator>=step && cycles<400 {
+            match self.mode {
+                Mode::Intercept=>{
+                    let thrust=if is_key_down(KeyCode::W) {0.02*C_SI}
+                        else if is_key_down(KeyCode::S) {-0.01*C_SI} else {0.0};
+                    self.intercept.step(Seconds(step),Control {
+                        player_thrust_m_s2:thrust,
+                        player_facing_rad:self.facing_rad,
+                        fire_player:is_key_down(KeyCode::Space),
+                    });
+                }
+                Mode::Tidal=>self.tidal.step(Seconds(step)),
             }
+            self.accumulator-=step;
+            cycles+=1;
         }
-        self.bolts.retain(|bolt| bolt.life > 0.0);
-        self.player.hp -= hit_player;
-        self.opponent.hp -= hit_opponent;
-        for pos in impacts { self.burst(pos, 18, PURPLE, 120.0); }
-
-        let mut detonations = Vec::new();
-        for bomb in &mut self.bombs {
-            if bomb.step(&self.bodies, dt) { detonations.push(bomb.pos); }
+        if self.mode==Mode::Intercept {
+            for evt in self.intercept.events.iter().filter(|x|x.time_s>self.displayed_latest_time_s) {
+                self.effects.push(Effect{
+                    pos_m:evt.pos_m,start_s:evt.time_s,
+                    magnitude:evt.energy_j.0/1e17,
+                    tone:if evt.target_is_player {RED} else {SKYBLUE},
+                });
+            }
+            if let Some(last)=self.intercept.events.last() {
+                self.displayed_latest_time_s=last.time_s;
+            }
+            let camera_target=(self.intercept.player.pos_m+self.intercept.opponent.pos_m)*0.5;
+            self.camera.center_m+=(camera_target-self.camera.center_m)*0.08;
+        } else {
+            self.camera.center_m+=(self.tidal.black_hole.pos_m-self.camera.center_m)*0.06;
         }
-        self.bombs.retain(|bomb| !bomb.detonated);
-        for location in detonations {
-            self.burst(location, 1050, ORANGE, 540.0);
-            self.last_event = "Hawking endpoint flash";
-            for pilot in [&mut self.player, &mut self.opponent] {
-                let offset = pilot.pos - location;
-                let range = offset.len();
-                if range < 280.0 {
-                    pilot.hp -= (280.0 - range) * 0.16;
-                    pilot.vel += offset.normalized() * 170.0;
+        let now=self.current_time();
+        self.effects.retain(|e|now-e.start_s<2.4);
+    }
+    fn stars(&self) {
+        for i in 0..370_u32 {
+            let x=((i as i64*2207+3181)%8000) as f32/8000.0*screen_width();
+            let y=((i as i64*3911+701)%8000) as f32/8000.0*screen_height();
+            let sz=if i%31==0 {1.7} else {0.8};
+            draw_circle(x,y,sz,Color::new(0.45,0.58,0.79,0.2+(i%5) as f32*0.06));
+        }
+    }
+    fn glow(&self,p:Vec2,r:f32,c:Color) {
+        for layer in (1..=5).rev() {
+            let k=layer as f32;
+            draw_circle(p.x,p.y,r*(1.0+k*0.48),
+                Color::new(c.r,c.g,c.b,0.032));
+        }
+    }
+    fn actor(&self,pos_m:V2,theta:f64,c:Color,size:f32) {
+        let p=self.screen(pos_m);
+        let h=vec2(theta.cos() as f32,theta.sin() as f32);
+        let w=vec2(-h.y,h.x);
+        self.glow(p,size,c);
+        draw_triangle(p+h*size*1.4,p-h*size+w*size*0.80,
+            p-h*size-w*size*0.80,c);
+        draw_circle_lines(p.x,p.y,size*1.5,1.0,c);
+    }
+    fn labeled(&self,title:&str,value:&str,y:f32,c:Color) {
+        draw_text(title,24.0,y,20.0,LIGHTGRAY);
+        draw_text(value,245.0,y,20.0,c);
+    }
+    fn paint_intercept(&self) {
+        let player=&self.intercept.player;
+        let foe=&self.intercept.opponent;
+        let a=self.screen(player.pos_m);
+        let b=self.screen(foe.pos_m);
+        let shield_player=(player.cross_section_radius_m/
+            self.camera.metres_per_pixel.0) as f32;
+        let shield_foe=(foe.cross_section_radius_m/
+            self.camera.metres_per_pixel.0) as f32;
+        draw_circle_lines(a.x,a.y,shield_player.max(9.0),1.4,SKYBLUE);
+        draw_circle_lines(b.x,b.y,shield_foe.max(9.0),1.4,ORANGE);
+        self.actor(player.pos_m,player.facing_rad,SKYBLUE,16.0);
+        self.actor(foe.pos_m,foe.facing_rad,ORANGE,19.0);
+        if let Some((apparent,delay))=self.intercept.apparent_opponent() {
+            let ghost=self.screen(apparent);
+            draw_circle_lines(ghost.x,ghost.y,12.0,1.8,GOLD);
+            draw_line(ghost.x,ghost.y,b.x,b.y,1.2,
+                Color::new(1.0,0.86,0.38,0.54));
+            draw_text("LIGHT-CONE OBSERVATION",ghost.x+17.0,ghost.y+5.0,15.0,GOLD);
+            draw_text(&format!("T - {:.2} s",delay),ghost.x+17.0,ghost.y+24.0,15.0,YELLOW);
+        }
+        for round in &self.intercept.rounds {
+            let p=self.screen(round.pos_m);
+            let tail=self.screen(round.pos_m-round.vel_m_s*0.055);
+            let tone=if round.is_player {SKYBLUE} else {RED};
+            draw_line(tail.x,tail.y,p.x,p.y,2.5,tone);
+            draw_circle(p.x,p.y,2.4,WHITE);
+        }
+        let now=self.current_time();
+        for effect in &self.effects {
+            let p=self.screen(effect.pos_m);
+            let age=((now-effect.start_s)/2.4).clamp(0.0,1.0) as f32;
+            let radius=(30.0+effect.magnitude.sqrt() as f32*34.0)*(0.3+age*2.2);
+            draw_circle_lines(p.x,p.y,radius,2.3,
+                Color::new(effect.tone.r,effect.tone.g,effect.tone.b,1.0-age));
+        }
+        let px=self.camera.metres_per_pixel.0;
+        let distance=(foe.pos_m-player.pos_m).len();
+        let light_delay=distance/C_SI;
+        let last=self.intercept.last_impact();
+        self.labeled("RANGE", &format!("{:.0} Mm",distance/1e6),245.0,WHITE);
+        self.labeled("LIGHT TIME", &format!("{:.3} s",light_delay),274.0,GOLD);
+        self.labeled("SHIP SPEED", &format!("{:.5} c",player.vel_m_s.len()/C_SI),303.0,SKYBLUE);
+        self.labeled("LORENTZ", &format!("gamma = {:.5}",player.gamma()),332.0,SKYBLUE);
+        self.labeled("PROPER TIME", &format!("{:.3} s",player.proper_time_s),361.0,WHITE);
+        self.labeled("PLAYER SHIELD", &format!("{:.1}%",
+            100.0*player.shield_energy_j/player.shield_capacity_j),390.0,SKYBLUE);
+        self.labeled("ENEMY SHIELD", &format!("{:.1}%",
+            100.0*foe.shield_energy_j/foe.shield_capacity_j),419.0,ORANGE);
+        self.labeled("RKM SHOTS", &self.intercept.shots_fired.to_string(),448.0,LIGHTGRAY);
+        if let Some(evt)=last {
+            self.labeled("IMPACT ENERGY", &format!("{:.3e} J",evt.energy_j.0),
+                477.0,YELLOW);
+        }
+        self.labeled("SCALE", &format!("{:.3} km/px",px/1000.0),
+            506.0,LIGHTGRAY);
+        if !foe.alive() {
+            draw_text("TARGET SHIELD DISABLED",screen_width()*0.32,screen_height()*0.8,
+                39.0,SKYBLUE);
+        }
+        if !player.alive() {
+            draw_text("PLAYER SHIELD DISABLED",screen_width()*0.32,screen_height()*0.8,
+                39.0,RED);
+        }
+        draw_text("SHIELD RADII ARE FICTIONAL DEFENSE ENVELOPES; SHIP MARKERS EXAGGERATED",
+            25.0,screen_height()-17.0,17.0,GRAY);
+    }
+    fn paint_tidal(&self) {
+        let b=&self.tidal.black_hole;
+        let star=&self.tidal.white_dwarf;
+        let bh=self.screen(b.pos_m);
+        self.glow(bh,19.0,ORANGE);
+        draw_circle(bh.x,bh.y,21.0,ORANGE);
+        draw_circle(bh.x,bh.y,16.0,BLACK);
+        draw_circle_lines(bh.x,bh.y,24.0,2.0,YELLOW);
+        draw_text("10 M_SUN BLACK HOLE",bh.x+32.0,bh.y+7.0,18.0,ORANGE);
+        let white=self.screen(star.pos_m);
+        if self.tidal.disruption.is_none() {
+            self.glow(white,13.0,SKYBLUE);
+            draw_circle(white.x,white.y,14.0,LIGHTGRAY);
+            draw_text("0.65 M_SUN WHITE DWARF",white.x+19.0,white.y+7.0,17.0,WHITE);
+        } else {
+            let event=self.tidal.disruption.unwrap();
+            let locus=self.screen(event.position_m);
+            draw_circle_lines(locus.x,locus.y,
+                (self.tidal.time_s-event.time_s).max(0.0) as f32*18.0+15.0,
+                1.5,Color::new(1.0,0.45,0.1,0.6));
+            for fragment in &self.tidal.fragments {
+                let p=self.screen(fragment.pos_m);
+                if p.x>0.0&&p.y>0.0&&p.x<screen_width()&&p.y<screen_height() {
+                    draw_circle(p.x,p.y,2.3,Color::new(0.56,0.82,1.0,0.86));
                 }
             }
-            for node in &mut self.swarm {
-                let delta = node.pos - location;
-                if delta.len() < 400.0 {
-                    node.vel += delta.normalized() * 250.0;
-                }
-            }
         }
-
-        let mut shearing_events = Vec::new();
-        for i in 0..self.bodies.len() {
-            if self.sheared[i] || self.bodies[i].kind == BodyKind::BlackHole { continue; }
-            let mut ratio: f64 = 0.0;
-            for j in 0..self.bodies.len() {
-                if i == j { continue; }
-                ratio = ratio.max(tidal_ratio(&self.bodies[j], &self.bodies[i]));
-            }
-            if ratio > 1.0 {
-                self.sheared[i] = true;
-                self.bodies[i].radius *= 1.3;
-                self.bodies[i].mass *= 0.87;
-                shearing_events.push(self.bodies[i].pos);
-            }
-        }
-        for location in shearing_events {
-            self.burst(location, 1200, YELLOW, 360.0);
-            self.last_event = "Stellar tidal shear";
-        }
-
-        step_swarm(&mut self.swarm, &self.bodies, dt);
-        for spark in &mut self.sparks {
-            spark.pos += spark.vel * dt;
-            spark.vel = spark.vel * 0.992;
-            spark.life -= dt as f32;
-        }
-        self.sparks.retain(|spark| spark.life > 0.0);
-        self.camera += (self.player.pos - self.camera) * (1.0 - (-2.0 * dt).exp());
-    }
-
-    fn starfield(&self) {
-        for i in 0..450_i32 {
-            let x = (((i as i64 * 1801 + 1477) % 6001) - 3000) as f64;
-            let y = (((i as i64 * 2539 + 871) % 5003) - 2500) as f64;
-            let point = self.screen(V2::new(x, y));
-            if point.x < 0.0 || point.y < 0.0 ||
-                point.x > screen_width() || point.y > screen_height() { continue; }
-            let a = 0.17 + (i % 7) as f32 * 0.055;
-            draw_circle(point.x, point.y, if i % 19 == 0 { 1.8 } else { 0.85 },
-                Color::new(0.7, 0.85, 1.0, a));
+        let dist=(b.pos_m-star.pos_m).len();
+        let q=blighted_galaxy::physics::near_side_tidal_ratio_si(b,star)
+            .unwrap_or(f64::NAN);
+        self.labeled("SEPARATION",&format!("{:.2} Mm",dist/1e6),245.0,WHITE);
+        self.labeled("ORBIT SPEED",&format!("{:.1} km/s",star.vel_m_s.len()/1000.0),
+            274.0,WHITE);
+        self.labeled("TIDAL / SELF G",&format!("{:.4}",q),303.0,YELLOW);
+        self.labeled("MAX TIDAL RATIO",&format!("{:.4}",self.tidal.peak_tidal_ratio),
+            332.0,YELLOW);
+        self.labeled("ELAPSED",&format!("{:.2} s",self.tidal.time_s),361.0,LIGHTGRAY);
+        self.labeled("MASS TRACED",&format!("{:.4} M_SUN",
+            self.tidal.total_visible_mass_kg().0/SOLAR_MASS_KG),
+            390.0,SKYBLUE);
+        if let Some(event)=self.tidal.disruption {
+            self.labeled("DISRUPTION",&format!("at {:.2} s; q = {:.3}",
+                event.time_s,event.ratio),419.0,ORANGE);
+            self.labeled("DEBRIS", &format!("{} tracers",self.tidal.fragments.len()),
+                448.0,WHITE);
+            draw_text("PROXY BREAKUP: DEBRIS IS BALLISTIC, WITHOUT STELLAR HYDRODYNAMICS",
+                20.0,screen_height()-17.0,16.0,GRAY);
+        } else {
+            draw_text("NEAR-SIDE TIDAL ACCELERATION / SELF-GRAVITY; FAILURE GATE AT 1",
+                20.0,screen_height()-17.0,17.0,GRAY);
         }
     }
-
-    fn draw_body(&self, index: usize, body: &Body) {
-        let p = self.screen(body.pos);
-        let r = (body.radius as f32 * self.zoom).max(2.0);
-        if p.x < -300.0 || p.y < -300.0 ||
-            p.x > screen_width() + 300.0 || p.y > screen_height() + 300.0 { return; }
-        match body.kind {
-            BodyKind::Star => {
-                glow(p, r, Color::new(1.0, 0.64, 0.21, 0.9));
-                draw_circle(p.x, p.y, r, Color::new(1.0, 0.87, 0.60, 1.0));
-            }
-            BodyKind::WhiteDwarf => {
-                glow(p, r, Color::new(0.61, 0.86, 1.0, 0.8));
-                draw_circle(p.x, p.y, r, WHITE);
-            }
-            BodyKind::NeutronStar => {
-                glow(p, r * 1.2, Color::new(0.45, 0.4, 1.0, 0.8));
-                draw_circle(p.x, p.y, r, Color::new(0.75, 0.72, 1.0, 1.0));
-                draw_line(p.x - r * 5.0, p.y + r * 2.0,
-                    p.x + r * 5.0, p.y - r * 2.0, 1.5, VIOLET);
-            }
-            BodyKind::BlackHole => {
-                glow(p, r * 1.8, Color::new(0.86, 0.42, 0.18, 0.6));
-                for k in 0..80 {
-                    let angle = k as f32 * std::f32::consts::TAU / 80.0
-                        + self.time as f32 * 0.23;
-                    let rr = r * (1.5 + (angle * 5.0).sin() * 0.17);
-                    draw_circle(p.x + angle.cos() * rr, p.y + angle.sin() * rr * 0.58,
-                        2.2 * self.zoom, Color::new(1.0, 0.45, 0.13, 0.67));
-                }
-                draw_circle(p.x, p.y, r * 0.82, BLACK);
-                draw_circle_lines(p.x, p.y, r * 1.03, 2.0, YELLOW);
-            }
-        }
-        if self.sheared[index] {
-            draw_circle_lines(p.x, p.y, r * 1.85, 2.0, ORANGE);
-        }
-    }
-
-    fn draw_duelist(&self, pilot: Duelist, tint: Color) {
-        let p = self.screen(pilot.pos);
-        let heading = pilot.heading();
-        let dir = vec2(heading.x as f32, heading.y as f32);
-        let wing = vec2(-dir.y, dir.x);
-        let size = 20.0 * self.zoom;
-        draw_triangle(p + dir * size * 1.3,
-            p - dir * size + wing * size * 0.65,
-            p - dir * size - wing * size * 0.65, tint);
-        draw_circle_lines(p.x, p.y, size * 1.45, 1.2, tint);
-        let hp = (pilot.hp / 100.0).clamp(0.0, 1.0) as f32;
-        draw_rectangle(p.x - 24.0, p.y - size - 18.0, 48.0, 4.0, DARKGRAY);
-        draw_rectangle(p.x - 24.0, p.y - size - 18.0, 48.0 * hp, 4.0, tint);
-    }
-
     fn draw(&self) {
-        clear_background(Color::new(0.019, 0.027, 0.063, 1.0));
-        self.starfield();
-
-        for (index, body) in self.bodies.iter().enumerate() {
-            self.draw_body(index, body);
+        clear_background(Color::new(0.010,0.015,0.042,1.0));
+        self.stars();
+        match self.mode {
+            Mode::Intercept=>self.paint_intercept(),
+            Mode::Tidal=>self.paint_tidal(),
         }
-        for node in &self.swarm {
-            let p = self.screen(node.pos);
-            if p.x < -3.0 || p.x > screen_width() + 3.0 ||
-                p.y < -3.0 || p.y > screen_height() + 3.0 { continue; }
-            draw_circle(p.x, p.y, 1.3 * self.zoom.max(0.4),
-                Color::new(0.70, 0.23, 1.0, 0.6));
+        draw_rectangle(13.0,12.0,800.0,207.0,
+            Color::new(0.022,0.033,0.058,0.92));
+        draw_rectangle_lines(13.0,12.0,800.0,207.0,1.0,DARKGRAY);
+        draw_text("BLIGHTED GALAXY / SI GAMEPLAY BRIDGE",23.0,45.0,27.0,WHITE);
+        let title=match self.mode {
+            Mode::Intercept=>"1  RELATIVISTIC RKM INTERCEPT • 2kg PROJECTILES",
+            Mode::Tidal=>"2  WHITE-DWARF TIDAL BREAKUP • 10 SOLAR MASS HOLE",
+        };
+        draw_text(title,23.0,80.0,22.0,SKYBLUE);
+        draw_text("1 / 2  SCENARIOS      Q / E  TIME RATE       Z / X / WHEEL  ZOOM",
+            23.0,113.0,19.0,LIGHTGRAY);
+        if self.mode==Mode::Intercept {
+            draw_text("MOUSE aim • M keyboard aim • A/D rotate • W/S thrust • SPACE fire",
+                23.0,145.0,18.0,LIGHTGRAY);
+        } else {
+            draw_text("Observe calibrated freefall and physically scaled tidal ratio",
+                23.0,145.0,18.0,LIGHTGRAY);
         }
-
-        for bomb in &self.bombs {
-            let p = self.screen(bomb.pos);
-            let glow_size = (18.0 + 1.3 / bomb.mass.max(0.2) as f32) * self.zoom;
-            glow(p, glow_size, Color::new(1.0, 0.66, 0.18, 0.7));
-            draw_circle(p.x, p.y, 2.0, WHITE);
-        }
-        for bolt in &self.bolts {
-            let p = self.screen(bolt.pos);
-            let from = self.screen(bolt.pos - bolt.vel * 0.035);
-            draw_line(from.x, from.y, p.x, p.y,
-                (3.0 * self.zoom).max(1.0), if bolt.friendly { SKYBLUE } else { RED });
-        }
-        for spark in &self.sparks {
-            let p = self.screen(spark.pos);
-            if p.x < -5.0 || p.x > screen_width() + 5.0 ||
-                p.y < -5.0 || p.y > screen_height() + 5.0 { continue; }
-            let alpha = spark.tint.a * (spark.life / spark.original_life);
-            draw_circle(p.x, p.y, (spark.radius * self.zoom).max(0.5),
-                Color::new(spark.tint.r, spark.tint.g, spark.tint.b, alpha));
-        }
-        if self.opponent.hp > 0.0 { self.draw_duelist(self.opponent, RED); }
-        self.draw_duelist(self.player, SKYBLUE);
-
-        draw_rectangle(16.0, 16.0, 570.0, 170.0, Color::new(0.015, 0.02, 0.042, 0.86));
-        draw_rectangle_lines(16.0, 16.0, 570.0, 170.0, 1.0, DARKGRAY);
-        draw_text("BLIGHTED GALAXY  /  RUST RECONSTRUCTION", 30.0, 45.0, 23.0, WHITE);
-        draw_text("W/S thrust  A/D turn  SPACE plasma  E contact strike", 30.0, 77.0, 19.0, LIGHTGRAY);
-        draw_text("B Hawking bomb  G swarm scatter  R restart  wheel zoom", 30.0, 104.0, 19.0, LIGHTGRAY);
-        draw_text(&format!("HP {:.0} | rival {:.0} | swarm {} | particles {} | {:.0} fps",
-            self.player.hp.max(0.0), self.opponent.hp.max(0.0), self.swarm.len(),
-            self.sparks.len(), get_fps()), 30.0, 134.0, 19.0, SKYBLUE);
-        draw_text(self.last_event, 30.0, 161.0, 18.0, GOLD);
-
-        draw_text("TOY UNITS  /  NEW CLEAN-ROOM CODE  /  N-BODY + SWEPT COLLISION",
-            22.0, screen_height() - 18.0, 18.0, GRAY);
+        draw_text(&format!("SIM RATE {:5.3}x | COORDINATE TIME {:8.3} s | R RESET | ESC QUIT",
+            self.sim_rate,self.current_time()),23.0,179.0,18.0,GOLD);
+        draw_text("SI kinematics + Newtonian gravity • exotic shields and breakup are game rules",
+            23.0,204.0,16.0,GRAY);
     }
 }
 
-fn glow(p: Vec2, radius: f32, tint: Color) {
-    for layer in (1..=5).rev() {
-        let s = layer as f32;
-        draw_circle(p.x, p.y, radius * (1.0 + s * 0.33),
-            Color::new(tint.r, tint.g, tint.b, tint.a * 0.042));
-    }
-}
-
-#[macroquad::main(window_conf)]
+#[macroquad::main(config)]
 async fn main() {
-    let mut game = Game::new();
+    let mut game=Game::new(Mode::Intercept);
     loop {
-        if is_key_pressed(KeyCode::R) { game = Game::new(); }
-        if is_key_pressed(KeyCode::Escape) { break; }
-        let (_, wheel) = mouse_wheel();
-        if wheel != 0.0 {
-            game.zoom = (game.zoom * (1.0 + wheel * 0.09)).clamp(0.15, 2.2);
-        }
-        game.accumulator = (game.accumulator + f64::from(get_frame_time())).min(0.16);
-        let mut steps = 0;
-        while game.accumulator >= STEP && steps < 20 {
-            game.step(STEP);
-            game.accumulator -= STEP;
-            steps += 1;
-        }
+        if is_key_pressed(KeyCode::Escape) {break;}
+        game.input();
+        game.advance(get_frame_time() as f64);
         game.draw();
         next_frame().await;
     }
