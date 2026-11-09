@@ -338,7 +338,7 @@ mod tests {
     #[test]
     fn distant_ray_escapes_with_correct_time_orientation() {
         let cam=camera(0.0,PI/3.0);
-        let r=cam.trace(15.0,10.0).unwrap();
+        let r=cam.trace(40.0,35.0).unwrap();
         assert_eq!(r.exit,RayExit::Sky);
         assert!(r.t_geom<0.0);
     }
