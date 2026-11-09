@@ -89,7 +89,7 @@ At N=64–256, the `Shell/matched` model gives the closest radius for these damp
 
 The shell layout improves the logarithmic density mismatch at N=512. For `Legacy/fixed`, `Shell/fixed` and `Shell/matched`, the final log-RMS density errors are approximately **0.435, 0.248 and 0.246**. Their final-to-initial RMS force ratios are **0.215, 0.479 and 0.495**. These tests establish a measurable particle-placement tradeoff at short damping duration, while the longer undamped hold remains the decisive equilibrium gate.
 
-Under undamped evolution for three dynamical times (7.87 physical seconds), the shell/matched star's radius expands by **28.3% at N=64** and **24.7% at N=128**. This is a more severe oscillation than the previous BG-PHY-08 setup. The experiments underscore that smoother or weaker gravity can improve a damped radius without producing a stable star.
+Under undamped evolution for three dynamical times (7.87 physical seconds), the shell/matched star's radius expands by **28.3% at N=64**, **24.7% at N=128**, and **31.5% at N=256**. This is a more severe oscillation than the previous BG-PHY-08 setup. The experiments underscore that smoother or weaker gravity can improve a damped radius without producing a stable star.
 
 **Conclusion for Issue #8:** Keep it open. The acceptance gate requires a radius error below 5% **and** an undamped evolution within 5% over at least three dynamical times. More particles and a closer match between hydrostatic density and SPH-resolved density are necessary, together with suitable timestep/convergence controls.
 
