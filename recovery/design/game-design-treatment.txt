@@ -1,0 +1,433 @@
+SOURCE: Blighted Galaxy Game Design Treatment.docx
+RECOVERY TYPE: Text transcription extracted from user-supplied DOCX
+RECOVERED: 2026-11-09
+NOTE: Page markers and parser line wraps are retained. DOCX formatting and embedded images are not represented in this text file. No editorial changes were made to the story text.
+
+<PARSED TEXT FOR PAGE: 1 / 10>
+       Composite Gameplay
+
+   1) Relativistic flight/flight duels/jousting
+   2) Interstellar warfare with weapons of mass destruction/War Economy
+   3) Transhuman/Post-human Duels
+
+        The three modes of gameplay hinge on a universe where the speed of light is the limit of
+movement, vast distances of space and time separate a series of points on a map. In Blighted
+Galaxy 1, the map is 2d, in Blighted Galaxy 2, ideally, the map would be 3d reflecting the
+physical grandeur of space. When it comes to plotting movements between stars, the geometry
+of 3d space permits more radial degrees of approach, which in a game set in a giant elliptical
+galaxy, would become a consistent risk. In a spiral galaxy, the depth of the galactic disk and the
+higher density star population limits how much radial approach complicates long-term strategic
+positioning. So one would hope that not so much of the geometry of the strategy game is
+warped by transitioning from 2d to 3d.
+
+   1) Relativistic duels, involve shooting beams at the speed of light while traveling at a lesser
+      fraction. Changing trajectory while going to high sub-relativistic speeds is hard, so this
+      sort of high speed flight, while thrilling, also has tank-like inertia to it, which is further
+      warped by gravity, in fun, circular ways. Some UFO lore focuses on a craft’s ability to
+      pivot on a dime at impressive speeds, and that might be physically plausible at the low
+      velocities of a visible UFO, we’re talking about basis points of light speed and it busts a
+      zig-zag, sure. Go for it. Use some tiny, unseen, high energy reaction to emit a burst of
+      (presumably detectable energy), or use some yet-unknown magic-tech to reactionless
+      zip around, the energy going into the nth dimension or something. It’s still energy,
+      affecting inertia, to perform those pivots, this is basic Newtonian stuff. So it follows that
+      maneuverability at 0.7c is limited. The ability to aim and fire, on the other hand, allows
+      for a lot of geometry. There is a time-lag, because targets are at distances of several
+      light seconds or minutes away. The ability to hit such a fine target, and aim a weapon at
+      such mass (so accelerated, the pivoting could feel like spooning a neutron star), but let’s
+      say transhuman/post-human abilities enable the aiming and firing, like an oblong
+      kamehameha. We’re willing to grease the wheels on that detail. You end up with
+      gameplay a bit like Joust or Tron, but with shooting, and the gravity of massive objects
+      becomes a tactical terrain utilization option. This is kinda fun, but if we slow down...
+
+   2) Transhuman Duels
+
+        Ultimately, in the future of >100,000 years After Fresh, the various forms of the
+descendants of humanity have had to converge on bio-nanoborg body types, which support
+survival in extreme environments for long periods of time, scale adjustment, dynamic
+construction of habitats, food ingredients, megastructures, body clones, forks if need be, things
+that are needed in a Blighted Galaxy. So when two of these entities get down, it comes off
+somewhere between the violent killing between chimpanzees at the start of 2001: A Space
+<PARSED TEXT FOR PAGE: 2 / 10>
+Odyssey, the eldritch bludgeoning of an Evangelion battle, perhaps including the cannibalism,
+and the geometry/chemistry/thermodynamics of nanomachines battling in space.
+
+        In the Blighted Galaxy, there is no Superintelligence. There is only The Blight, a
+graveyard of Failed Transcendence Experiments, and the clever physics-based explosives that
+are possible when you build megastructures around supergiant stars. However there is a vast
+range of cladistics from the various survivors of transhumanity, who have adapted in many
+ways, becoming Space Dragons, the long-extinct Titans, the mysterious black hole engineering
+project of the vanished Great Library Civilization, the reckless, loose transformation of the
+Abominations that culminated in a spinning black hole becoming a jeweled mirror super-gun and
+through-putting destructive beams to target millions of stars within a short time span.
+
+         In this setting, to be a post-Singularity being is to have already incorporated a
+gravitational singularity into your body-mind-megastructure architecture. Post-human
+consciousness *is* different from transhuman consciousness, which is like a funky, relatable
+version of we like to think of as human. Post-humans are utterly distinct, separated from other
+cultures by thousands of light years and as much history. Yet, can one become post-human,
+return to being more transhuman, even recast themselves as a synthetic baseline human?
+Sure, if they wanted to. It’s just not something people have a ton of time for in this setting. What
+with all the warfare.
+
+        The tiering of the entities in the setting, in the sense of power level, has a lot of to do
+with their size and the energy throughput of their megastructures. This is not a setting where the
+protagonists are bright “modosophonts” against the arcane backdrop of a civilized galaxy with a
+wormhole network enjoying the discourse of Singularity-level 1-6 minds. This is a setting, where
+a transhuman protagonist stands down the blighting swarms over ten million stars in a radial,
+dampening, incomplete sweep around the galactic arms. It is a setting where the horrifying,
+unstoppable passage of time, and the horrifying, seemingly unstoppable expansion of
+wavefronts, dominates intelligence, growth of thought, or any other such luxuries. Where
+stupidity is slightly more probable to emerge out of the competitive percolation of a slow
+communication galaxy. It’s about heavy metal synth fugues escalating the way physics does.
+
+       A general taxonomy of “Power Levels” based on physics, not awareness, follows:
+
+        0 - Biological lifeforms, totally vulnerable, gamma ray events increasing has rendering
+large swaths of the galaxy sterile for future evolution of biological life, even millions of years
+after these wars end.
+
+         1 - Nearbaseline Transhumans, largely extinct, tried building relativistic fleets with lasers
+to take on The Blight. Kind of got us all into this mess in the first place. Often have biological
+core frames but symbiotic nanites, cybernetic interlace, supported by technology of a K-I
+civilization (but not K-II, due to the long observed mutual agreement and mutually-assured
+destruction that allowed the completely decentralized colonies to be at peace for 30 millenia.
+Their run is ended.
+<PARSED TEXT FOR PAGE: 3 / 10>
+       2 - Outer Arm Bionanoborgs
+
+        The surviving descendents of Transhumanity, shoot them in the head, no big deal, blow
+them up with a frag grenade, pop those shards right out. Blast them with a 20MW plasma
+cannon, ok sure, dead. Can be backed up. Can transform. Can survive in space. Can pretend to
+be as human as people were long ago, but it’s more of a cultural custom. Sort of an editor’s
+curation of different post-human tech relics that managed to make their way outward ahead of
+the Blight’s Expansion, because parents love their children sometimes, and want them to
+survive.
+
+       3 - Baseline Post-Human
+
+        There is no homogenous baseline of what it means to be a post-human in terms of form
+and architecture, but as a category, there is a general baseline of ability for someone who has
+embraced the path of transformation and obtained some form of post-humanity. Some have
+said, to be post-human, is to stop pretending. Abilities generally include: high-data-throughout
+specialized cognition (process lots of sensors with some lag), transform body into a spaceship,
+integrated fusion power, plasma control. Downsides of post-humanity run a tremendous gamut
+but include: schizophrenic ego-fragmentation, tendencies to cloister for long-periods in
+simulated environments, grandiose singular obsessions, omnicidal mania, suicidal tendencies
+masked as “transcendence experimentation” that for all outside observers appears to be fancy
+suicide, austere asceticism, tendencies to abuse less powerful life-forms, complete erosion of
+capacity for empathy, and much more!
+
+       The Abomination Bombers are Baseline Post-Humans who use Hawking-class black
+holes as propellant and then as a final kamikaze detonation when they arrive at target. Flying
+such a mission as a fork of a perpetually self-replicating warrior is typical baseline post-human
+stuff.
+
+       4 - Stellar Swarm
+
+        At this scale, relativistic latency between different points in a solar-scale swarm of
+rotating habitats or computing objects becomes the limiting factor in communication and mind-
+growth. Group-minds delegating different spatial regions of a swarm have been attempted, but
+what seems to dominate life in the galaxy is this basic data structure with an extreme
+redundancy, a cryptographically verifiable lineage, trickling around in waves of updates, allowing
+for basic decisions to be made comprehensively as a singular decision, but over tens of
+thousands of years of relays. Most of the Stellar Swarms in the galaxy use star-scale energy,
+but for arguably meaningless purposes, like zombies. Yet, these sort of zombies are particularly
+hostile when agitated. The energy of the star can be used to propel the system into new
+trajectories, or concentrated into an offensive blast, or used in lighter concentrations to
+accelerate allies and provide artillery support over the surrounding area, where accuracy is
+<PARSED TEXT FOR PAGE: 4 / 10>
+more practical. Swarms, being composed of diamondoid carbon computronium, and auxiliary
+utility nano-assembles, can transform into war swarms of ravenous nanomachines.
+
+        The story of the zombified Swarms is the story of Blighted Galaxy, but the stories of the
+failed post-human K-II civilizations color the greater evolution of the galaxy.
+
+      5 - Trans-Singularity Post-humans
+
+        Taking a Hawking-class Black Hole of a more long-lived mass into their form as a core-
+engine, this tier of post-human has access to tremendous energy, can sustain the black hole
+through periodic feedings, is capable of rapid deceleration or acceleration, can blast anything,
+and can use the energy for computation to experience the galaxy as a vivid, integrated
+psychedelic experience layered with all kinds of background thought. This heightened
+consciousness enables them to execute physical maneuvers and sustained attacks involving
+precise manipulation of the heaviest astrophysical objects in the universe. It’s like, they really
+feel every swing of the neutron star. They really sense the precision of targeting a million
+targets. Combat to them is an orgiastic celebration of physical reality that punctuate the quiet
+simulation-binging-and-chill of the lonely night.
+
+          The Abomination Bombers don’t quite qualify as this level because their Hawking-class
+black holes are smaller, set to explode within 20 or 100 years, while the sustainable utilization of
+black hole engines by this tier of entity, with typical active lifetimes of 500 or 1000 years, they
+aren’t stuck on an accelerating trajectory until death, they can fully use the energy throughput of
+the Hawking radiation for maximal energy usage in all aspects of life: thought, combat, and
+flight. It also provides them a last-option maneuver if they are in a doomed situation.
+
+        The Blight eventually learns from multiple wars with post-humans how to construct
+similarly engineered superscale warriors capable of, among other things, running crew on
+megascale Double Barreled White Dwarf Shotguns. This escalation in cleverness and force is
+what happens when you fight the Blight and don’t happen to successfully scourge it from the
+entire galaxy. It always bounces back harder.
+
+      6 - Fused or Ascended Transingularity Post-Humans
+
+         The Titans of the Perseus arm were rumored to have blasted the song of their struggle
+out towards the entire rimward population, as a sort of forewarning some might hear. They
+leveraged all their powers as Trans-singularity peeps, were defeated by military principles, they
+lacked first strike advantage and ended up being boxed in. In the final battle, after triggering
+multiple type Ia supernovae, fighting off advancing swarms from every direction, they resorted to
+Fusions. By adding spin energy to their cores during the Fusion, and doubling their nanite mass,
+the Titans hoped to achieve an exponential increase in their power output. In the process, the
+two minds would have to fuse psychically, delegating control of different parts of the large new
+body, which required a painful, but necessary, melding of egos and emergence of new forms of
+intuitive control between the Two. Ultimately the Ultimate Warrior, resulting from the successive
+<PARSED TEXT FOR PAGE: 5 / 10>
+fusing of all the Titans into the Colossus, enabled a spray of relativistic jets to repel the
+oncoming swarms. However in the process of mentally fusing, for an unknown reason, the
+Colossus imploded on itself, leaving just the spinning black hole in its wake, the last remnant of
+the Titan K-2.2 civilization.
+
+        The Great Library Civilization, a K-2.1 civilization (occupying a single cluster), is fabled
+to have engineered a multi-black hole N-body system that, to this megasecond, continues to
+feed on the chaotically infalling neighboring stars, the surrounding energy then provides a
+region of space-time that is so contorted, no swarm or explorer dares approach it, and
+gravitational lensing give observers a spastic lavalamp to try and analyze. Maybe they did it.
+Maybe there’s really something amazing computationally going on in there.
+
+         Part of the reason that Transhumanity has failed to resist The Blight, is stupidity, another
+part is slow response, or lack of forewarning. But a big part of the reason why Post-Humanity of
+various stripes hasn’t succeeded in winning, is because the relative simplicity of The Blight
+makes it less failure prone. Every civilization who has tried to break through to something
+Beyond Trans-Singularity status, has vanished from observable spacetime. People assume,
+they all just fell into the black holes. But not everyone.
+
+          In the same way that the Abomination Bombers use a high-energy, suicide-mission
+version of Tier 5 Trans-singularity tech, but are themselves merely Tier 3 Baseline Post-humans
+flying a mission of destiny, but they don’t get to experience a Hawking Radiation-powered brain
+or any of the related tech of those older civs, Aunt Weena uses a spinning black hole as a
+weapon, but doesn’t try to use it to create a great-entity or build a Cauchy-horizon based
+computing substrate. She probably would have been fine running the spinner for a gigasecond,
+setting up the better part of the stars in the galaxy for a probably intersection, and then suiciding
+by falling into the black hole, because why not. So what’s the difference between being a
+nihilistic terrorist trying to just blow things up, and suiciding out of nihilism, vs. losing causal
+contact with the outside galaxy trying to build a black-hole computer. One is clearly nerdier than
+the other.
+
+         So getting back to duels. If you duel something of a higher tier, odds are you’re going to
+be outmatched. That’s 101. Alfonso in Paticia Tries rages on a bomber, does the relativistic duel
+to knock it around, as things slow the form of conflict shifts. He transforms and out-abominable-
+izes the Abomination, but in a class Vishnu style. Empowered by the nanites from the Swarm
+(tier 4), Alfonso and Tatyana become effectively a Transhuman “Superior”-clade version of a tier
+3 being, but also a weird Blight Swarm-influenced hybrid because they carry and analyze a copy
+of the Patricia Trie now. They grow into their powers over the subsequent arc of the stories.
+Unlike a zombie apocalypse logistics, where you need to be quiet, manage the flow of
+coagulating large swarms, and there’s no real cure or reasoning with the enemy, the Blight
+Apocalypse has this weird dimension of memes transforming the Blight into a more layered and
+culturally imprinted, pan-galactic zombie nanoswarm.
+<PARSED TEXT FOR PAGE: 6 / 10>
+       You can be a fully-fledged space weirdo with sick powers, who spends a long time flying
+through space, and not lose your mind. You don’t have to adopt crazy monster aesthetics. This
+is where cosmetic preference and different clade strengths and weaknesses come in.
+
+        At this level, the game design tradition of groups of heroes vs. boss monsters, or
+individual RPG characters vs. a long-held nemesis of comparable power, is a necessary import.
+Hit points are a mainstay. Want to get away from hit points, have some kind of anatomy-based
+damage with various organ-failure dying pathologies. Doesn’t make a ton of sense for a
+nanoborg battle. HP with a high regen-rate makes sense. It takes a certain amount of energy
+throughput for tissues of nano-fabricated material to repair and re-organize. The regeneration
+rate could be higher for a higher energy entity.
+
+        As two entities decelerate and get closer, gravity between them becomes more relevant,
+sharp energetic pulses can allow for pivots, and proximity is a count-down toward an
+increasingly escalated violence that will bring the duel to a quick end. A more powerful entity
+may become more vulnerable if lesser assailants get close, because sabotage of its structure
+becomes possible. The only way physically to overcome the most-powerful trans-singularity
+entities, is to bring a heavy mass object with you that can disrupt the movement of the black
+hole powering the entity.
+
+        When it comes to close range resolutions, a violent one will tend to fall to the higher-
+energy entity, unless the lesser entities have significant numbers of succeed in sabotage. At
+longer ranges, the ability to wield weapons of mass destruction become a probabilistic trump
+card.
+
+        The feeling of welding superweapons, triggering supernovas and stuff, is a key part of
+the setting, more on that below, but also the feeling of flight, of going so fast that time dilation is
+notable, is a key part of the experience. The composite gameplay of having high speed but
+limited maneuverability, vs. slowing down and duking it out, is key to this feeling of extreme
+inertia and de/acceleration.
+
+         RPG elements, the cursed phrase, may enter in here to lend tactical complexity to the
+combat. Aleatory elements, variable damage, can figure in. There’s a sense that raw brute-force
+computational power (not to be confused with superintelligence) can program nanomachines to
+route victoriously through the patterns of lattice arrayed by the opponent’s nanomachines. So
+you get a sort of HP-regen rate/attack power factor in the energy throughput of a being, and an
+Intelligent/MP attack power factor in its nano-crochet computing skillz.
+
+         The non-aleatory damage-per-second dimension would be the Wattage rating of the
+entity in question. Here we degrade into pure Dragon Ball Z kamehameha wave tugs-of-war or a
+more radial light show alternative.
+
+      Creative transformations into different structures make these tactical trade-offs into
+something of an already-caught Pokemon menagerie, so intransitive relationships between
+<PARSED TEXT FOR PAGE: 7 / 10>
+different structures lead team play to become risk-reductive while having the class-flexibility of
+the best Final Fantasy games.
+
+        Meme combat is the real MP lateral dimension, and raw computational power is
+orthagonal to the mind-complexity that allows an entity to resist and dish-out seductive memes
+that can have a number of effects. An Evangelion angel-possession type contact could make a
+target suffer an existential crisis and fall into temporary catatonia. Combining such mental
+attacks with physical content is a common process of subsuming a mind into another. The Blight
+maybe does this, as seemed to be happening when Weena was attacked, leading her to
+abandon transhumanism. A softer style of memetic attack can attempt to de-escalate conflict
+through diplomatic persuasion.
+
+       Wouldn’t it be cool if the mental pathologies of post-humans became a weak spot?
+
+        Like in Vampire: The Masquerade, different clades can have different powers but also
+different psychological pathologies to try and exploit.
+
+        Dramatic arcs involving strange, multi-ten-thousand year processes of personal
+evolution and the gyres and pitfalls of that process, turned into a symbolic game system for
+trying to push entities’ buttons.
+
+               Memetic gameplay
+
+        The concept of The Blight (The Patricia Tries Civilization) adapting memetically to new
+type of warfare, and also to new diplomatic/historical events that cause it to re-evaluate policies,
+is an implementation of a memetic simulation.
+
+        As an example of how Instead of simulating a bunch of virtual towns people, and having
+a child sacrifice meme and an adultery meme, and a worship golden calves meme ect. and you
+have to play Populous as a stern, moralist Yahweh, intervening physically with miracles, but
+also introducing specific memes to try and win the population over to your way of doing
+business. Now imagine the population are the sinful, murderous orgy-fiends of Sodom and
+Gamorah, that’s the Blighted Galaxy.
+
+        Instead of you having the power to smite the twisted city, there are walls of Dyson
+swarms, capable of blasting you if they could coordinate the targeting. So then Yahweh has to
+resort to surgical strikes, prophets, incremental ripple effects.
+
+       Realy a huge untapped source of composite genre play that has almost 0 games in it.
+Chris Crawford’s Siboot may be the ur-example. It’s relatively modular to take the full game
+design other than this meme component, put in a simulation model to adjust otherwise hard-
+coded finite state machine behaviors, and experiment.
+<PARSED TEXT FOR PAGE: 8 / 10>
+        Macro memes are fun, lots of room to learn about it and create content based on the
+learning. Micro-memes as a sort of buff/debuff system, or status-effect roulette, is probably a
+necessary bit of spice. A simple psychology system for a classic, human-theme Hero’s Journey
+template RPG, might involve the protagonist’s feelings about her father or or dead husband and
+so on, here it’s more about the two long-term risks to transhuman psychology: ossification and
+perversion. You can spend a lot of time experiencing 1/100th or /1000th real-time while
+traveling, or you can stick to principles and hold your ground, never change! Or you can
+transform, spiraling into the unknown, with the laundry list of mental perils. So probably different
+characters have different psychological weak-spots that make them more susceptible to
+different kinds of “Status Effects” (e.g. “Blue Screen of Death”).
+
+        If this is starting to seem reminiscent of the Ninjutsu (range-attacks), Taijutsu (martial
+arts, melee attacks) and Genjutsu (illusions) system of Naruto, that’s not a coincidence. It is only
+a sign that you are… still sane.
+
+        The composite of these three styles of attack in a Transhuman duel, extends out to the
+higher speed flying/shooting gameplay. You can shoot a meme attack. You can shoot a
+“ninjutsu” mass-driver shot. Only the nano-clubbing is reserved for the lower-velocity.
+
+        I don’t know, maybe you can magnetize the other guy and lock in like a tractor beam,
+combined with the gravity and the angular momentum, takes a really drawn-out physic of slowly
+getting closer with lots of orbits and misses, tightens it up. Visceral and tactical. Good gameplay
+is often about flanderizing physics.
+
+        Ok enough of the deep space ball-tripping Evangelion part, now to the Stellaris on Meth
+part.
+
+    3) Interstellar war economy
+
+       First off, space-time is big. Space is big because it takes a lot of time to get anywhere.
+You can spend centuries zipping around a theater of war in a cube 50 or 60 light years on each
+side. You can spend millenia moving from one sector of the galaxy to another. The vast
+distances separating us in spacetime, the improbability of contact, the beauty and peace, and
+funky gloom of the Blight-light, all add to the brutal geometry of interstellar war. All stars are
+weapons of mass destruction. Their mirror-focused attacks move at the speed of light, they can
+be easily dodged by luck, but only evaded with a fore-known program of expecting these
+attacks. First Strike Doctrine dominates interstellar war. That’s part of how the Blight got its
+edge, though it expands at only ~60% of light speed. It’s edge had to be renewed by the lapses
+in preparatory judgement and the compounded risk of desperate transcendence experiments.
+
+        There’s a few key economic unit operations at these large time-scales:
+
+    1) Capture a stellar remnant
+    2) Nano-eat the matter of a solar system and build a swarm around the star
+<PARSED TEXT FOR PAGE: 9 / 10>
+   3) Nano-eat the matter of a solar system to use in a megastructure elsewhere or a roaming
+      war swarm
+   4) Build a mega-structure capable of somehow utilizing a stellar remnant
+   5) Build a mega-structure capable of housing transhumans
+   6) Combine system nodes in a co-ordinated fashion
+   7) Use a megastructure and star to manufacture Hawking-class black holes with
+      Kugelblitzes.
+   8) Use a swarm/megastructure to crunch research points to climb the tech tree
+
+         The tech tree doesn’t need to be so innovative, the range of tech is not so great, this is a
+setting where the physical limits of astrophysics energy gets thrown down in heavy metal
+survival contests, so the tech tree mostly has to do with covering that territory. The Singularity-
+like acceleration flow of Alpha Centauri blended with the modular composite unit-access of They
+Are Billions.
+
+        Resources:
+
+   1)   Stars
+   2)   Supergiants - a distinct resource in that these are better for weapons
+   3)   Carbon/generic nanite mass
+   4)   White Dwarves
+   5)   Neutron Stars
+   6)   Black Holes (Hawking Class)
+   7)   Black Holes (Massive/Rotating)
+   8)   Population
+   9)   Wattage
+
+       Of these, Carbon, vanilla Stars, Population and the star/structure’s wattage are the
+primary resources of the econ game.
+
+       Unlike They Are Billions, the transhuman-hero gameplay blends with the general
+composite RTS game, so there’s no parallel, miniature leveling system for the hero, the tech
+that can boost the hero in various ways is scattered among the tech tree.
+
+        Now, do this 2d, imagine Star Control 2. Instead of generic mass, specialized elements
+were a thing. Maybe we can do that too. It was a bit too much detail for little tactical color per
+element, they all blended into a generic Resource Unit. SC2 setting had hyperspace, and
+Quasi-space, let’s not forget, which enabled more rapid fire missions in a time-frame measured
+in game years. The crew is mostly human. It’s all relatable Star Trek stuff. Yet if the game clock
+had several zeroes added to it, and simulated these theaters of war in parallel so the time has a
+strategic cost, it holds together as a very solid gameplay flow. The Ur-Quan were relatively
+simple biological lifeforms, if you took 15,000 years to run your mystery-solving, item-swapping
+laundry quest around the sector (a seemingly small chunk of the galaxy), the Ur-Quan might
+<PARSED TEXT FOR PAGE: 10 / 10>
+have gotten antsy meanwhile. A heck of a lot can happen in 15,000 years. Yet, in Blighted
+Galaxy, that is about the time it takes to play out a good trilogy arc. Just like Einstein intended.
+
+         Without dissecting everything right and wrong about SC2’s economy, ship battles and
+adventure gameplay, we can compare quickly to Stellaris. One of the top 4x games. Setting
+doesn’t dive whole-hog into Singularity Levels and other such esoteria, keeps it to humanoid
+aliens who can just dip their toes into that kind of thing. Involves FTL as well. Slow population
+growth is the main time-lag effect, rather than travel time. Geometric, slow-start population
+growth is also a primary resource constraint in Sid Meier’s Alpha Centauri. Time to rebalance
+this tried and true mechanic. Blighted Galaxy involves self-replicating nano swarms and
+asexually reproducing post-humans, so population is sort of like surplus HP you regenerated
+when nobody was fighting you.
+
+       Physics Prototype:
+
+       There are a few key things to get right about the micro-gameplay in a prototype:
+
+   1) Feeling of flying and shooting at sub-relativistic speeds with light-time lags, zooming in,
+      having gravitational effects as one decelerates.
+   2) Ideally the physics of a black hole bomb going off and if it’s not close enough, the
+      nanoswarm and/or the star’s mass (big range difference in that) gets tidally sheared.
+   3) The close-up Transhuman dueling. SC 2 used a lot of goofy geometry to change up ship
+      shooting patterns, also a closed 2-space so the velocity actually created a “phantom
+      gravity” to speed-steer through the bullet hell. A flanderized electromagnetic locking
+      device could be used to make this effect tangible, otherwise if we wanted to Gran
+      Turismo these astrophysics, gravity between two small bodies really isn’t so big unless
+      at Face Off proximities. Normal gravity does get us a fateful slug-out to the death within
+      the last few km of proximity. But when it’s millions and billions of kilometers, we need to
+      speed this thing along, otherwise you’ll be looping your opponent for millions of years
+      before the end of the duel.
