@@ -55,6 +55,8 @@ jobs:
             target/release/kerr_camera_lab.exe
             target/release/kerr_camera_bench.exe
             target/release/white_dwarf_lab.exe
+            target/release/kerr_optical_lab.exe
+            target/release/optical_relax_bench.exe
             target/release/white_dwarf_bench.exe
           if-no-files-found: error
           retention-days: 30
