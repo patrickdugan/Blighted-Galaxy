@@ -4,7 +4,7 @@
  //! triangles for GPU rasterization with bounded draw calls. This is not a
  //! GPU compute-particle implementation or an instanced renderer.
 use macroquad::models::{draw_mesh, Mesh, Vertex};
-use macroquad::prelude::{Color,Vec2,Vec3};
+use macroquad::prelude::{Color,Vec2};
 
 /// 4 vertices/particle. Restrict per-batch indices to u16 range.
 pub const MAX_PARTICLES_PER_MESH:usize=4096;

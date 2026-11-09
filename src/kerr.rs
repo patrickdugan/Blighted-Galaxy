@@ -243,8 +243,8 @@ mod tests {
     fn circular_timelike_kerr_reduces_to_schwarzschild() {
         let bh=KerrGeometry::new(10.0*SOLAR_MASS_KG,0.0).unwrap();
         let orbit=bh.circular_timelike(10.0,1).unwrap();
-        near(orbit.energy,(1.0-2.0/10.0)/(1.0-3.0/10.0).sqrt(),1e-12);
-        near(orbit.angular_momentum_rg,10.0/(10.0-3.0).sqrt(),1e-12);
+        near(orbit.energy,(1.0-2.0/10.0)/(1.0_f64-3.0/10.0).sqrt(),1e-12);
+        near(orbit.angular_momentum_rg,10.0/(10.0_f64-3.0).sqrt(),1e-12);
         near(orbit.omega_rad_s,10.0f64.powf(-1.5)*C_SI/bh.r_g_m,1e-12);
     }
     #[test]
