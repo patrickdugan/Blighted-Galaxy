@@ -58,6 +58,12 @@ fn main() {
         (128_usize,RelaxParameters {
             iterations:1500,dt_s:0.01,damping_time_s:0.7,
         },"extended"),
+        (256_usize,RelaxParameters {
+            iterations:1500,dt_s:0.01,damping_time_s:0.7,
+        },"extended"),
+        (512_usize,RelaxParameters {
+            iterations:1500,dt_s:0.01,damping_time_s:0.7,
+        },"extended"),
     ] {
         let mut particles=sph3::seed_from_hydrostatic(
             &profile,V3::new(1.0e8,0.0,0.0),V3::default(),count);
