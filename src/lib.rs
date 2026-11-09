@@ -409,3 +409,6 @@ pub mod stellar_relax;
 
 // BG-PHY-08: variable-h grad-h-corrected SPH force diagnostics.
 pub mod sph_adaptive;
+
+// BG-PHY-08: equatorial moving Kerr observers and aberrated causal optics.
+pub mod kerr_moving_observer;
