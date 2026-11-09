@@ -403,3 +403,6 @@ pub mod kerr_camera;
 
 // BG-PHY-07: curved Kerr optical acquisition of recorded orbital combatants.
 pub mod kerr_optics;
+
+// BG-PHY-07: damped isolated SPH white-dwarf relaxation diagnostics.
+pub mod stellar_relax;
