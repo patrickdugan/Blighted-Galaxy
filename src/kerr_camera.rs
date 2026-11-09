@@ -23,6 +23,9 @@ pub struct KerrPixelRay {
     pub du:f64,
     pub theta:f64,
     pub dtheta:f64,
+    /// mu=cos(theta), integrated to avoid polar-axis coordinate stiffness.
+    pub mu:f64,
+    pub dmu:f64,
     pub phi:f64,
     pub t_geom:f64,
     pub b:f64,
@@ -42,27 +45,25 @@ impl KerrPixelRay {
             2.0*k*u.powi(3)-a*a*self.q*u.powi(4)
     }
     fn polar_polynomial(&self,a:f64)->f64 {
-        let sin=self.theta.sin();
-        if sin.abs()<1e-10 {return f64::NAN;}
-        self.q+a*a*self.theta.cos().powi(2)-
-            self.b*self.b*(self.theta.cos()/sin).powi(2)
+        // (dmu/dlambda)^2=(1-mu^2)*Theta(theta).
+        let mu=self.mu;
+        self.q+(a*a-self.b*self.b-self.q)*mu*mu-
+            a*a*mu.powi(4)
     }
     fn state(&self)->[f64;6] {
-        [self.u,self.du,self.theta,self.dtheta,self.phi,self.t_geom]
+        [self.u,self.du,self.mu,self.dmu,self.phi,self.t_geom]
     }
     fn set_state(&mut self,s:[f64;6]) {
-        self.u=s[0];self.du=s[1];self.theta=s[2];
-        self.dtheta=s[3];self.phi=s[4];self.t_geom=s[5];
-        if self.theta<0.0 {
-            self.theta=-self.theta;self.dtheta=-self.dtheta;self.phi+=PI;
-        } else if self.theta>PI {
-            self.theta=2.0*PI-self.theta;
-            self.dtheta=-self.dtheta;self.phi+=PI;
-        }
+        self.u=s[0];self.du=s[1];self.mu=s[2];self.dmu=s[3];
+        self.phi=s[4];self.t_geom=s[5];
+        // The invariant-preserving integrator remains in mu; theta is
+        // reconstructed only for visual direction and diagnostics.
+        self.theta=self.mu.clamp(-1.0,1.0).acos();
+        self.dtheta=-self.dmu/self.theta.sin().max(1e-10);
     }
     pub fn invariant_errors(&self,a:f64)->(f64,f64) {
         (self.du*self.du-self.radial_polynomial(a),
-         self.dtheta*self.dtheta-self.polar_polynomial(a))
+         self.dmu*self.dmu-self.polar_polynomial(a))
     }
 }
 #[derive(Debug,Clone,Copy)]
@@ -119,36 +120,36 @@ impl KerrCamera {
             cos*cos*(b*b/(sin*sin)-a*a);
         let u=1.0/r;
         let mut ray=KerrPixelRay {
-            u,du:0.0,theta,dtheta:0.0,phi:0.0,t_geom:0.0,
+            u,du:0.0,theta,dtheta:0.0,
+            mu:cos,dmu:0.0,phi:0.0,t_geom:0.0,
             b,q,steps:0,exit:RayExit::Unresolved,
             disc_radius_rg:0.0,disc_g_factor:0.0,
             max_radial_error:0.0,max_polar_error:0.0,
         };
         ray.du=ray.radial_polynomial(a).max(0.0).sqrt();
         let pol=ray.polar_polynomial(a).max(0.0).sqrt();
-        ray.dtheta=if beta_rg>=0.0 {-pol}else{pol};
+        ray.dmu=if beta_rg>=0.0 {pol}else{-pol};
+        ray.dtheta=-ray.dmu/sin;
         Some(ray)
     }
     fn deriv(&self,ray:&KerrPixelRay,state:[f64;6])->[f64;6] {
         let u=state[0];
-        let theta=state[2];
+        let mu=state[2];
         let a=self.geometry.spin;
         let b=ray.b;let q=ray.q;
         let k=(b-a).powi(2)+q;
         let u2=u*u;
         let rad_acc=(a*a-b*b-q)*u+
             3.0*k*u2-2.0*a*a*q*u2*u;
-        let sin=theta.sin();
-        let safe_sin=if sin.abs()<1e-8 {1e-8}else{sin};
-        let cos=theta.cos();
-        let polar_acc=-a*a*sin*cos+b*b*cos/safe_sin.powi(3);
+        let mu_acc=(a*a-b*b-q)*mu-2.0*a*a*mu.powi(3);
+        let sin2=(1.0-mu*mu).max(1e-10);
         let r=1.0/u.max(1e-10);
         let delta=self.geometry.delta(r);
         let p=r*r+a*a-a*b;
         // Negative signs are essential for a past-directed ray.
-        let phidot=-(a*p/delta+b/(safe_sin*safe_sin)-a);
-        let tdot=-((r*r+a*a)*p/delta+a*(b-a*sin*sin));
-        [state[1],rad_acc,state[3],polar_acc,phidot,tdot]
+        let phidot=-(a*p/delta+b/sin2-a);
+        let tdot=-((r*r+a*a)*p/delta+a*(b-a*sin2));
+        [state[1],rad_acc,state[3],mu_acc,phidot,tdot]
     }
     fn rk4(&self,ray:&KerrPixelRay,y:[f64;6],h:f64)->[f64;6] {
         let k1=self.deriv(ray,y);
@@ -205,11 +206,11 @@ impl KerrCamera {
                 if er.is_finite() {ray.max_radial_error=ray.max_radial_error.max(er.abs());}
                 if ep.is_finite() {ray.max_polar_error=ray.max_polar_error.max(ep.abs());}
             }
-            let previous=old[2]-PI*0.5;
-            let following=ray.theta-PI*0.5;
+            let previous=old[2];
+            let following=ray.mu;
             if (previous*following<0.0 || following.abs()<1e-9) &&
-                (old[2]-ray.theta).abs()>1e-10 {
-                let f=((PI*0.5-old[2])/(ray.theta-old[2])).clamp(0.0,1.0);
+                (old[2]-ray.mu).abs()>1e-10 {
+                let f=(-old[2]/(ray.mu-old[2])).clamp(0.0,1.0);
                 let u_cross=old[0]+f*(ray.u-old[0]);
                 let r_cross=1.0/u_cross;
                 if r_cross>=self.disc_inner_rg() &&
