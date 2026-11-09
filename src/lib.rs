@@ -412,3 +412,6 @@ pub mod sph_adaptive;
 
 // BG-PHY-08: equatorial moving Kerr observers and aberrated causal optics.
 pub mod kerr_moving_observer;
+
+// BG-PHY-08: local emitter rest-frame Kerr target envelopes.
+pub mod kerr_worldtube;

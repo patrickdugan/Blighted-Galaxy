@@ -19,6 +19,7 @@ use crate::kerr_camera::{
 use crate::kerr_optics::OrbitingCombatant;
 use crate::physics::C_SI;
 use crate::V2;
+use crate::kerr_worldtube::segment_hit_rest_worldtube;
 use std::f64::consts::{FRAC_PI_2,TAU};
 
 #[derive(Clone,Copy,Debug)]
@@ -166,15 +167,15 @@ pub fn observe_recorded_source(
             let e1=match source_history.sample_at(t1) {
                 Some(v)=>v,None=>continue,
             };
-            if let Some(f)=crate::swept_circle_hit(
-                p0.chart_xy_m,p1.chart_xy_m,0.0,
-                e0.pos_m,e1.pos_m,envelope_m,
+            // The source's rest-space metric sets its finite collision
+            // envelope. The photon/source chord remains a local linear
+            // approximation between consecutive Kerr ray samples.
+            if let Some((f,observed,hit))=segment_hit_rest_worldtube(
+                &observer.camera.geometry,source_history,
+                p0.chart_xy_m,p1.chart_xy_m,t0,t1,envelope_m,
             ) {
                 let time=t0+(t1-t0)*f;
-                let emitter=source_history.sample_at(time)?;
-                let hit=p0.chart_xy_m+
-                    (p1.chart_xy_m-p0.chart_xy_m)*f;
-                matched=Some((time,emitter.pos_m,hit));
+                matched=Some((time,observed,hit));
                 break;
             }
         }
