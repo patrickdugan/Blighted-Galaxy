@@ -15,6 +15,9 @@ use std::f64::consts::PI;
 pub enum StarSampling {
     LegacyAntipodalFibonacci,
     ShellBalancedAntipodal,
+    /// Mass-CDF shells sized so radial thickness is near the
+    /// equal-area angular tile width.
+    ApproximatelyCubicShells,
 }
 #[derive(Debug,Clone)]
 pub struct ShellSeedReport {
@@ -99,6 +102,117 @@ pub fn seed_shell_balanced(
     };
     (particles,report)
 }
+#[derive(Debug,Clone)]
+pub struct VolumeShell {
+    pub first_pair:usize,
+    pub pair_count:usize,
+    pub lower_radius_m:f64,
+    pub upper_radius_m:f64,
+    pub thickness_over_tile:f64,
+}
+#[derive(Debug,Clone)]
+pub struct EqualVolumeSeedReport {
+    pub shells:Vec<VolumeShell>,
+    pub min_tile_aspect:f64,
+    pub max_tile_aspect:f64,
+    pub median_tile_aspect:f64,
+    pub mass_relative_error:f64,
+    pub center_error_m:f64,
+}
+/// Deterministic approximate equal-volume shells: each pair contributes
+/// two equal-mass SPH parcels. Shell boundaries follow the continuum
+/// enclosed-mass CDF. The number of pairs per shell is selected to make
+/// shell thickness Delta r close to an angular tile edge
+/// r_mid*sqrt(2*pi/k), with 2*k angular cells.
+pub fn seed_approximately_cubic_shells(
+    profile:&WhiteDwarfProfile,
+    center:V3,velocity:V3,count:usize,
+)->(Vec<Fluid3>,EqualVolumeSeedReport) {
+    assert!(count>=8 && count%2==0);
+    let pairs=count/2;
+    let mass=profile.mass_kg/count as f64;
+    let golden=PI*(3.0-5.0_f64.sqrt());
+    let mut ordered=Vec::<(usize,Fluid3,Fluid3)>::with_capacity(pairs);
+    let mut shells=Vec::<VolumeShell>::new();
+    let mut first=0_usize;
+    while first<pairs {
+        let remaining=pairs-first;
+        let lower=profile.radius_at_mass_fraction(
+            first as f64/pairs as f64);
+        let maximum=remaining.min(96);
+        let mut best=(f64::INFINITY,1_usize,0.0,0.0,0.0);
+        for k in 1..=maximum {
+            // Prefer at least two directions per shell unless this is the
+            // final residual bin.
+            if k==1&&remaining>1 {continue;}
+            if remaining-k==1 {continue;}
+            let upper=profile.radius_at_mass_fraction(
+                (first+k) as f64/pairs as f64);
+            let middle=profile.radius_at_mass_fraction(
+                (first as f64+0.5*k as f64)/pairs as f64);
+            let thickness=upper-lower;
+            let tile=middle*(2.0*PI/k as f64).sqrt();
+            let ratio=thickness/tile.max(1.0);
+            // The log-distance penalizes needles and flattened cells
+            // symmetrically, while limiting very small outer shell sizes.
+            let cost=ratio.ln().abs()+if k==2{0.05}else{0.0};
+            if cost<best.0 {
+                best=(cost,k,upper,middle,ratio);
+            }
+        }
+        let (_,k,upper,_,ratio)=best;
+        assert!(k>=1 && k<=remaining, "shell allocation failed");
+        let index=shells.len();
+        shells.push(VolumeShell {
+            first_pair:first,pair_count:k,
+            lower_radius_m:lower,
+            upper_radius_m:upper,
+            thickness_over_tile:ratio,
+        });
+        let phase=2.0*PI*radical_inverse(index+1,3);
+        let tilt=PI*radical_inverse(index+1,5);
+        let (sp,cp)=phase.sin_cos();
+        let (st,ct)=tilt.sin_cos();
+        for local in 0..k {
+            let i=first+local;
+            let f=(i as f64+0.5)/pairs as f64;
+            let radius=profile.radius_at_mass_fraction(f);
+            let z=1.0-2.0*(local as f64+0.5)/k as f64;
+            let phi=golden*local as f64;
+            let xy=(1.0-z*z).sqrt();
+            let nx=xy*phi.cos();let ny=xy*phi.sin();
+            let rx=ct*nx+st*z;
+            let rz=-st*nx+ct*z;
+            let dir=V3::new(cp*rx-sp*ny,sp*rx+cp*ny,rz);
+            let d=dir*radius;
+            ordered.push((i,
+                Fluid3{pos_m:center+d,vel_m_s:velocity,mass_kg:mass},
+                Fluid3{pos_m:center-d,vel_m_s:velocity,mass_kg:mass}));
+        }
+        first+=k;
+    }
+    ordered.sort_by_key(|(i,_,_)|*i);
+    let mut particles=Vec::with_capacity(count);
+    for (_,a,b) in ordered {
+        particles.push(a);particles.push(b);
+    }
+    let total=particles.iter().map(|p|p.mass_kg).sum::<f64>();
+    let mean=particles.iter().fold(V3::default(),|sum,p|
+        sum+p.pos_m*p.mass_kg)/total;
+    let mut aspects=shells.iter().map(|x|x.thickness_over_tile)
+        .collect::<Vec<_>>();
+    aspects.sort_by(|a,b|a.partial_cmp(b).unwrap());
+    let report=EqualVolumeSeedReport {
+        min_tile_aspect:*aspects.first().unwrap(),
+        max_tile_aspect:*aspects.last().unwrap(),
+        median_tile_aspect:aspects[aspects.len()/2],
+        shells,
+        mass_relative_error:(total-profile.mass_kg).abs()/profile.mass_kg,
+        center_error_m:(mean-center).len(),
+    };
+    (particles,report)
+}
+
 pub fn seeded_star(
     profile:&WhiteDwarfProfile,center:V3,velocity:V3,
     count:usize,method:StarSampling,
@@ -108,6 +222,8 @@ pub fn seeded_star(
             crate::sph3::seed_from_hydrostatic(profile,center,velocity,count),
         StarSampling::ShellBalancedAntipodal=>
             seed_shell_balanced(profile,center,velocity,count).0,
+        StarSampling::ApproximatelyCubicShells=>
+            seed_approximately_cubic_shells(profile,center,velocity,count).0,
     }
 }
 
@@ -151,6 +267,40 @@ mod tests {
                 (i as f64+0.5)/(n/2) as f64);
             assert!((r-expected).abs()<1e-7);
             assert!((p[2*i].pos_m+p[2*i+1].pos_m).len()<1e-7);
+        }
+    }
+    #[test]
+    fn approximately_cubic_shells_cover_all_equal_mass_pairs() {
+        let profile=setup();
+        for n in [64,128,512,1024] {
+            let (p,report)=seed_approximately_cubic_shells(
+                &profile,V3::new(1e8,0.0,0.0),V3::default(),n);
+            assert_eq!(p.len(),n);
+            assert_eq!(report.shells.iter()
+                .map(|s|s.pair_count).sum::<usize>(),n/2);
+            assert!(report.shells.len()>1);
+            assert!(report.min_tile_aspect>0.0&&
+                report.max_tile_aspect.is_finite());
+            assert!(report.mass_relative_error<1e-12);
+            assert!(report.center_error_m<2e-5);
+            assert!(p.iter().all(|x|x.pos_m.finite()));
+            for pair in p.chunks_exact(2) {
+                let pos=(pair[0].pos_m+pair[1].pos_m)*0.5;
+                assert!((pos-V3::new(1e8,0.0,0.0)).len()<2e-7);
+            }
+        }
+    }
+    #[test]
+    fn approximately_cubic_shells_respect_mass_cdf_quantiles() {
+        let profile=setup();
+        let count=128;
+        let (samples,_)=seed_approximately_cubic_shells(
+            &profile,V3::default(),V3::default(),count);
+        for i in 0..count/2 {
+            let r=samples[2*i].pos_m.len();
+            let reference=profile.radius_at_mass_fraction(
+                (i as f64+0.5)/(count/2) as f64);
+            assert!((r-reference).abs()<1e-7);
         }
     }
     #[test]
