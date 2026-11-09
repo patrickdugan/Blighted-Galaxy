@@ -10,4 +10,6 @@ The historical game-design and setting documents remain in [design/](design/) an
 
 - [BG-PHY-05: Kerr Photons and 3D SPH](physics/KERR_PHOTON_SPH3.md), including Kerr equations, photon trajectories, polytropic 3D fluid, mesh batching, regression gates and known limitations.
 
+- [BG-PHY-06: Kerr Camera and Cold White Dwarfs](physics/KERR_CAMERA_WHITE_DWARF.md), with non-equatorial Carter photon ray tracing, ZAMO camera, cold electron degeneracy EOS and a hydrostatic stellar model.
+
 See the consolidated [GDD](../design/GDD.md). New interpretations should cite source manuscripts or a specific physical approximation. Preserve the two originals without silent revision.

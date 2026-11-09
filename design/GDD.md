@@ -204,6 +204,8 @@ The first publicly playable benchmark mission, **The Cluster Bomber Intercept**,
 
 **M1 SI physics bench:** calibrated constants, N-body acceleration and symplectic evolution, relativistic energy/time, nominal Hawking temperature/power/lifetime, diagnostics and executable benchmarks. Included in the same PR; still independent of the arcade renderer.
 
+**BG-PHY-06 photon camera and cold-star bridge:** non-equatorial Kerr null geodesics with a finite-radius observer and Carter constant, cold relativistic electron EOS, a spherical hydrostatic reference profile, and stratified 3D SPH sampling. See [BG-PHY-06](../workpapers/physics/KERR_CAMERA_WHITE_DWARF.md). The live joust's optical history and camera ray tracer remain separate integrations.
+
 **M2 calibrated encounter:** choose world-unit mapping and camera model, integrate SI time/space into a standalone or alternate playable scene, add trajectories and retarded optical states.
 
 **M3 boxing and morphogenesis:** continuous collision for deformable entities, form state, energy-limited regeneration and spatial partitioning.
