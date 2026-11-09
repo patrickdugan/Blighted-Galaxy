@@ -394,3 +394,9 @@ pub mod debris;
 pub mod kerr;
 pub mod sph3;
 pub mod particle_batch;
+
+// BG-PHY-06: cold electron-degenerate stellar structure reference.
+pub mod white_dwarf;
+
+// BG-PHY-06: non-equatorial Kerr null-ray camera.
+pub mod kerr_camera;

@@ -86,6 +86,25 @@ The benchmark reports Kerr orbital reference values, radial constraint residuals
 
 Detailed assumptions: [BG-PHY-05 physics workpaper](workpapers/physics/KERR_PHOTON_SPH3.md).
 
+## Non-equatorial Kerr photon camera and cold white dwarfs (BG-PHY-06)
+
+The new Kerr camera integrates past-directed null trajectories with the Carter separation constant from a local zero-angular-momentum observer. It resolves black-hole silhouettes, curved photon paths, synthetic background stars, and a thin accretion disc at arbitrary viewing inclination.
+
+The new white-dwarf module solves Newtonian hydrostatic structure with the fully relativistic zero-temperature electron equation of state. A 0.65-solar-mass carbon–oxygen reference star has a calculated radius around 8,402 km. Its radial density profile can seed a 3D SPH model using the same cold electron pressure.
+
+~~~sh
+cargo run --release --bin kerr_camera_lab
+cargo run --release --bin white_dwarf_lab
+cargo run --release --bin kerr_camera_bench -- --output kerr-camera.png
+cargo run --release --bin white_dwarf_bench -- --output wd-mass-radius.csv
+~~~
+
+The camera lab uses keys 1–4 to select spin (0, +0.45, +0.85, -0.85), Up/Down for inclination and Z/X for field of view. The stellar lab uses keys 1–3 for mass, Space to pause, Q/E for time rate and A/D to rotate the 3D projection.
+
+The curved Kerr rays and hydrostatic white-dwarf profiles use calibrated equations. Synthetic disc colors, idealized 3D particle sampling, isothermal assumptions in older scenes and fictional spacecraft hardware remain distinguishable from physical predictions.
+
+Full derivations and test scope: [BG-PHY-06 workpaper](workpapers/physics/KERR_CAMERA_WHITE_DWARF.md).
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.

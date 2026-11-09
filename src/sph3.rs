@@ -5,6 +5,7 @@
  //! This represents an idealized fluid; it does not solve nuclear burning,
  //! radiation transport, degenerate-electron relativity, or strong-field GR.
 use crate::physics::{G_SI, SiBody};
+use crate::white_dwarf::{DegenerateElectrons,WhiteDwarfProfile};
 use std::f64::consts::PI;
 use std::ops::{Add,AddAssign,Sub,SubAssign,Mul,Div};
 
@@ -57,12 +58,18 @@ pub struct Massive3 {
     pub radius_m:f64,
 }
 #[derive(Clone,Copy,Debug)]
+pub enum Sph3Eos {
+    Polytrope,
+    /// Fully relativistic zero-temperature Fermi electron EOS, mu_e=A/Z.
+    ColdDegenerate {mu_e:f64},
+}
+#[derive(Clone,Copy,Debug)]
 pub struct Sph3Config {
     pub smoothing_m:f64,
     pub gravity_softening_m:f64,
-    /// P = K * rho^gamma, rho in kg/m³, P in pascal.
     pub polytropic_k:f64,
     pub gamma:f64,
+    pub eos:Sph3Eos,
 }
 impl Sph3Config {
     pub fn white_dwarf_proxy()->Self {
@@ -71,13 +78,24 @@ impl Sph3Config {
             gravity_softening_m:1.2e6,
             polytropic_k:3.0e8,
             gamma:5.0/3.0,
+            eos:Sph3Eos::Polytrope,
         }
+    }
+    pub fn cold_white_dwarf(mu_e:f64)->Option<Self> {
+        DegenerateElectrons::new(mu_e)?;
+        Some(Self {smoothing_m:1.5e6,gravity_softening_m:0.8e6,
+            polytropic_k:0.0,gamma:5.0/3.0,
+            eos:Sph3Eos::ColdDegenerate{mu_e}})
     }
     pub fn valid(&self)->bool {
         self.smoothing_m.is_finite()&&self.smoothing_m>0.0&&
         self.gravity_softening_m.is_finite()&&self.gravity_softening_m>0.0&&
         self.polytropic_k.is_finite()&&self.polytropic_k>=0.0&&
-        self.gamma.is_finite()&&self.gamma>1.0
+        self.gamma.is_finite()&&self.gamma>1.0&&
+        match self.eos {
+            Sph3Eos::Polytrope=>true,
+            Sph3Eos::ColdDegenerate{mu_e}=>DegenerateElectrons::new(mu_e).is_some(),
+        }
     }
 }
 /// Normalized 3D cubic spline kernel W: m^-3.
@@ -114,10 +132,19 @@ pub fn densities_kg_m3(particles:&[Fluid3],h:f64)->Vec<f64> {
     density
 }
 pub fn pressure_pa(rho:f64,cfg:Sph3Config)->f64 {
-    cfg.polytropic_k*rho.powf(cfg.gamma)
+    match cfg.eos {
+        Sph3Eos::Polytrope=>cfg.polytropic_k*rho.powf(cfg.gamma),
+        Sph3Eos::ColdDegenerate{mu_e}=>
+            DegenerateElectrons::new(mu_e).unwrap().pressure_pa(rho),
+    }
 }
 pub fn internal_energy_j_per_kg(rho:f64,cfg:Sph3Config)->f64 {
-    cfg.polytropic_k*rho.powf(cfg.gamma-1.0)/(cfg.gamma-1.0)
+    match cfg.eos {
+        Sph3Eos::Polytrope=>
+            cfg.polytropic_k*rho.powf(cfg.gamma-1.0)/(cfg.gamma-1.0),
+        Sph3Eos::ColdDegenerate{mu_e}=>
+            DegenerateElectrons::new(mu_e).unwrap().internal_energy_j_kg(rho),
+    }
 }
 #[derive(Debug)]
 pub struct Sph3Forces {
@@ -251,6 +278,32 @@ pub fn seed_from_progenitor(
     };
     (out,placeholder)
 }
+/// Equal-mass, antipodal samples with radial locations from the hydrostatic
+/// cumulative mass profile. This gives a stratified progenitor distribution.
+/// SPH particle sampling remains an approximation to continuum equilibrium.
+pub fn seed_from_hydrostatic(
+    profile:&WhiteDwarfProfile,center_m:V3,velocity_m_s:V3,
+    count:usize,
+)->Vec<Fluid3> {
+    assert!(count>=4 && count%2==0);
+    let half=count/2;
+    let mut out=Vec::with_capacity(count);
+    let golden=PI*(3.0-5.0f64.sqrt());
+    let mass_each=profile.mass_kg/count as f64;
+    for i in 0..half {
+        let z=1.0-2.0*(i as f64+0.5)/half as f64;
+        let angle=golden*i as f64;
+        let xy=(1.0-z*z).sqrt();
+        let dir=V3::new(xy*angle.cos(),xy*angle.sin(),z);
+        let radius=profile.radius_at_mass_fraction((i as f64+0.5)/half as f64);
+        let displacement=dir*radius;
+        out.push(Fluid3{pos_m:center_m+displacement,
+            vel_m_s:velocity_m_s,mass_kg:mass_each});
+        out.push(Fluid3{pos_m:center_m-displacement,
+            vel_m_s:velocity_m_s,mass_kg:mass_each});
+    }
+    out
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -328,6 +381,52 @@ mod tests {
         for _ in 0..40 {advance(&mut bh,&mut p,cfg,0.002);}
         let drift=(energy_j(&bh,&p,cfg)-e).abs()/e.abs();
         assert!(drift<0.001,"energy drift ratio={drift}");
+    }
+    #[test]
+    fn cold_degenerate_eos_is_wired_to_exact_reference() {
+        let cfg=Sph3Config::cold_white_dwarf(2.0).unwrap();
+        let e=DegenerateElectrons::new(2.0).unwrap();
+        for rho in [1.0e7,1.0e9,1.0e11] {
+            let a=pressure_pa(rho,cfg);
+            assert!((a-e.pressure_pa(rho)).abs()/a<1e-13);
+            let u=internal_energy_j_per_kg(rho,cfg);
+            assert!((u-e.internal_energy_j_kg(rho)).abs()/u<1e-13);
+        }
+        assert!(!Sph3Config::cold_white_dwarf(0.0).is_some());
+    }
+    #[test]
+    fn hydrostatic_seed_preserves_bulk_mass_center_and_momentum() {
+        let eos=DegenerateElectrons::new(2.0).unwrap();
+        let star=crate::white_dwarf::profile_for_mass(
+            0.65*SOLAR_MASS_KG,eos,10_000.0).unwrap();
+        let center=V3::new(1e8,-2e7,3e7);
+        let velocity=V3::new(1e5,2e4,-3e4);
+        let samples=seed_from_hydrostatic(&star,center,velocity,128);
+        let mass: f64=samples.iter().map(|p|p.mass_kg).sum();
+        let com=samples.iter().fold(V3::default(),
+            |s,p|s+p.pos_m*p.mass_kg)/mass;
+        let momentum=samples.iter().fold(V3::default(),
+            |s,p|s+p.vel_m_s*p.mass_kg)/mass;
+        assert!((mass-star.mass_kg).abs()/mass<1e-12);
+        assert!((com-center).len()<1e-5);
+        assert!((momentum-velocity).len()<1e-6);
+        assert!(samples.iter().all(|p|(p.pos_m-center).len()<=star.radius_m));
+    }
+    #[test]
+    fn cold_eos_pair_forces_conserve_total_linear_momentum() {
+        let eos=DegenerateElectrons::new(2.0).unwrap();
+        let star=crate::white_dwarf::profile_for_mass(
+            0.65*SOLAR_MASS_KG,eos,10_000.0).unwrap();
+        let mut samples=seed_from_hydrostatic(&star,
+            V3::new(1e8,0.0,0.0),V3::new(-3e5,0.0,0.0),64);
+        let mut central=Massive3{pos_m:V3::default(),vel_m_s:V3::default(),
+            mass_kg:10.0*SOLAR_MASS_KG,radius_m:3.0e4};
+        let cfg=Sph3Config::cold_white_dwarf(2.0).unwrap();
+        let p0=total_momentum(&central,&samples);
+        for _ in 0..8 {advance(&mut central,&mut samples,cfg,0.001);}
+        let p1=total_momentum(&central,&samples);
+        assert!((p1-p0).len()/(star.mass_kg*3.0e5)<1e-10);
+        assert!(samples.iter().all(|x|x.vel_m_s.finite()));
     }
     #[test]
     fn zero_step_identity() {

@@ -15,6 +15,19 @@ jobs:
       - run: cargo run --bin physics_bench
       - run: cargo run --bin strongfield_bench
       - run: cargo run --bin kerr_sph3_bench
+      - run: cargo run --release --bin kerr_camera_bench -- --output kerr-camera-smoke.png
+      - run: cargo run --release --bin kerr_camera_bench -- --width 320 --height 200 --span 86 --inclination 65 --output kerr-camera-wide.png
+      - run: cargo run --release --bin white_dwarf_bench -- --output wd-mass-radius.csv
+      - name: Upload physics reference outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy06-physics-reference
+          path: |
+            kerr-camera-smoke.png
+            kerr-camera-wide.png
+            wd-mass-radius.csv
+          if-no-files-found: error
+          retention-days: 30
       - run: cargo test si_bridge -- --nocapture
 
   windows-playable:
@@ -38,5 +51,9 @@ jobs:
             target/release/strongfield_bench.exe
             target/release/kerr_sph3_lab.exe
             target/release/kerr_sph3_bench.exe
+            target/release/kerr_camera_lab.exe
+            target/release/kerr_camera_bench.exe
+            target/release/white_dwarf_lab.exe
+            target/release/white_dwarf_bench.exe
           if-no-files-found: error
           retention-days: 30
