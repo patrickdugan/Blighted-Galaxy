@@ -7,15 +7,20 @@ use std::f64::consts::PI;
 
 fn main() {
     let output=std::env::args().skip(1).collect::<Vec<_>>();
-    let path=output.windows(2).find(|x|x[0]=="--output")
+    let get=|name:&str|output.windows(2).find(|x|x[0]==name)
         .map(|x|x[1].as_str());
+    let path=get("--output");
+    let width:u16=get("--width").and_then(|x|x.parse().ok()).unwrap_or(120);
+    let height:u16=get("--height").and_then(|x|x.parse().ok()).unwrap_or(80);
+    let span:f64=get("--span").and_then(|x|x.parse().ok()).unwrap_or(36.0);
+    let inclination:f64=get("--inclination").and_then(|x|x.parse().ok()).unwrap_or(60.0);
     let mass=10.0*SOLAR_MASS_KG;
     let mut previous=None;
     for spin in [0.0,0.85] {
         let geometry=KerrGeometry::new(mass,spin).unwrap();
-        let camera=KerrCamera::new(geometry,85.0,PI/3.0,36.0).unwrap();
-        let image=camera.render_rgba(120,80);
-        println!("Kerr camera a={spin:+.2}, inclination 60 degrees");
+        let camera=KerrCamera::new(geometry,85.0,inclination*PI/180.0,span).unwrap();
+        let image=camera.render_rgba(width,height);
+        println!("Kerr camera a={spin:+.2}, inclination {inclination:.1} degrees, span {span:.1} rg");
         println!("  pixels={} captured={} disc={} sky={} unresolved={}",
             image.width as usize*image.height as usize,
             image.captured,image.disc,image.sky,image.unresolved);
@@ -25,7 +30,7 @@ fn main() {
         assert!(image.captured>0 && image.disc>0 && image.sky>0);
         assert!(image.worst_radial_residual < 1e-4);
         assert!(image.worst_polar_residual < 1e-3);
-        assert_eq!(image.pixels.len(),120*80*4);
+        assert_eq!(image.pixels.len(),width as usize*height as usize*4);
         if let Some(prior)=previous.take() {
             assert_ne!(prior,image.pixels,"rotating Kerr must change sky image");
         }
