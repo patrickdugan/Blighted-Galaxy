@@ -12,7 +12,11 @@ use blighted_galaxy::particle_batch::{
     ParticleBillboard,build_meshes,draw_billboards,
 };
 use blighted_galaxy::stellar_relax::{
-    relax_isolated_white_dwarf,RelaxParameters,RelaxReport,
+    relax_isolated_white_dwarf,relax_isolated_adaptive,
+    RelaxParameters,RelaxReport,AdaptiveRelaxReport,
+};
+use blighted_galaxy::sph_adaptive::{
+    self,AdaptiveConfig,AdaptiveState,
 };
 use macroquad::prelude::*;
 
@@ -37,6 +41,8 @@ struct WdLab {
     rotation:f32,
     scale:f32,
     relaxation:Option<RelaxReport>,
+    adaptive_relaxation:Option<AdaptiveRelaxReport>,
+    adaptive_state:Option<AdaptiveState>,
 }
 impl WdLab {
     fn new(target_solar:f64)->Self {
@@ -64,7 +70,8 @@ impl WdLab {
         Self{profile,mass_radius:curve,particles,central,config,
             energy_initial,momentum_initial,mass_initial,
             elapsed_s:0.0,accumulator_s:0.0,time_rate:1.0,
-            paused:true,rotation:0.36,scale:2.7,relaxation:None}
+            paused:true,rotation:0.36,scale:2.7,relaxation:None,
+            adaptive_relaxation:None,adaptive_state:None}
     }
     fn controls(&mut self) {
         let target=if is_key_pressed(KeyCode::Key1) {Some(0.35)}
@@ -77,6 +84,8 @@ impl WdLab {
         }
         if is_key_pressed(KeyCode::Space) {self.paused=!self.paused;}
         if is_key_pressed(KeyCode::H) {
+            self.adaptive_state=None;
+            self.adaptive_relaxation=None;
             // Reset to a hydrostatic stratified seed before relaxing the
             // star in isolation, then introduce it into the BH encounter.
             self.paused=true;
@@ -100,6 +109,38 @@ impl WdLab {
                 &self.central,&self.particles);
             self.elapsed_s=0.0;self.accumulator_s=0.0;
         }
+        if is_key_pressed(KeyCode::J) {
+            // Compare density-adaptive SPH (grad-h pressure correction)
+            // under the same isolated star / black-hole encounter.
+            self.paused=true;
+            self.relaxation=None;
+            self.particles=sph3::seed_from_hydrostatic(
+                &self.profile,V3::new(1.2e8,0.0,0.0),
+                V3::new(-3.0e5,2.0e4,0.0),192);
+            self.central=Massive3{
+                pos_m:V3::default(),vel_m_s:V3::default(),
+                mass_kg:10.0*SOLAR_MASS_KG,radius_m:3.0e4
+            };
+            let adaptive_cfg=AdaptiveConfig::from_star_radius(
+                self.profile.radius_m);
+            let mut adaptive=AdaptiveState::new(
+                &self.particles,self.profile.radius_m,adaptive_cfg);
+            self.adaptive_relaxation=relax_isolated_adaptive(
+                &mut self.particles,self.config,&self.profile,
+                adaptive_cfg,&mut adaptive,
+                RelaxParameters {
+                    iterations:750,dt_s:0.01,damping_time_s:0.7,
+                }).ok();
+            self.energy_initial=sph_adaptive::adaptive_energy_j(
+                &self.central,&self.particles,&mut adaptive,
+                self.config,adaptive_cfg);
+            self.adaptive_state=Some(adaptive);
+            self.momentum_initial=sph3::total_momentum(
+                &self.central,&self.particles);
+            self.mass_initial=sph3::total_mass_kg(
+                &self.central,&self.particles);
+            self.elapsed_s=0.0;self.accumulator_s=0.0;
+        }
         if is_key_pressed(KeyCode::Q) {self.time_rate=(self.time_rate/2.0).max(0.1);}
         if is_key_pressed(KeyCode::E) {self.time_rate=(self.time_rate*2.0).min(12.0);}
         if is_key_down(KeyCode::A) {self.rotation-=0.015;}
@@ -114,8 +155,15 @@ impl WdLab {
         let mut count=0;
         let dt=0.002;
         while self.accumulator_s>=dt && count<90 {
-            sph3::advance(&mut self.central,&mut self.particles,
-                self.config,dt);
+            if let Some(state)=self.adaptive_state.as_mut() {
+                sph_adaptive::advance(
+                    &mut self.central,&mut self.particles,state,
+                    self.config,AdaptiveConfig::from_star_radius(
+                        self.profile.radius_m),dt);
+            } else {
+                sph3::advance(&mut self.central,&mut self.particles,
+                    self.config,dt);
+            }
             self.elapsed_s+=dt;
             self.accumulator_s-=dt;
             count+=1;
@@ -163,8 +211,11 @@ impl WdLab {
         draw_circle(bh.x,bh.y,20.0,GOLD);
         draw_circle(bh.x,bh.y,16.0,BLACK);
         draw_circle_lines(bh.x,bh.y,22.0,2.0,ORANGE);
-        let density=sph3::densities_kg_m3(
-            &self.particles,self.config.smoothing_m);
+        let density=if let Some(state)=&self.adaptive_state {
+            state.densities_kg_m3.clone()
+        } else {
+            sph3::densities_kg_m3(&self.particles,self.config.smoothing_m)
+        };
         let peak=density.iter().copied().fold(0.0_f64,f64::max);
         let sprites=self.particles.iter().zip(&density)
             .map(|(p,rho)| {
@@ -177,7 +228,13 @@ impl WdLab {
             }).collect::<Vec<_>>();
         draw_billboards(&build_meshes(&sprites));
         let momentum=sph3::total_momentum(&self.central,&self.particles);
-        let energy=sph3::energy_j(&self.central,&self.particles,self.config);
+        let energy=if let Some(state)=&self.adaptive_state {
+            sph_adaptive::energy_j_cached(&self.central,&self.particles,
+                state,self.config,AdaptiveConfig::from_star_radius(
+                    self.profile.radius_m))
+        } else {
+            sph3::energy_j(&self.central,&self.particles,self.config)
+        };
         let p_drift=(momentum-self.momentum_initial).len()/
             (self.mass_initial*3.0e5);
         let energy_drift=(energy-self.energy_initial).abs()/
@@ -188,7 +245,7 @@ impl WdLab {
             27.0,47.0,26.0,WHITE);
         draw_text("1: 0.35 Msun   2: 0.65 Msun   3: 0.95 Msun",
             27.0,78.0,19.0,SKYBLUE);
-        draw_text("SPACE pause | H 15-second damped relaxation | A/D rotate | Q/E rate | Z/X zoom",
+        draw_text("SPACE pause | H fixed-h relax | J adaptive-h relax | A/D rotate | Q/E rate | Z/X zoom",
             27.0,105.0,18.0,LIGHTGRAY);
         let rows=[
             format!("Mass            {:9.6} solar masses",self.profile.mass_solar()),
@@ -200,12 +257,20 @@ impl WdLab {
                 self.elapsed_s,if self.paused {"PAUSED"} else {"RUNNING"}),
             format!("SPH ΔE/|E0|     {:9.3e}       ΔP/scale {:9.3e}",
                 energy_drift,p_drift),
-            if let Some(r)=self.relaxation {
-                format!("RELAX FORCE RATIO {:9.5}    {} iterations",
+            if let Some(a)=self.adaptive_relaxation {
+                format!("ADAPTIVE FORCE RATIO {:7.5}   Omega min {:.3}",
+                    a.report.force_reduction(),a.minimum_omega)
+            } else if let Some(r)=self.relaxation {
+                format!("FIXED-h FORCE RATIO {:9.5}   {} iterations",
                     r.force_reduction(),r.iterations)
-            } else {"RELAX STATUS    H: prepare damped initial state".to_string()},
-            if let Some(r)=self.relaxation {
-                format!("LOG-RHO MISMATCH {:7.4}->{:.4} | max R {:.1} km",
+            } else {"RELAX STATUS   H fixed-h, J adaptive-h".to_string()},
+            if let Some(a)=self.adaptive_relaxation {
+                format!("ADAPTIVE ΔLOGRHO {:.4}->{:.4} | R {:.1} km",
+                    a.report.initial_density_log_rms,
+                    a.report.final_density_log_rms,
+                    a.report.max_radius_m/1000.0)
+            } else if let Some(r)=self.relaxation {
+                format!("LOG-RHO MISMATCH {:.4}->{:.4} | R {:.1} km",
                     r.initial_density_log_rms,r.final_density_log_rms,
                     r.max_radius_m/1000.0)
             } else {"SOURCE PROFILE   hydrostatic 1D, SPH discrete seed".to_string()},
@@ -215,7 +280,7 @@ impl WdLab {
                 if i==5 {GOLD}else{WHITE});
         }
         self.draw_curve();
-        draw_text("Hydrostatic Newtonian reference; 192 equal-mass SPH parcels under a cold electron EOS.",
+        draw_text("Hydrostatic cold-electron EOS; adaptive-h and fixed-h are distinct, uncalibrated SPH experiments.",
             25.0,screen_height()-20.0,18.0,LIGHTGRAY);
     }
 }

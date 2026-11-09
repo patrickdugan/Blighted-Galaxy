@@ -229,6 +229,16 @@ pub fn adaptive_energy_j(
     physics:Sph3Config,cfg:AdaptiveConfig,
 )->f64 {
     update_adaptive_densities(particles,state,cfg);
+    energy_j_cached(central,particles,state,physics,cfg)
+}
+/// Energy with the smoothing-length/density snapshot already updated by the
+/// most recent force call, for low-overhead per-frame telemetry.
+pub fn energy_j_cached(
+    central:&Massive3,particles:&[Fluid3],
+    state:&AdaptiveState,
+    physics:Sph3Config,cfg:AdaptiveConfig,
+)->f64 {
+    assert!(state.valid_for(particles.len()));
     let mut e=central.mass_kg*central.vel_m_s.len_sq()*0.5;
     for (i,p) in particles.iter().enumerate() {
         e+=p.mass_kg*(0.5*p.vel_m_s.len_sq()+
