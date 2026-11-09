@@ -54,7 +54,7 @@ fn main() {
     println!("BG-PHY-08 VARIABLE-h COLD WHITE DWARF RELAXATION");
     println!("  hydrostatic reference: M=0.65 Msun R={:.2} km t_dyn={:.3} s",
         star.radius_m/1e3,(star.radius_m.powi(3)/(G_SI*star.mass_kg)).sqrt());
-    for n in [64_usize,128,256] {
+    for n in [64_usize,128,256,512] {
         let center=V3::new(1.0e8,0.0,0.0);
         let seed=sph3::seed_from_hydrostatic(&star,center,V3::default(),n);
         let options=RelaxParameters{
@@ -98,7 +98,7 @@ fn main() {
         let mut hold_radius=f64::NAN;
         let mut hold_energy=f64::NAN;
         let mut hold_p=f64::NAN;
-        if n==64 {
+        if n<=128 {
             let dyn_time=(star.radius_m.powi(3)/(G_SI*star.mass_kg)).sqrt();
             let dt=0.01;
             let steps=(3.0*dyn_time/dt).ceil() as usize;
@@ -108,8 +108,8 @@ fn main() {
             hold_radius=hold.radius_relative_change;
             hold_energy=hold.energy_relative_drift;
             hold_p=hold.momentum_relative_drift;
-            println!("    N=64 undamped hold {:.2}s (3 t_dyn): ΔR/R={:+.3}%, ΔE/E={:.3e}, ΔP/scale={:.3e}",
-                hold_seconds,100.0*hold_radius,hold_energy,hold_p);
+            println!("    N={} undamped hold {:.2}s (3 t_dyn): ΔR/R={:+.3}%, ΔE/E={:.3e}, ΔP/scale={:.3e}",
+                n,hold_seconds,100.0*hold_radius,hold_energy,hold_p);
             assert!(hold.mass_relative_drift<1e-12);
             assert!(hold.momentum_relative_drift<1e-9);
         }
