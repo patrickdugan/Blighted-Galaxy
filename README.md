@@ -1,7 +1,43 @@
 # Blighted Galaxy
 
-A reconstruction of the Blighted Galaxy game and its surviving story-world archive.
+A recovery project for the lost Rust-based Blighted Galaxy game, preserving its original fiction and design documents alongside a new playable prototype.
 
-The original local Rust engine was lost in 2026. Recovered narrative manuscripts and a clean-room Rust prototype are being restored in a reviewable pull request. See the incoming `recovery/` and `src/` directories.
+The earlier local engine was lost in 2026. This code is a clean-room reconstruction. The surviving 94 pages of source material, approximately 34,000 whitespace-delimited words, are archived as text transcriptions in [recovery/](recovery/README.md).
 
-The historical manuscripts are creative source material. The reconstructed simulation is new code, with explicit simplifications where detailed astrophysical models have not yet been recovered.
+## Run the Rust sandbox
+
+Install the Rust toolchain, then:
+
+~~~sh
+cargo run --release
+~~~
+
+The scene contains a gravitationally active star, a black hole, a white dwarf, a neutron star, a nanite swarm and a dueling post-human opponent. It uses GPU-backed 2D drawing via macroquad.
+
+Controls: W/S thrust, A/D rotate, Space fire, E contact strike, B release a short-lived Hawking payload, G scatter a swarm, mouse wheel zoom, R restart, Escape exit.
+
+## Simulation modules
+
+- Reproducible seeded nanoswarm scatter.
+- Newtonian N-body dynamics with softened gravity and velocity Verlet integration.
+- Swept-circle projectile collision, with AABB contact-boxing.
+- Simplified tidal-disruption criterion and visible shear debris.
+- Analytic normalized evaporation law with end-of-life particle burst.
+- Fixed 120 Hz simulation step with independently rendered frames.
+
+The initial physics units are deliberately normalized. Scientific accuracy requires replacing the gravity/evaporation approximations with calibrated models before claiming realistic Hawking explosions or stellar dynamics.
+
+## Evidence
+
+The [Game Design Treatment](recovery/design/game-design-treatment.txt) calls for relativistic jousting, transhuman duels and interstellar war economics. The [macro-history](recovery/design/macro-history.txt) outlines 22 episodes. Four recovered fiction manuscripts supply encounters and characters. All six transcriptions preserve the text extracted from the user-supplied Word documents.
+
+See [engine recovery notes](docs/ENGINE_RECOVERY.md) for the distinction between documented game design, remembered features of the lost engine, and current reconstruction.
+
+## Tests
+
+~~~sh
+cargo test --all-targets
+cargo check --all-targets
+~~~
+
+GitHub Actions runs the same checks on pushes and pull requests. The core math tests include high-speed projectile tunneling, tidal trend, Hawking step consistency, deterministic swarm generation and velocity bounds.
