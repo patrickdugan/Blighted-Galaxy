@@ -52,16 +52,22 @@ fn main() {
     let eos=DegenerateElectrons::new(2.0).unwrap();
     let profile=profile_for_mass(0.65*SOLAR_MASS_KG,eos,10_000.0).unwrap();
     let cfg=Sph3Config::cold_white_dwarf(2.0).unwrap();
-    for count in [64_usize,128] {
+    for (count,options,label) in [
+        (64_usize,RelaxParameters::baseline(),"baseline"),
+        (128_usize,RelaxParameters::baseline(),"baseline"),
+        (128_usize,RelaxParameters {
+            iterations:1500,dt_s:0.01,damping_time_s:0.7,
+        },"extended"),
+    ] {
         let mut particles=sph3::seed_from_hydrostatic(
             &profile,V3::new(1.0e8,0.0,0.0),V3::default(),count);
         let t=Instant::now();
         let report=relax_isolated_white_dwarf(
-            &mut particles,cfg,&profile,RelaxParameters::baseline())
+            &mut particles,cfg,&profile,options)
             .expect("finite relaxed particles");
         println!(
-            "  N={} duration {:.3}s, RMS accel {:e}->{:e}, force ratio {:.5}, log-density mismatch {:.5}->{:.5}",
-            count,t.elapsed().as_secs_f64(),
+            "  N={} {} (physical {:.1}s) runtime {:.3}s, RMS accel {:e}->{:e}, force ratio {:.5}, log-density mismatch {:.5}->{:.5}",
+            count,label,options.iterations as f64*options.dt_s,t.elapsed().as_secs_f64(),
             report.initial_accel_rms_m_s2,
             report.final_accel_rms_m_s2,
             report.force_reduction(),
