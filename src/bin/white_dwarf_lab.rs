@@ -18,6 +18,7 @@ use blighted_galaxy::stellar_relax::{
 use blighted_galaxy::sph_adaptive::{
     self,AdaptiveConfig,AdaptiveState,
 };
+use blighted_galaxy::sph_sampling::{self,StarSampling};
 use macroquad::prelude::*;
 
 fn config()->Conf {
@@ -43,6 +44,8 @@ struct WdLab {
     relaxation:Option<RelaxReport>,
     adaptive_relaxation:Option<AdaptiveRelaxReport>,
     adaptive_state:Option<AdaptiveState>,
+    adaptive_config:Option<AdaptiveConfig>,
+    active_method:&'static str,
 }
 impl WdLab {
     fn new(target_solar:f64)->Self {
@@ -71,7 +74,8 @@ impl WdLab {
             energy_initial,momentum_initial,mass_initial,
             elapsed_s:0.0,accumulator_s:0.0,time_rate:1.0,
             paused:true,rotation:0.36,scale:2.7,relaxation:None,
-            adaptive_relaxation:None,adaptive_state:None}
+            adaptive_relaxation:None,adaptive_state:None,
+            adaptive_config:None,active_method:"hydrostatic seed"}
     }
     fn controls(&mut self) {
         let target=if is_key_pressed(KeyCode::Key1) {Some(0.35)}
@@ -85,7 +89,9 @@ impl WdLab {
         if is_key_pressed(KeyCode::Space) {self.paused=!self.paused;}
         if is_key_pressed(KeyCode::H) {
             self.adaptive_state=None;
+            self.adaptive_config=None;
             self.adaptive_relaxation=None;
+            self.active_method="fixed-h degenerate SPH";
             // Reset to a hydrostatic stratified seed before relaxing the
             // star in isolation, then introduce it into the BH encounter.
             self.paused=true;
@@ -135,6 +141,43 @@ impl WdLab {
                 &self.central,&self.particles,&mut adaptive,
                 self.config,adaptive_cfg);
             self.adaptive_state=Some(adaptive);
+            self.adaptive_config=Some(adaptive_cfg);
+            self.active_method="adaptive-h with fixed Plummer gravity";
+            self.momentum_initial=sph3::total_momentum(
+                &self.central,&self.particles);
+            self.mass_initial=sph3::total_mass_kg(
+                &self.central,&self.particles);
+            self.elapsed_s=0.0;self.accumulator_s=0.0;
+        }
+        if is_key_pressed(KeyCode::K) {
+            // Research mode: shell-balanced seed and a variable Plummer
+            // potential differentiated through h(rho), including zeta/Omega.
+            self.paused=true;
+            self.relaxation=None;
+            self.particles=sph_sampling::seeded_star(
+                &self.profile,V3::new(1.2e8,0.0,0.0),
+                V3::new(-3e5,2e4,0.0),192,
+                StarSampling::ShellBalancedAntipodal);
+            self.central=Massive3 {
+                pos_m:V3::default(),vel_m_s:V3::default(),
+                mass_kg:10.0*SOLAR_MASS_KG,radius_m:3.0e4,
+            };
+            let adaptive_cfg=AdaptiveConfig::from_star_radius(
+                self.profile.radius_m).with_adaptive_gravity();
+            let mut adaptive=AdaptiveState::new(
+                &self.particles,self.profile.radius_m,adaptive_cfg);
+            self.adaptive_relaxation=relax_isolated_adaptive(
+                &mut self.particles,self.config,&self.profile,
+                adaptive_cfg,&mut adaptive,
+                RelaxParameters {
+                    iterations:750,dt_s:0.01,damping_time_s:0.7,
+                }).ok();
+            self.energy_initial=sph_adaptive::adaptive_energy_j(
+                &self.central,&self.particles,&mut adaptive,
+                self.config,adaptive_cfg);
+            self.adaptive_state=Some(adaptive);
+            self.adaptive_config=Some(adaptive_cfg);
+            self.active_method="shell-balanced + variational Plummer";
             self.momentum_initial=sph3::total_momentum(
                 &self.central,&self.particles);
             self.mass_initial=sph3::total_mass_kg(
@@ -158,8 +201,8 @@ impl WdLab {
             if let Some(state)=self.adaptive_state.as_mut() {
                 sph_adaptive::advance(
                     &mut self.central,&mut self.particles,state,
-                    self.config,AdaptiveConfig::from_star_radius(
-                        self.profile.radius_m),dt);
+                    self.config,self.adaptive_config
+                        .expect("adaptive state requires an adaptive config"),dt);
             } else {
                 sph3::advance(&mut self.central,&mut self.particles,
                     self.config,dt);
@@ -230,8 +273,8 @@ impl WdLab {
         let momentum=sph3::total_momentum(&self.central,&self.particles);
         let energy=if let Some(state)=&self.adaptive_state {
             sph_adaptive::energy_j_cached(&self.central,&self.particles,
-                state,self.config,AdaptiveConfig::from_star_radius(
-                    self.profile.radius_m))
+                state,self.config,self.adaptive_config
+                    .expect("adaptive state requires an adaptive config"))
         } else {
             sph3::energy_j(&self.central,&self.particles,self.config)
         };
@@ -239,13 +282,13 @@ impl WdLab {
             (self.mass_initial*3.0e5);
         let energy_drift=(energy-self.energy_initial).abs()/
             self.energy_initial.abs().max(1.0);
-        draw_rectangle(14.0,14.0,920.0,385.0,
+        draw_rectangle(14.0,14.0,920.0,420.0,
             Color::new(0.012,0.024,0.047,0.93));
         draw_text("BLIGHTED GALAXY / WHITE-DWARF STRUCTURE",
             27.0,47.0,26.0,WHITE);
         draw_text("1: 0.35 Msun   2: 0.65 Msun   3: 0.95 Msun",
             27.0,78.0,19.0,SKYBLUE);
-        draw_text("SPACE pause | H fixed-h relax | J adaptive-h relax | A/D rotate | Q/E rate | Z/X zoom",
+        draw_text("SPACE pause | H fixed | J adaptive | K shell+matched gravity | A/D rotate | Q/E rate",
             27.0,105.0,18.0,LIGHTGRAY);
         let rows=[
             format!("Mass            {:9.6} solar masses",self.profile.mass_solar()),
@@ -257,6 +300,7 @@ impl WdLab {
                 self.elapsed_s,if self.paused {"PAUSED"} else {"RUNNING"}),
             format!("SPH ΔE/|E0|     {:9.3e}       ΔP/scale {:9.3e}",
                 energy_drift,p_drift),
+            format!("SCHEME          {}",self.active_method),
             if let Some(a)=self.adaptive_relaxation {
                 format!("ADAPTIVE FORCE RATIO {:7.5}   Omega min {:.3}",
                     a.report.force_reduction(),a.minimum_omega)

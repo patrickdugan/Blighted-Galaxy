@@ -30,7 +30,7 @@ fn main() {
     let mut csv=String::from(
         "particles,seed,gravity,damped_seconds,force_ratio,density_log_rms,bias_percent,radius_km,minimum_omega,capped_fraction,elapsed_wall_s,hold_seconds,hold_radius_percent,hold_energy_drift,hold_momentum_drift\n"
     );
-    for n in [64_usize,128,256] {
+    for n in [64_usize,128,256,512] {
         let iterations=if n<=128 {300} else {120};
         let options=RelaxParameters{
             iterations,dt_s:0.01,damping_time_s:0.7,
