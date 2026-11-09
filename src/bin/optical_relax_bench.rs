@@ -17,6 +17,13 @@ use std::f64::consts::FRAC_PI_2;
 use std::time::Instant;
 
 fn main() {
+    let argv=std::env::args().skip(1).collect::<Vec<_>>();
+    let flag=|name:&str|argv.windows(2)
+        .find(|x|x[0]==name).map(|x|x[1].as_str());
+    let convergence_csv=flag("--csv");
+    let optical_csv=flag("--optical-csv");
+    let mut csv=String::from(
+        "particles,scheme,physical_s,force_initial_m_s2,force_final_m_s2,force_ratio,log_density_initial,log_density_final,max_radius_km,reference_radius_km,max_speed_km_s,run_seconds\n");
     let mass=10.0*SOLAR_MASS_KG;
     println!("BG-PHY-07: recorded curved Kerr light-cone acquisition");
     for spin in [0.0,0.8,-0.8] {
@@ -41,6 +48,20 @@ fn main() {
             observed.radial_error,observed.polar_error,
             observed.ray.samples.len(),history.validate_segments()
         );
+        if spin==0.8 {
+            if let Some(path)=optical_csv {
+                let mut data=String::from(
+                    "photon_t_offset_s,photon_x_m,photon_y_m,source_x_m,source_y_m\n");
+                for v in &observed.ray.samples {
+                    if let Some(sample)=history.sample_at(now+v.t_offset_s) {
+                        data.push_str(&format!("{:.12e},{:.12e},{:.12e},{:.12e},{:.12e}\n",
+                            v.t_offset_s,v.chart_xy_m.x,v.chart_xy_m.y,
+                            sample.pos_m.x,sample.pos_m.y));
+                    }
+                }
+                std::fs::write(path,data).expect("write Kerr optical path CSV");
+            }
+        }
         assert!(observed.light_delay_s>0.0);
         assert!(observed.radial_error<1e-4);
         assert!(observed.polar_error<1e-4);
@@ -86,9 +107,22 @@ fn main() {
             report.center_shift_m/profile.radius_m,
             report.final_max_speed_relative_m_s/1000.0
         );
+        csv.push_str(&format!(
+            "{},{},{:.5},{:.12e},{:.12e},{:.8},{:.8},{:.8},{:.4},{:.4},{:.4},{:.4}\n",
+            count,label,options.iterations as f64*options.dt_s,
+            report.initial_accel_rms_m_s2,report.final_accel_rms_m_s2,
+            report.force_reduction(),report.initial_density_log_rms,
+            report.final_density_log_rms,report.max_radius_m/1000.0,
+            profile.radius_m/1000.0,
+            report.final_max_speed_relative_m_s/1000.0,
+            t.elapsed().as_secs_f64()
+        ));
         assert!(report.mass_relative_error<1e-12);
         assert!(report.center_shift_m/profile.radius_m<1e-8);
         assert!(report.force_reduction().is_finite());
         assert!(report.max_radius_m<3.0*profile.radius_m);
+    }
+    if let Some(path)=convergence_csv {
+        std::fs::write(path,csv).expect("write stellar convergence CSV");
     }
 }

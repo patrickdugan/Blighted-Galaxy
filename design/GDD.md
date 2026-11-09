@@ -214,6 +214,14 @@ The first publicly playable benchmark mission, **The Cluster Bomber Intercept**,
 
 **M5 campaign:** systems, 22-episode branching scaffolding, delayed order queues and localized Patricia Trie propagation.
 
+### BG-PHY-07 integration gate
+
+The Kerr camera now supports an **equatorial moving-source optical acquisition**: an observer receives light propagated along a stationary Kerr null geodesic, and the ray intersects a recorded circular-orbit combatant history. The 2D source-envelope collision remains chart-coordinate approximated, and the default solar-system joust continues using flat-spacetime causality until an observer/worldtube representation with consistent Kerr coordinates is ready.
+
+The three-dimensional cold electron EOS now has a **damped isolated-SPH relaxation** experiment. The numerical residual force drops after extended damping, while the low-resolution particle star shrinks below its hydrostatic radius. This exposes a physical-fidelity blocker for any white-dwarf shotgun or near-hole collision level. Advance to adaptive smoothing and higher-resolution, converged stellar initial conditions before turning this into campaign damage balancing.
+
+See [BG-PHY-07](../workpapers/physics/KERR_CAUSAL_RELAX.md).
+
 ## 11. Unresolved design decisions
 
 - **Fidelity:** whether orbital maneuvers use realistic dynamical constants in all encounters, or curated time/length scales for playable pacing.
