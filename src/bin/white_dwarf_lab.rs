@@ -11,6 +11,9 @@ use blighted_galaxy::white_dwarf::{
 use blighted_galaxy::particle_batch::{
     ParticleBillboard,build_meshes,draw_billboards,
 };
+use blighted_galaxy::stellar_relax::{
+    relax_isolated_white_dwarf,RelaxParameters,RelaxReport,
+};
 use macroquad::prelude::*;
 
 fn config()->Conf {
@@ -33,6 +36,7 @@ struct WdLab {
     paused:bool,
     rotation:f32,
     scale:f32,
+    relaxation:Option<RelaxReport>,
 }
 impl WdLab {
     fn new(target_solar:f64)->Self {
@@ -60,7 +64,7 @@ impl WdLab {
         Self{profile,mass_radius:curve,particles,central,config,
             energy_initial,momentum_initial,mass_initial,
             elapsed_s:0.0,accumulator_s:0.0,time_rate:1.0,
-            paused:true,rotation:0.36,scale:2.7}
+            paused:true,rotation:0.36,scale:2.7,relaxation:None}
     }
     fn controls(&mut self) {
         let target=if is_key_pressed(KeyCode::Key1) {Some(0.35)}
@@ -72,6 +76,30 @@ impl WdLab {
             *self=Self::new(self.profile.mass_solar());
         }
         if is_key_pressed(KeyCode::Space) {self.paused=!self.paused;}
+        if is_key_pressed(KeyCode::H) {
+            // Reset to a hydrostatic stratified seed before relaxing the
+            // star in isolation, then introduce it into the BH encounter.
+            self.paused=true;
+            self.particles=sph3::seed_from_hydrostatic(
+                &self.profile,V3::new(1.2e8,0.0,0.0),
+                V3::new(-3.0e5,2.0e4,0.0),192);
+            self.central=Massive3{
+                pos_m:V3::default(),vel_m_s:V3::default(),
+                mass_kg:10.0*SOLAR_MASS_KG,radius_m:3.0e4
+            };
+            self.relaxation=relax_isolated_white_dwarf(
+                &mut self.particles,self.config,&self.profile,
+                RelaxParameters {
+                    iterations:1500,dt_s:0.01,damping_time_s:0.7,
+                }).ok();
+            self.energy_initial=sph3::energy_j(
+                &self.central,&self.particles,self.config);
+            self.momentum_initial=sph3::total_momentum(
+                &self.central,&self.particles);
+            self.mass_initial=sph3::total_mass_kg(
+                &self.central,&self.particles);
+            self.elapsed_s=0.0;self.accumulator_s=0.0;
+        }
         if is_key_pressed(KeyCode::Q) {self.time_rate=(self.time_rate/2.0).max(0.1);}
         if is_key_pressed(KeyCode::E) {self.time_rate=(self.time_rate*2.0).min(12.0);}
         if is_key_down(KeyCode::A) {self.rotation-=0.015;}
@@ -154,13 +182,13 @@ impl WdLab {
             (self.mass_initial*3.0e5);
         let energy_drift=(energy-self.energy_initial).abs()/
             self.energy_initial.abs().max(1.0);
-        draw_rectangle(14.0,14.0,920.0,314.0,
+        draw_rectangle(14.0,14.0,920.0,385.0,
             Color::new(0.012,0.024,0.047,0.93));
         draw_text("BLIGHTED GALAXY / WHITE-DWARF STRUCTURE",
             27.0,47.0,26.0,WHITE);
         draw_text("1: 0.35 Msun   2: 0.65 Msun   3: 0.95 Msun",
             27.0,78.0,19.0,SKYBLUE);
-        draw_text("SPACE evolve/pause | A/D rotate | Q/E simulation rate | Z/X zoom",
+        draw_text("SPACE pause | H 15-second damped relaxation | A/D rotate | Q/E rate | Z/X zoom",
             27.0,105.0,18.0,LIGHTGRAY);
         let rows=[
             format!("Mass            {:9.6} solar masses",self.profile.mass_solar()),
@@ -172,6 +200,15 @@ impl WdLab {
                 self.elapsed_s,if self.paused {"PAUSED"} else {"RUNNING"}),
             format!("SPH ΔE/|E0|     {:9.3e}       ΔP/scale {:9.3e}",
                 energy_drift,p_drift),
+            if let Some(r)=self.relaxation {
+                format!("RELAX FORCE RATIO {:9.5}    {} iterations",
+                    r.force_reduction(),r.iterations)
+            } else {"RELAX STATUS    H: prepare damped initial state".to_string()},
+            if let Some(r)=self.relaxation {
+                format!("LOG-RHO MISMATCH {:7.4}->{:.4} | max R {:.1} km",
+                    r.initial_density_log_rms,r.final_density_log_rms,
+                    r.max_radius_m/1000.0)
+            } else {"SOURCE PROFILE   hydrostatic 1D, SPH discrete seed".to_string()},
         ];
         for (i,row) in rows.iter().enumerate() {
             draw_text(row,27.0,141.0+i as f32*29.0,19.0,

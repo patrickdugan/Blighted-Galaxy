@@ -15,6 +15,16 @@ jobs:
       - run: cargo run --bin physics_bench
       - run: cargo run --bin strongfield_bench
       - run: cargo run --bin kerr_sph3_bench
+      - run: cargo run --release --bin optical_relax_bench -- --csv bg-phy07-relax-convergence.csv --optical-csv bg-phy07-kerr-path.csv
+      - name: Upload BG-PHY-07 numerical reference
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy07-numerical-reference
+          path: |
+            bg-phy07-relax-convergence.csv
+            bg-phy07-kerr-path.csv
+          if-no-files-found: error
+          retention-days: 30
       - run: cargo run --release --bin kerr_camera_bench -- --output kerr-camera-smoke.png
       - run: cargo run --release --bin kerr_camera_bench -- --width 320 --height 200 --span 86 --inclination 65 --output kerr-camera-wide.png
       - run: cargo run --release --bin white_dwarf_bench -- --output wd-mass-radius.csv
@@ -54,6 +64,8 @@ jobs:
             target/release/kerr_camera_lab.exe
             target/release/kerr_camera_bench.exe
             target/release/white_dwarf_lab.exe
+            target/release/kerr_optical_lab.exe
+            target/release/optical_relax_bench.exe
             target/release/white_dwarf_bench.exe
           if-no-files-found: error
           retention-days: 30

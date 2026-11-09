@@ -12,4 +12,6 @@ The historical game-design and setting documents remain in [design/](design/) an
 
 - [BG-PHY-06: Kerr Camera and Cold White Dwarfs](physics/KERR_CAMERA_WHITE_DWARF.md), with non-equatorial Carter photon ray tracing, ZAMO camera, cold electron degeneracy EOS and a hydrostatic stellar model.
 
+- [BG-PHY-07: Kerr Optical Acquisition and SPH Relaxation](physics/KERR_CAUSAL_RELAX.md), connecting the Kerr null-ray tracer to moving recorded worldlines, plus damped degenerate stellar initial conditions and measured resolution biases.
+
 See the consolidated [GDD](../design/GDD.md). New interpretations should cite source manuscripts or a specific physical approximation. Preserve the two originals without silent revision.

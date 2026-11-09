@@ -105,6 +105,21 @@ The curved Kerr rays and hydrostatic white-dwarf profiles use calibrated equatio
 
 Full derivations and test scope: [BG-PHY-06 workpaper](workpapers/physics/KERR_CAMERA_WHITE_DWARF.md).
 
+## Curved Kerr optical acquisition and white-dwarf relaxation (BG-PHY-07)
+
+A new **moving-target optical laboratory** sends past-directed Kerr photon rays through the recorded worldline of a posthuman combatant on a circular test-body orbit. It computes the emission time and the source position that an observer receives after the curved photon flight. The source's simulated present position is displayed separately.
+
+~~~sh
+cargo run --release --bin kerr_optical_lab
+cargo run --release --bin optical_relax_bench
+~~~
+
+Kerr optical lab controls: **1/2/3** choose black-hole spin (0, +0.75, -0.75), **F** toggles automatic optical acquisition, **A/D** steer the manual ray, **Q/E** change time rate, and **Z/X** or mouse wheel zoom. The sensor traces **incoming** photons and targets the recorded causal past. It does not simulate an outgoing laser or full 3D moving-object intersection.
+
+The white-dwarf lab also supports **H** to reinitialize a hydrostatic star and apply 15 simulated seconds of isolated damped SPH relaxation before entering the black-hole encounter. The new diagnostics track force reduction and density mismatch. Resolution tests reveal that the relaxed low-particle-count star contracts excessively, despite large reductions in force residual. Treat the relaxed star as a numerical experiment until the mass–radius convergence gate passes.
+
+More details and measurements: [BG-PHY-07 workpaper](workpapers/physics/KERR_CAUSAL_RELAX.md).
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.
