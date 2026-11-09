@@ -14,4 +14,6 @@ The historical game-design and setting documents remain in [design/](design/) an
 
 - [BG-PHY-07: Kerr Optical Acquisition and SPH Relaxation](physics/KERR_CAUSAL_RELAX.md), connecting the Kerr null-ray tracer to moving recorded worldlines, plus damped degenerate stellar initial conditions and measured resolution biases.
 
+- [BG-PHY-08: Moving Kerr Observers and Adaptive-h White-Dwarf SPH](physics/ADAPTIVE_SPH_MOVING_OBSERVER.md), with local optical aberration, emitter-rest-frame target envelopes, variational grad-h pressure corrections, and fixed/adaptive resolution comparisons.
+
 See the consolidated [GDD](../design/GDD.md). New interpretations should cite source manuscripts or a specific physical approximation. Preserve the two originals without silent revision.
