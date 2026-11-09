@@ -120,6 +120,21 @@ The white-dwarf lab also supports **H** to reinitialize a hydrostatic star and a
 
 More details and measurements: [BG-PHY-07 workpaper](workpapers/physics/KERR_CAUSAL_RELAX.md).
 
+## BG-PHY-08: orbiting Kerr observers and adaptive white-dwarf SPH
+
+The new **moving-observer Kerr lab** carries an equatorial camera along a circular timelike Kerr orbit, computes its speed relative to the local zero-angular-momentum frame, applies photon aberration, and solves light-cone intersections with a **recorded, potentially noncircular source history**. Its target envelope uses a local metric-based estimate of the emitter's rest space.
+
+~~~sh
+cargo run --release --bin kerr_moving_lab
+cargo run --release --bin phy08_bench -- --csv bg-phy08-adaptive.csv
+~~~
+
+Moving-observer controls: **1–3** black-hole spin, **W** switching between a ZAMO and an orbiting observer, **F** automatic photon acquisition, **A/D** manual ray direction, **Q/E** clock rate, **Z/X** zoom.
+
+The white-dwarf lab adds **J** for isolated damping using an adaptive smoothing-length and grad-h-corrected SPH pressure force; **H** retains the original fixed-h comparison. Following relaxation, each mode uses the corresponding force method for live evolution. The new solver increases stellar radius at the measured particle counts. A 64-particle undamped hold still expands by over 12% in three dynamical times, leaving [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) open.
+
+Read the complete [BG-PHY-08 physics workpaper](workpapers/physics/ADAPTIVE_SPH_MOVING_OBSERVER.md) for equations, CI data, convergence targets and the metric-worldtube approximation.
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.

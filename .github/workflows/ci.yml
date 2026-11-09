@@ -16,6 +16,14 @@ jobs:
       - run: cargo run --bin strongfield_bench
       - run: cargo run --bin kerr_sph3_bench
       - run: cargo run --release --bin optical_relax_bench -- --csv bg-phy07-relax-convergence.csv --optical-csv bg-phy07-kerr-path.csv
+      - run: cargo run --release --bin phy08_bench -- --csv bg-phy08-adaptive.csv
+      - name: Upload BG-PHY-08 adaptive reference
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy08-adaptive-reference
+          path: bg-phy08-adaptive.csv
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload BG-PHY-07 numerical reference
         uses: actions/upload-artifact@v4
         with:
@@ -66,6 +74,8 @@ jobs:
             target/release/white_dwarf_lab.exe
             target/release/kerr_optical_lab.exe
             target/release/optical_relax_bench.exe
+            target/release/phy08_bench.exe
+            target/release/kerr_moving_lab.exe
             target/release/white_dwarf_bench.exe
           if-no-files-found: error
           retention-days: 30

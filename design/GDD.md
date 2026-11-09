@@ -222,6 +222,14 @@ The three-dimensional cold electron EOS now has a **damped isolated-SPH relaxati
 
 See [BG-PHY-07](../workpapers/physics/KERR_CAUSAL_RELAX.md).
 
+### BG-PHY-08 fidelity and perception milestone
+
+The encounter optics now permit an **orbiting observer** in a Kerr background. The camera accounts for its local velocity relative to the ZAMO tetrad, rotates the photon geodesic to the observer's reception azimuth, and intersects the ray with a recorded source history. The source can undergo a smooth noncircular perturbation. The target envelope is measured using a local rest-frame metric estimate, retaining finite-chart and two-dimensional constraints. The main solar-system duel still uses the established flat-spacetime causal engine.
+
+The white-dwarf branch adds **adaptive 3D SPH** with per-particle smoothing lengths and a grad-h pressure correction. Fixed-h and adaptive-h models remain independently selectable, and their measured radius, force residual, density-profile mismatch and undamped free-evolution stability inform further engineering. The first comparison improves the predicted radius while retaining a substantial discrepancy from the hydrostatic reference. The white-dwarf equilibrium issue stays open until a resolution-converged radius within 5% and a stable multi-dynamical-time undamped hold are measured.
+
+Refer to [BG-PHY-08 workpaper](../workpapers/physics/ADAPTIVE_SPH_MOVING_OBSERVER.md) and the open convergence issue.
+
 ## 11. Unresolved design decisions
 
 - **Fidelity:** whether orbital maneuvers use realistic dynamical constants in all encounters, or curated time/length scales for playable pacing.
