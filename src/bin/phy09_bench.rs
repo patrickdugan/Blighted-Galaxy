@@ -43,10 +43,12 @@ fn main() {
             let seed_label=match seed {
                 StarSampling::LegacyAntipodalFibonacci=>"legacy",
                 StarSampling::ShellBalancedAntipodal=>"shell",
+                StarSampling::ApproximatelyCubicShells=>"cubic",
             };
             let gravity_label=match gravity {
                 GravityModel::FixedPlummer=>"fixed",
                 GravityModel::MatchedAdaptivePlummer=>"variational",
+                GravityModel::MatchedCubicSpline=>"cubic_spline",
             };
             let mut particles=sph_sampling::seeded_star(&star,
                 V3::new(1e8,0.0,0.0),V3::default(),n,seed);
