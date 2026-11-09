@@ -381,3 +381,6 @@ mod tests {
 
 // Calibrated SI reference physics is implemented independently of gameplay units.
 pub mod physics;
+
+// SI-to-gameplay adapter, relativistic combat and tidal-breakup demo.
+pub mod si_bridge;
