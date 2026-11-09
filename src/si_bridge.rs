@@ -3,9 +3,11 @@
  //! Fictional systems: shields, high-power engines, and breakup impulses.
 use crate::physics::{
     kinetic_energy_relativistic_j, lorentz_gamma, near_side_tidal_ratio_si,
-    retarded_emission_si, velocity_verlet_si, SiBody, AU_M, C_SI, G_SI, SOLAR_MASS_KG,
+    velocity_verlet_si, SiBody, AU_M, C_SI, G_SI, SOLAR_MASS_KG,
 };
 use crate::{swept_circle_hit, V2};
+use crate::causal::{WorldlineHistory,WorldlineSample};
+use crate::debris::{self, DebrisConfig};
 use std::f64::consts::TAU;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -165,30 +167,42 @@ pub struct SiJoust {
     pub next_player_shot_s:f64,
     pub next_enemy_shot_s:f64,
     pub shots_fired:u64,
+    pub player_history:WorldlineHistory,
+    pub opponent_history:WorldlineHistory,
 }
 impl Default for SiJoust {fn default()->Self {Self::new()}}
 impl SiJoust {
     pub fn new()->Self {
         let center=V2::new(AU_M,0.0);
+        let player=Craft::new(center+V2::new(-250e6,-20e6),V2::default(),0.0);
+        let opponent=Craft::new(center+V2::new(250e6,20e6),
+            V2::new(-0.012*C_SI,0.0),std::f64::consts::PI);
+        let mut player_history=WorldlineHistory::new(8192);
+        let mut opponent_history=WorldlineHistory::new(8192);
+        player_history.push(WorldlineSample{
+            time_s:0.0,pos_m:player.pos_m,vel_m_s:player.vel_m_s,
+        }).unwrap();
+        opponent_history.push(WorldlineSample{
+            time_s:0.0,pos_m:opponent.pos_m,vel_m_s:opponent.vel_m_s,
+        }).unwrap();
         Self{
             sun:SiBody::new(SOLAR_MASS_KG,6.957e8,V2::default(),V2::default()),
-            player:Craft::new(center+V2::new(-250e6,-20e6),V2::default(),0.0),
-            opponent:Craft::new(center+V2::new(250e6,20e6),V2::new(-0.012*C_SI,0.0),
-                std::f64::consts::PI),
+            player,opponent,player_history,opponent_history,
             rounds:vec![],events:vec![],time_s:0.0,
             next_player_shot_s:0.0,next_enemy_shot_s:1.2,shots_fired:0,
         }
     }
-    /// Optical apparent position under a locally constant-velocity model.
+    /// Optical position from a strictly recorded, bounded worldline.
+    /// Returns None until a physical light signal has arrived from the
+    /// recorded time window, rather than extrapolating nonexistent history.
     pub fn apparent_opponent(&self)->Option<(V2,f64)> {
-        let at_zero=self.opponent.pos_m-self.opponent.vel_m_s*self.time_s;
-        let e=retarded_emission_si(at_zero,self.opponent.vel_m_s,
-            self.player.pos_m,self.time_s)?;
-        Some((e.emission_pos_m,e.delay_s))
+        let e=self.opponent_history.observe(self.player.pos_m,self.time_s)?;
+        Some((e.pos_m,e.delay_s))
     }
     pub fn last_impact(&self)->Option<&ImpactEvent> {self.events.last()}
     pub fn step(&mut self,dt:Seconds,input:Control) {
         assert!(dt.0>=0.0 && dt.0<=0.1);
+        if dt.0==0.0 {return;}
         self.player.facing_rad=input.player_facing_rad;
         let player_before=self.player.pos_m;
         let opponent_before=self.opponent.pos_m;
@@ -202,16 +216,15 @@ impl SiJoust {
             self.shots_fired+=1;
         }
         if self.time_s>=self.next_enemy_shot_s && self.opponent.alive() {
-            // The enemy uses the retarded optical position rather than a
-            // perfect instantaneous knowledge of the player's location.
-            let at_zero=self.player.pos_m-self.player.vel_m_s*self.time_s;
-            if let Some(e)=retarded_emission_si(at_zero,self.player.vel_m_s,
+            // Enemy fire control is limited to signals contained in its
+            // recorded causal past. No target data means no targeted shot.
+            if let Some(e)=self.player_history.observe(
                 self.opponent.pos_m,self.time_s) {
-                let aim=(e.emission_pos_m-self.opponent.pos_m).normalized();
+                let aim=(e.pos_m-self.opponent.pos_m).normalized();
                 self.opponent.facing_rad=aim.y.atan2(aim.x);
+                self.rounds.push(KineticRound::from_craft(&self.opponent,false));
+                self.next_enemy_shot_s=self.time_s+2.5;
             }
-            self.rounds.push(KineticRound::from_craft(&self.opponent,false));
-            self.next_enemy_shot_s=self.time_s+2.5;
         }
         let mut impacts=Vec::new();
         for shot in &mut self.rounds {
@@ -239,15 +252,19 @@ impl SiJoust {
             self.events.drain(0..self.events.len()-80);
         }
         self.time_s+=dt.0;
+        self.player_history.push(WorldlineSample{
+            time_s:self.time_s,pos_m:self.player.pos_m,
+            vel_m_s:self.player.vel_m_s,
+        }).expect("player worldline must remain causal and monotonic");
+        self.opponent_history.push(WorldlineSample{
+            time_s:self.time_s,pos_m:self.opponent.pos_m,
+            vel_m_s:self.opponent.vel_m_s,
+        }).expect("opponent worldline must remain causal and monotonic");
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct TidalFragment {
-    pub pos_m:V2,
-    pub vel_m_s:V2,
-    pub mass_kg:f64,
-}
+/// Historical alias retained for renderer and encounter compatibility.
+pub type TidalFragment = debris::FluidParcel;
 #[derive(Debug, Clone, Copy)]
 pub struct TidalDisruption {
     pub time_s:f64,
@@ -297,16 +314,10 @@ impl SiTidalEncounter {
                 }
             }
         } else {
-            // Newtonian tracers after proxy breakup. Self-gravity and
-            // pressure, radiative shocks and core recoil are deferred.
-            self.black_hole.pos_m+=self.black_hole.vel_m_s*dt.0;
-            for fragment in &mut self.fragments {
-                let delta=self.black_hole.pos_m-fragment.pos_m;
-                let r2=delta.len_sq().max((5.0*self.black_hole.radius_m).powi(2));
-                let a=delta*(G_SI*self.black_hole.mass_kg/(r2*r2.sqrt()));
-                fragment.vel_m_s+=a*dt.0;
-                fragment.pos_m+=fragment.vel_m_s*dt.0;
-            }
+            // Pairwise self-gravity + symmetric 2D pressure and black-hole
+            // recoil; sound-speed closure approximates fluid behavior.
+            debris::advance(&mut self.black_hole, &mut self.fragments,
+                DebrisConfig::white_dwarf_proxy(),dt.0);
         }
         self.time_s+=dt.0;
     }
@@ -420,6 +431,13 @@ mod tests {
         let mut game=SiJoust::new();
         game.opponent.pos_m=game.player.pos_m+V2::new(3e6,0.0);
         game.opponent.vel_m_s=V2::default();
+        // Reset recorded past after test-fixture placement. Real gameplay
+        // disallows discontinuous teleports between causal samples.
+        game.opponent_history=WorldlineHistory::new(8192);
+        game.opponent_history.push(WorldlineSample {
+            time_s:0.0,pos_m:game.opponent.pos_m,
+            vel_m_s:game.opponent.vel_m_s,
+        }).unwrap();
         let shield=game.opponent.shield_energy_j;
         for _ in 0..20 {
             game.step(Seconds(1.0/120.0),Control{
@@ -442,6 +460,34 @@ mod tests {
         approx(m,star.mass_kg,1e-14);
         assert!((p-star.pos_m).len()<1e-5);
         assert!((v-star.vel_m_s).len()<1e-6);
+    }
+    #[test]
+    fn target_observation_uses_recorded_past_not_instant_prediction() {
+        let mut game=SiJoust::new();
+        assert!(game.apparent_opponent().is_none());
+        for _ in 0..350 {
+            game.step(Seconds(1.0/120.0),Control::default());
+        }
+        let (observed,delay)=game.apparent_opponent().unwrap();
+        assert!(delay>1.0 && delay<3.0);
+        assert!((observed-game.opponent.pos_m).len()>1.0e5);
+        assert!(game.player_history.validate_segments());
+    }
+    #[test]
+    fn debris_after_breakup_preserves_global_linear_momentum() {
+        let mut game=SiTidalEncounter::new();
+        for _ in 0..2500 {
+            game.step(Seconds(0.1));
+            if game.disruption.is_some() {break;}
+        }
+        assert!(game.disruption.is_some());
+        let p0=debris::system_momentum_kg_m_s(&game.black_hole,&game.fragments);
+        let before=game.black_hole.vel_m_s;
+        for _ in 0..50 {game.step(Seconds(0.02));}
+        let p1=debris::system_momentum_kg_m_s(&game.black_hole,&game.fragments);
+        let scale=game.fragments[0].mass_kg*game.fragments[0].vel_m_s.len();
+        assert!((p1-p0).len()/scale<1e-8);
+        assert!((game.black_hole.vel_m_s-before).len()>0.0);
     }
     #[test]
     fn tidal_breakup_trigger_and_mass_accounting() {

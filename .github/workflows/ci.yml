@@ -13,6 +13,7 @@ jobs:
       - run: cargo test --all-targets
       - run: cargo check --all-targets
       - run: cargo run --bin physics_bench
+      - run: cargo run --bin strongfield_bench
       - run: cargo test si_bridge -- --nocapture
 
   windows-playable:
@@ -32,5 +33,7 @@ jobs:
             target/release/arcade_legacy.exe
             target/release/si_orbits.exe
             target/release/physics_bench.exe
+            target/release/strongfield_lab.exe
+            target/release/strongfield_bench.exe
           if-no-files-found: error
           retention-days: 30
