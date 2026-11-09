@@ -101,7 +101,9 @@ Weak-field deflection by impact parameter b is `alpha_lens≈4GM/(c²b)`. The mo
 - Monotonic near-side tide and weak-lensing behavior
 - Symmetric N-body acceleration, one Sun/Earth orbit, mechanical energy/momentum drift, and zero-step invariance
 
-Run `cargo test --all-targets` or `cargo run --release --bin physics_bench`.
+A visual companion is available with \`cargo run --release --bin si_orbits\`. The three selectable scenarios use physical masses and dimensions to evolve orbital paths, while explicitly exaggerating marker radii on screen. It overlays energy drift, interbody distance, retarded light delay and a first-order tidal ratio.
+
+Run \`cargo test --all-targets\` or `cargo run --release --bin physics_bench`.
 
 ## 8. Integration plan
 

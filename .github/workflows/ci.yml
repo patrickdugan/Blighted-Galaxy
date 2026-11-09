@@ -12,6 +12,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --all-targets
       - run: cargo check --all-targets
+      - run: cargo run --bin physics_bench
 
   windows-playable:
     runs-on: windows-latest
@@ -25,6 +26,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: blighted-galaxy-windows-x64
-          path: target/release/blighted-galaxy.exe
+          path: |
+            target/release/blighted-galaxy.exe
+            target/release/si_orbits.exe
+            target/release/physics_bench.exe
           if-no-files-found: error
           retention-days: 30
