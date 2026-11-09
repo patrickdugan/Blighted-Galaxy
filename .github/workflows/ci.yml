@@ -15,6 +15,7 @@ jobs:
       - run: cargo run --bin physics_bench
       - run: cargo run --bin strongfield_bench
       - run: cargo run --bin kerr_sph3_bench
+      - run: cargo run --release --bin optical_relax_bench
       - run: cargo run --release --bin kerr_camera_bench -- --output kerr-camera-smoke.png
       - run: cargo run --release --bin kerr_camera_bench -- --width 320 --height 200 --span 86 --inclination 65 --output kerr-camera-wide.png
       - run: cargo run --release --bin white_dwarf_bench -- --output wd-mass-radius.csv
