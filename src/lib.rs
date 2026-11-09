@@ -406,3 +406,6 @@ pub mod kerr_optics;
 
 // BG-PHY-07: damped isolated SPH white-dwarf relaxation diagnostics.
 pub mod stellar_relax;
+
+// BG-PHY-08: variable-h grad-h-corrected SPH force diagnostics.
+pub mod sph_adaptive;
