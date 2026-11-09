@@ -16,4 +16,6 @@ The historical game-design and setting documents remain in [design/](design/) an
 
 - [BG-PHY-08: Moving Kerr Observers and Adaptive-h White-Dwarf SPH](physics/ADAPTIVE_SPH_MOVING_OBSERVER.md), with local optical aberration, emitter-rest-frame target envelopes, variational grad-h pressure corrections, and fixed/adaptive resolution comparisons.
 
+- [BG-PHY-09: Variational Adaptive Plummer Gravity and Shell-balanced White Dwarfs](physics/GRAD_H_GRAVITY_SHELL_SEED.md), with the gravitational zeta/Omega correction, equal-mass stellar shells, energy-gradient checks and 64–512-particle A/B results.
+
 See the consolidated [GDD](../design/GDD.md). New interpretations should cite source manuscripts or a specific physical approximation. Preserve the two originals without silent revision.

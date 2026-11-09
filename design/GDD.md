@@ -230,6 +230,14 @@ The white-dwarf branch adds **adaptive 3D SPH** with per-particle smoothing leng
 
 Refer to [BG-PHY-08 workpaper](../workpapers/physics/ADAPTIVE_SPH_MOVING_OBSERVER.md) and the open convergence issue.
 
+### BG-PHY-09 gravity consistency and star sampling
+
+The scientific physics bench now has a separate adaptive gravitational softening option. It differentiates the same h-dependent Plummer pair potential used for energy bookkeeping, adding a gravitational grad-h correction to the original variable-h pressure method. A deterministic shell-balanced equal-mass initializer supplies alternative 3D white-dwarf initial conditions from the recovered hydrostatic reference.
+
+The radius and density benchmarks support continued development of this numerical branch. The matched potential improves short-duration radii at small N, while the undamped post-relaxation star expands substantially and the 512-particle radius remains outside the ±5% acceptance gate. The primary astrophysical story encounters therefore continue to use a clearly labeled fluid proxy until the resolution, stability and energy-momentum gates converge.
+
+Full equations and measured results: [BG-PHY-09](../workpapers/physics/GRAD_H_GRAVITY_SHELL_SEED.md).
+
 ## 11. Unresolved design decisions
 
 - **Fidelity:** whether orbital maneuvers use realistic dynamical constants in all encounters, or curated time/length scales for playable pacing.

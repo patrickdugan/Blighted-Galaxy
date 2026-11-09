@@ -415,3 +415,6 @@ pub mod kerr_moving_observer;
 
 // BG-PHY-08: local emitter rest-frame Kerr target envelopes.
 pub mod kerr_worldtube;
+
+// BG-PHY-09: radial-shell-balanced degenerate stellar particle sampling.
+pub mod sph_sampling;
