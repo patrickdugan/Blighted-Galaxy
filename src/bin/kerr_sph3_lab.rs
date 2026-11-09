@@ -14,7 +14,6 @@ use blighted_galaxy::sph3::{
 };
 use blighted_galaxy::V2;
 use macroquad::prelude::*;
-use std::f32::consts::PI as PI32;
 
 fn window_conf()->Conf {
     Conf {window_title:"Blighted Galaxy: Kerr photons + 3D debris".to_string(),
@@ -221,8 +220,8 @@ impl Game {
         for (radius,color,label) in [
             (bh.outer_horizon_rg(),ORANGE,"HORIZON"),
             (bh.ergosphere_equatorial_rg(),VIOLET,"EQUATORIAL ERGOSPHERE"),
-            (bh.isco_rg(1).unwrap(),SKYBLUE,"PROGRADE ISCO"),
-            (bh.isco_rg(-1).unwrap(),DARKBLUE,"RETROGRADE ISCO"),
+            (bh.isco_rg(1).unwrap(),SKYBLUE,"POSITIVE-L ISCO"),
+            (bh.isco_rg(-1).unwrap(),DARKBLUE,"NEGATIVE-L ISCO"),
         ] {
             let r=radius as f32*self.scale;
             if r>0.0 {
@@ -256,10 +255,10 @@ impl Game {
         let lines=[
             ("SPIN a*",format!("{:.3}",bh.spin)),
             ("OUTER HORIZON",format!("{:.4} GM/c²",bh.outer_horizon_rg())),
-            ("ISCO PRO/RETRO",format!("{:.3} / {:.3} GM/c²",
+            ("ISCO +L / -L",format!("{:.3} / {:.3} GM/c²",
                 bh.isco_rg(1).unwrap(),bh.isco_rg(-1).unwrap())),
-            ("CRITICAL b PRO",format!("{:.5} r_g",bh.photon_critical_b_rg(1).unwrap())),
-            ("CRITICAL b RETRO",format!("{:.5} r_g",bh.photon_critical_b_rg(-1).unwrap())),
+            ("CRITICAL b +L",format!("{:.5} r_g",bh.photon_critical_b_rg(1).unwrap())),
+            ("CRITICAL b -L",format!("{:.5} r_g",bh.photon_critical_b_rg(-1).unwrap())),
             ("FRAME DRAG at 5rg",format!("{:.4} rad/s",
                 bh.zamo_omega_rad_s(5.0).unwrap())),
             ("CAPTURED / ESCAPED",format!("{} / {}",captured,escaped)),

@@ -16,7 +16,7 @@ In geometric units, set r_g=GM/c² and x=r/r_g. The signed dimensionless spin is
     A = (x²+a²)² - a² Delta
     ZAMO_omega = (2 a x / A)(c/r_g)
 
-For a circular equatorial timelike orbit, with direction s=+1 (positive angular momentum) or s=-1 (negative):
+For a circular equatorial timelike orbit, with direction s=+1 (positive axial angular momentum) or s=-1 (negative). For negative black-hole spin, positive L is counter-rotating relative to the hole:
 
     Omega = s (c/r_g) / (x^(3/2)+s a)
     E = [x^(3/2)-2 sqrt(x)+s a] /
