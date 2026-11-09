@@ -14,6 +14,7 @@ jobs:
       - run: cargo check --all-targets
       - run: cargo run --bin physics_bench
       - run: cargo run --bin strongfield_bench
+      - run: cargo run --bin kerr_sph3_bench
       - run: cargo test si_bridge -- --nocapture
 
   windows-playable:
@@ -35,5 +36,7 @@ jobs:
             target/release/physics_bench.exe
             target/release/strongfield_lab.exe
             target/release/strongfield_bench.exe
+            target/release/kerr_sph3_lab.exe
+            target/release/kerr_sph3_bench.exe
           if-no-files-found: error
           retention-days: 30

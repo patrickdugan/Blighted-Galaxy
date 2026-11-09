@@ -389,3 +389,8 @@ pub mod si_bridge;
 pub mod schwarzschild;
 pub mod causal;
 pub mod debris;
+
+// BG-PHY-05: Kerr equatorial light rays, 3D SPH fluid and GPU-backed particle meshes.
+pub mod kerr;
+pub mod sph3;
+pub mod particle_batch;
