@@ -71,6 +71,21 @@ The **default combat executable** now obtains observed positions from bounded re
 
 Scientific limitations: Schwarzschild geometry describes a nonrotating isolated central mass with negligible test-particle backreaction. The 2D isothermal fluid is a toy proxy for degenerate white-dwarf matter and does not model nuclear reactions or radiation. See [BG-PHY-04 workpaper](workpapers/physics/STRONG_FIELD_CAUSAL_SPH.md) for the equations, assumptions, and acceptance tests.
 
+## Kerr photons and 3D stellar fluid (BG-PHY-05)
+
+The next standalone lab implements **equatorial Kerr null photon trajectories**, spin-dependent frame dragging, a **3D polytropic SPH-like fluid** after the white-dwarf's tidal breakup, and GPU-backed batched particle sprites.
+
+~~~sh
+cargo run --release --bin kerr_sph3_lab
+cargo run --release --bin kerr_sph3_bench
+~~~
+
+Controls: **1** Schwarzschild photon rays, **2** spinning Kerr (+0.85), **3** reversed spin (-0.85), **4** 3D stellar debris. Q/E changes time rate; Z/X or wheel zooms, A/D rotates the debris projection, R resets.
+
+The benchmark reports Kerr orbital reference values, radial constraint residuals, 3D fluid energy and momentum drift, and a 10,000-particle batch test. The GPU renders indexed triangles; SPH and mesh assembly still run on the CPU. The physically grounded modules remain separate from the fictional energy shields, near-horizon weapons and other source-world engineering.
+
+Detailed assumptions: [BG-PHY-05 physics workpaper](workpapers/physics/KERR_PHOTON_SPH3.md).
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.

@@ -8,4 +8,6 @@ The historical game-design and setting documents remain in [design/](design/) an
 
 - [BG-PHY-04: Strong Field, Causality and Self-Gravitating Debris](physics/STRONG_FIELD_CAUSAL_SPH.md), the new Schwarzschild solver, causal history integration and 2D SPH-style debris equations, tests and executable lab.
 
+- [BG-PHY-05: Kerr Photons and 3D SPH](physics/KERR_PHOTON_SPH3.md), including Kerr equations, photon trajectories, polytropic 3D fluid, mesh batching, regression gates and known limitations.
+
 See the consolidated [GDD](../design/GDD.md). New interpretations should cite source manuscripts or a specific physical approximation. Preserve the two originals without silent revision.
