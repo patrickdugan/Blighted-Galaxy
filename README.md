@@ -135,6 +135,21 @@ The white-dwarf lab adds **J** for isolated damping using an adaptive smoothing-
 
 Read the complete [BG-PHY-08 physics workpaper](workpapers/physics/ADAPTIVE_SPH_MOVING_OBSERVER.md) for equations, CI data, convergence targets and the metric-worldtube approximation.
 
+## BG-PHY-09: matched variable gravity and shell-balanced white dwarfs
+
+The latest research mode includes a density-dependent **Plummer gravitational softening** with the corresponding grad-h energy correction, plus a deterministic radial-shell-balanced particle initializer inspired by stellar-SPH initial-condition methods. The code preserves each previous model for measurement.
+
+~~~sh
+cargo run --release --bin phy09_bench -- --csv bg-phy09-comparison.csv
+cargo run --release --bin white_dwarf_lab
+~~~
+
+The white-dwarf lab controls now include **H** for the old fixed-h solver, **J** for adaptive hydrodynamic smoothing with fixed gravitational softening, and **K** for the new shell-balanced seed with variationally differentiated adaptive Plummer gravity. Each mode uses the corresponding gravitational model for subsequent dynamics. The new bench compares radius, density-profile error, force residual and an undamped hold.
+
+The short-time stellar radius is closer to the independent hydrostatic reference in some low-resolution cases. The **long undamped hold still exhibits large expansion**, and at N=512 the earlier solver has a slightly smaller radius bias. [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) remains open.
+
+See the [BG-PHY-09 workpaper](workpapers/physics/GRAD_H_GRAVITY_SHELL_SEED.md) for the matched energy/potential equations, baseline comparisons and convergence limits.
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.
