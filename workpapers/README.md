@@ -18,4 +18,6 @@ The historical game-design and setting documents remain in [design/](design/) an
 
 - [BG-PHY-09: Variational Adaptive Plummer Gravity and Shell-balanced White Dwarfs](physics/GRAD_H_GRAVITY_SHELL_SEED.md), with the gravitational zeta/Omega correction, equal-mass stellar shells, energy-gradient checks and 64–512-particle A/B results.
 
+- [BG-PHY-10: Poisson-matched cubic M4 gravity and approximately cubic shells](physics/M4_GRAVITY_CUBIC_SHELLS.md), with the Price–Monaghan equations, hydrostatic mass-CDF shell allocation, 64–1024-particle experiments and explicit undamped stability results.
+
 See the consolidated [GDD](../design/GDD.md). New interpretations should cite source manuscripts or a specific physical approximation. Preserve the two originals without silent revision.
