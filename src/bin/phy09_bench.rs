@@ -70,7 +70,7 @@ fn main() {
             let mut hold_radius=f64::NAN;
             let mut hold_energy=f64::NAN;
             let mut hold_momentum=f64::NAN;
-            if n<=128 && gravity==GravityModel::MatchedAdaptivePlummer {
+            if n<=256 && gravity==GravityModel::MatchedAdaptivePlummer {
                 let steps=(3.0*t_dyn/0.01).ceil() as usize;
                 let hold=adaptive_undamped_hold(&mut particles,physics,
                     cfg,&mut state,0.01,steps).unwrap();
