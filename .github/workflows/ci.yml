@@ -12,3 +12,19 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --all-targets
       - run: cargo check --all-targets
+
+  windows-playable:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build Windows game
+        run: cargo build --release
+      - name: Upload playable Windows binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: blighted-galaxy-windows-x64
+          path: target/release/blighted-galaxy.exe
+          if-no-files-found: error
+          retention-days: 30
