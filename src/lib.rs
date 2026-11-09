@@ -378,3 +378,6 @@ mod tests {
         assert!(player.vel.len() <= LIGHT_SPEED * 0.8 + 1e-9);
     }
 }
+
+// Calibrated SI reference physics is implemented independently of gameplay units.
+pub mod physics;
