@@ -3,7 +3,7 @@ name = "blighted-galaxy"
 version = "0.1.0"
 edition = "2021"
 description = "A clean-room Rust reconstruction of the Blighted Galaxy physics sandbox"
-license = "MIT"
+publish = false
 
 [dependencies]
 macroquad = "0.4.14"

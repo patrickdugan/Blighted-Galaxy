@@ -29,6 +29,10 @@ For a Windows build without installing Rust, open the latest successful [GitHub 
 
 The initial physics units are deliberately normalized. Scientific accuracy requires replacing the gravity/evaporation approximations with calibrated models before claiming realistic Hawking explosions or stellar dynamics.
 
+## Rights and provenance
+
+The source fiction and historical design materials remain the author's work, with rights reserved pending a chosen license. The reconstructed Rust code has no distribution license yet and is marked non-publishable in Cargo. See [RIGHTS.md](RIGHTS.md).
+
 ## Evidence
 
 The [Game Design Treatment](recovery/design/game-design-treatment.txt) calls for relativistic jousting, transhuman duels and interstellar war economics. The [macro-history](recovery/design/macro-history.txt) outlines 22 episodes. Four recovered fiction manuscripts supply encounters and characters. All six transcriptions preserve the text extracted from the user-supplied Word documents.
