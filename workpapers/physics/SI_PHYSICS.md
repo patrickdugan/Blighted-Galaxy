@@ -57,6 +57,8 @@ For collinear velocities `u` and `v`, relativistic addition is `(u+v)/(1+uv/c²)
 
 For a uniformly moving light source, solve `|x_source(t_emit)-x_observer|=c(t_observe-t_emit)` to display the source at its **retarded emission position**. This supplies the correct foundation for delayed weapon detection and optical HUDs, though gravitational light bending is separate.
 
+**Authorial cross-check:** In *You Never Go Full Blight* (opening planetary evacuation), Wicker's sensor report states a 2 kg projectile moving at 0.9993c and an impact energy around 4.6 exajoules. The calibrated special-relativistic computation produces **4.625138398×10^18 J**, or about **1,105 megatons of TNT equivalent**. This agreement is now an automated named regression test. Kinetic energy is the available budget; atmospheric coupling, radiative transport and the resulting blast pattern remain unmodeled.
+
 **Example:** A 2 kg impactor at 0.9993c has kinetic energy vastly above a Newtonian `mv²/2` estimate. `physics_bench` prints the exact special-relativistic model value in joules and megatons TNT equivalent. No material equation of state or atmospheric blast calculation is included.
 
 ## 5. Black-hole quantities

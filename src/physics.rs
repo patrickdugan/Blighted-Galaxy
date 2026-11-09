@@ -322,6 +322,15 @@ mod tests {
         near(calculated / (0.5 * v * v), 1.0, 1e-6);
     }
     #[test]
+    fn wickers_two_kg_kill_projectile_matches_source_energy() {
+        // You Never Go Full Blight, opening evacuation:
+        // 2 kg at 0.9993c is stated to release ~4.6 exajoules on impact.
+        let energy = kinetic_energy_relativistic_j(2.0, 0.9993 * C_SI).unwrap();
+        near(energy, 4.625_138_398_379_77e18, 1e-12);
+        near(energy / 1e18, 4.6, 0.01);
+    }
+
+    #[test]
     fn relativistic_kinetic_energy_half_c() {
         let joules = kinetic_energy_relativistic_j(1.0, C_SI * 0.5).unwrap();
         near(joules, 1.39037910021726e16, 1e-12);
