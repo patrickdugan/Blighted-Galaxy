@@ -150,6 +150,21 @@ The short-time stellar radius is closer to the independent hydrostatic reference
 
 See the [BG-PHY-09 workpaper](workpapers/physics/GRAD_H_GRAVITY_SHELL_SEED.md) for the matched energy/potential equations, baseline comparisons and convergence limits.
 
+## BG-PHY-10: Poisson-matched M4 gravity and nearly cubic white-dwarf shells
+
+The new gravity model derives its softened potential from **Poisson's equation for the same cubic-spline density kernel** used by the SPH solver. It becomes exactly Newtonian beyond 2h and includes a density-adaptive gravitational grad-h term, with the matching energy diagnostic. A new hydrostatic particle initializer chooses radial shell widths comparable to their angular tile widths.
+
+~~~sh
+cargo run --release --bin phy10_bench -- --csv bg-phy10-comparison.csv
+cargo run --release --bin white_dwarf_lab
+~~~
+
+The stellar lab's **L** key selects nearly cubic shells with Poisson-matched M4 gravity. Earlier H/J/K modes remain available. The headless benchmark compares initializations and gravity models from 64 to 1,024 particles, and tests selected configurations over three dynamical times without damping.
+
+At 1,024 particles, the 0.65-solar-mass M4 star has a radius of 7,999 km versus the 8,402 km hydrostatic reference and a density log-RMS error of 0.1667. This short run lasts only 0.6 s, approximately 0.23 stellar dynamical times. The 128- and 256-particle undamped stars still contract more than 10%; **Issue #8 remains open** until stable long-duration equilibrium is demonstrated.
+
+See the [BG-PHY-10 physics workpaper](workpapers/physics/M4_GRAVITY_CUBIC_SHELLS.md) for the exact kernel potential and force formulas, source references, numerical tables and acceptance gates.
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.

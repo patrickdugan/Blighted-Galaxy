@@ -15,6 +15,7 @@ use crate::sph3::{
     self,Fluid3,Massive3,Sph3Config,Sph3Eos,V3,
 };
 use std::f64::consts::PI;
+use crate::sph_gravity_kernel;
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum GravityModel {
@@ -22,6 +23,9 @@ pub enum GravityModel {
     /// Pair potential -G m_i m_j /2 * [1/sqrt(r²+h_i²)+1/sqrt(r²+h_j²)].
     /// Requires the corresponding zeta/Omega grad-h force.
     MatchedAdaptivePlummer,
+    /// Poisson potential of the same compact 3D cubic spline used for SPH
+    /// density and pressure; exact Newtonian interaction for r >= 2h.
+    MatchedCubicSpline,
 }
 #[derive(Clone,Copy,Debug)]
 pub struct AdaptiveConfig {
@@ -45,8 +49,11 @@ impl AdaptiveConfig {
     }
     pub fn with_adaptive_gravity(mut self)->Self {
         self.gravity_model=GravityModel::MatchedAdaptivePlummer;
-        // Accurate coupled h/rho closure is particularly important for
-        // variational gravitational-force consistency.
+        self.density_iterations=24;
+        self
+    }
+    pub fn with_cubic_gravity(mut self)->Self {
+        self.gravity_model=GravityModel::MatchedCubicSpline;
         self.density_iterations=24;
         self
     }
@@ -157,7 +164,8 @@ pub fn adaptive_plummer_dphi_dh(r:f64,h:f64)->f64 {
 }
 /// zeta_i= (dh_i/drho_i) sum_{j!=i} m_j dphi_ij(h_i)/dh_i.
 /// With h∝rho^(-1/3), dh/drho=-h/(3rho) away from a hard h cap.
-/// This is a negative coefficient for the Plummer potential convention.
+/// Both the Plummer and Poisson-consistent cubic potential use a negative
+/// phi convention and produce a negative zeta coefficient.
 pub fn adaptive_gravity_zeta(
     particles:&[Fluid3],state:&AdaptiveState,cfg:AdaptiveConfig,
 )->Vec<f64> {
@@ -171,8 +179,15 @@ pub fn adaptive_gravity_zeta(
         let mut derivative_sum=0.0;
         for (j,q) in particles.iter().enumerate() {
             if i==j {continue;}
-            derivative_sum+=q.mass_kg*
-                adaptive_plummer_dphi_dh((p.pos_m-q.pos_m).len(),h);
+            let r=(p.pos_m-q.pos_m).len();
+            let derivative=match cfg.gravity_model {
+                GravityModel::FixedPlummer=>0.0,
+                GravityModel::MatchedAdaptivePlummer=>
+                    adaptive_plummer_dphi_dh(r,h),
+                GravityModel::MatchedCubicSpline=>
+                    sph_gravity_kernel::smoothing_derivative(r,h),
+            };
+            derivative_sum+=q.mass_kg*derivative;
         }
         zeta[i]=-h/(3.0*state.densities_kg_m3[i])*derivative_sum;
     }
@@ -197,7 +212,7 @@ pub fn forces(
     let mut acceleration=vec![V3::default();n];
     let mut central_acc=V3::default();
     let inv_eps2=cfg.gravity_softening_m.powi(2);
-    let zeta=if cfg.gravity_model==GravityModel::MatchedAdaptivePlummer {
+    let zeta=if cfg.gravity_model!=GravityModel::FixedPlummer {
         adaptive_gravity_zeta(particles,state,cfg)
     } else {vec![0.0;particles.len()]};
     let pressure_factor=state.densities_kg_m3.iter()
@@ -226,6 +241,14 @@ pub fn forces(
                     let hj2=state.smoothing_m[j].powi(2);
                     0.5*((r2+hi2).powf(-1.5)+(r2+hj2).powf(-1.5))
                 }
+                GravityModel::MatchedCubicSpline=>{
+                    if r>0.0 {
+                        0.5*(sph_gravity_kernel::radial_derivative(
+                            r,state.smoothing_m[i])+
+                            sph_gravity_kernel::radial_derivative(
+                            r,state.smoothing_m[j]))/r
+                    } else {0.0}
+                }
             };
             let grav=d*(crate::physics::G_SI*grav_scalar);
             acceleration[i]+=grav*particles[j].mass_kg;
@@ -242,7 +265,7 @@ pub fn forces(
                 (-coeff/r);
             acceleration[i]+=push*particles[j].mass_kg;
             acceleration[j]-=push*particles[i].mass_kg;
-            if cfg.gravity_model==GravityModel::MatchedAdaptivePlummer {
+            if cfg.gravity_model!=GravityModel::FixedPlummer {
                 // Price-Monaghan zeta correction derived by differentiating
                 // the pair gravitational potential through h_i(rho_i).
                 let gcoeff=0.5*crate::physics::G_SI*
@@ -333,6 +356,13 @@ pub fn energy_j_cached(
                 GravityModel::MatchedAdaptivePlummer=>
                     0.5*(1.0/(r2+state.smoothing_m[i].powi(2)).sqrt()+
                          1.0/(r2+state.smoothing_m[j].powi(2)).sqrt()),
+                GravityModel::MatchedCubicSpline=>{
+                    let radius=r2.sqrt();
+                    -0.5*(sph_gravity_kernel::potential(
+                        radius,state.smoothing_m[i])+
+                        sph_gravity_kernel::potential(
+                        radius,state.smoothing_m[j]))
+                },
             };
             e-=crate::physics::G_SI*particles[i].mass_kg*
                 particles[j].mass_kg*pair_inverse_r;
@@ -466,6 +496,75 @@ mod tests {
         assert!((e1-e0).abs()/e0.abs()<1e-3,
             "matched gravitational energy drift = {}",(e1-e0).abs()/e0.abs());
         assert!(momentum/(p[0].mass_kg*3e5)<1e-8);
+    }
+    #[test]
+    fn cubic_kernel_gravity_is_newtonian_beyond_compact_support() {
+        let (mut particles,phys,old,_)=setup(32);
+        let cfg=old.with_cubic_gravity();
+        let mut state=AdaptiveState::new(&particles,8.4e6,cfg);
+        let mut central=Massive3{
+            pos_m:V3::default(),vel_m_s:V3::default(),
+            mass_kg:0.0,radius_m:0.0,
+        };
+        // Separate just two equal masses by 12h in otherwise empty space.
+        particles.truncate(2);
+        particles[0].pos_m=V3::new(0.0,0.0,0.0);
+        particles[1].pos_m=V3::new(40.0e6,0.0,0.0);
+        state=AdaptiveState::new(&particles,8.4e6,cfg);
+        let force=forces(&central,&particles,&mut state,phys,cfg);
+        let r=40.0e6;
+        let expected=crate::physics::G_SI*particles[1].mass_kg/(r*r);
+        // Pressure has compact support too, so the pair responds to
+        // exactly Newtonian self-gravity at this separation.
+        let got=force.accelerations_m_s2[0].x;
+        assert!((got-expected).abs()/expected<1e-12);
+        let zeta=adaptive_gravity_zeta(&particles,&state,cfg);
+        assert!(zeta.iter().all(|z|z.abs()<1e-14));
+        central.pos_m=V3::new(2e8,0.0,0.0);
+    }
+    #[test]
+    fn cubic_kernel_gravity_force_matches_energy_gradient() {
+        let (mut particles,phys,old,_)=setup(48);
+        let cfg=old.with_cubic_gravity();
+        let central=Massive3{
+            pos_m:V3::default(),vel_m_s:V3::default(),
+            mass_kg:0.0,radius_m:0.0,
+        };
+        let mut state=AdaptiveState::new(&particles,8.4e6,cfg);
+        let a=forces(&central,&particles,&mut state,phys,cfg)
+            .accelerations_m_s2[2].x;
+        let delta=30.0;
+        particles[2].pos_m.x+=delta;
+        let mut positive=state.clone();
+        let e_plus=adaptive_energy_j(&central,&particles,
+            &mut positive,phys,cfg);
+        particles[2].pos_m.x-=2.0*delta;
+        let mut negative=state.clone();
+        let e_minus=adaptive_energy_j(&central,&particles,
+            &mut negative,phys,cfg);
+        let numeric=-(e_plus-e_minus)/(2.0*delta*particles[2].mass_kg);
+        let relative=(a-numeric).abs()/a.abs().max(1.0e3);
+        assert!(relative<0.03,
+            "cubic gravity variational energy gradient error {relative}, analytic={a}, numeric={numeric}");
+    }
+    #[test]
+    fn cubic_gravity_preserves_momentum_and_short_step_energy() {
+        let (mut particles,phys,old,_)=setup(64);
+        let cfg=old.with_cubic_gravity();
+        let mut state=AdaptiveState::new(&particles,8.4e6,cfg);
+        let mut central=Massive3{
+            pos_m:V3::default(),vel_m_s:V3::default(),
+            mass_kg:0.0,radius_m:0.0,
+        };
+        let p0=sph3::total_momentum(&central,&particles);
+        let e0=adaptive_energy_j(&central,&particles,&mut state,phys,cfg);
+        for _ in 0..60 {
+            advance(&mut central,&mut particles,&mut state,phys,cfg,0.002);
+        }
+        let p1=sph3::total_momentum(&central,&particles);
+        let e1=adaptive_energy_j(&central,&particles,&mut state,phys,cfg);
+        assert!((p1-p0).len()/(particles[0].mass_kg*3e5)<1e-8);
+        assert!((e1-e0).abs()/e0.abs()<1e-3);
     }
     #[test]
     fn adaptive_zero_step_and_short_drift() {

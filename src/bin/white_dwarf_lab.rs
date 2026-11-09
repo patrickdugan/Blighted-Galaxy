@@ -184,6 +184,41 @@ impl WdLab {
                 &self.central,&self.particles);
             self.elapsed_s=0.0;self.accumulator_s=0.0;
         }
+        if is_key_pressed(KeyCode::L) {
+            // Research mode: nearly cubic mass-CDF shells with Poisson-matched
+            // spline gravitation and variational grad-h zeta correction.
+            self.paused=true;
+            self.relaxation=None;
+            self.particles=sph_sampling::seeded_star(
+                &self.profile,V3::new(1.2e8,0.0,0.0),
+                V3::new(-3e5,2e4,0.0),192,
+                StarSampling::ApproximatelyCubicShells);
+            self.central=Massive3 {
+                pos_m:V3::default(),vel_m_s:V3::default(),
+                mass_kg:10.0*SOLAR_MASS_KG,radius_m:3.0e4,
+            };
+            let adaptive_cfg=AdaptiveConfig::from_star_radius(
+                self.profile.radius_m).with_cubic_gravity();
+            let mut adaptive=AdaptiveState::new(
+                &self.particles,self.profile.radius_m,adaptive_cfg);
+            self.adaptive_relaxation=relax_isolated_adaptive(
+                &mut self.particles,self.config,&self.profile,
+                adaptive_cfg,&mut adaptive,
+                RelaxParameters {
+                    iterations:750,dt_s:0.01,damping_time_s:0.7,
+                }).ok();
+            self.energy_initial=sph_adaptive::adaptive_energy_j(
+                &self.central,&self.particles,&mut adaptive,
+                self.config,adaptive_cfg);
+            self.adaptive_state=Some(adaptive);
+            self.adaptive_config=Some(adaptive_cfg);
+            self.active_method="near-cubic shells + Poisson M4 gravity";
+            self.momentum_initial=sph3::total_momentum(
+                &self.central,&self.particles);
+            self.mass_initial=sph3::total_mass_kg(
+                &self.central,&self.particles);
+            self.elapsed_s=0.0;self.accumulator_s=0.0;
+        }
         if is_key_pressed(KeyCode::Q) {self.time_rate=(self.time_rate/2.0).max(0.1);}
         if is_key_pressed(KeyCode::E) {self.time_rate=(self.time_rate*2.0).min(12.0);}
         if is_key_down(KeyCode::A) {self.rotation-=0.015;}
@@ -288,7 +323,7 @@ impl WdLab {
             27.0,47.0,26.0,WHITE);
         draw_text("1: 0.35 Msun   2: 0.65 Msun   3: 0.95 Msun",
             27.0,78.0,19.0,SKYBLUE);
-        draw_text("SPACE pause | H fixed | J adaptive | K shell+matched gravity | A/D rotate | Q/E rate",
+        draw_text("SPACE pause | H fixed | J adaptive | K Plummer | L Poisson cubic | A/D rotate",
             27.0,105.0,18.0,LIGHTGRAY);
         let rows=[
             format!("Mass            {:9.6} solar masses",self.profile.mass_solar()),

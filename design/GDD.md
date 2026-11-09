@@ -238,6 +238,14 @@ The radius and density benchmarks support continued development of this numerica
 
 Full equations and measured results: [BG-PHY-09](../workpapers/physics/GRAD_H_GRAVITY_SHELL_SEED.md).
 
+### BG-PHY-10: kernel-matched self-gravity and stable stellar debris
+
+The physics research engine implements a Poisson-matched cubic-spline gravitational potential, including the h-dependent force correction, and a new approximately cubic equal-mass shell layout. The M4 gravity is exactly Newtonian beyond its compact support. The numerical benchmark reaches 1,024 particles with a cold-degenerate reference white dwarf.
+
+After 0.6 simulated seconds, the 1,024-particle M4 model falls within 5% of the Newtonian hydrostatic reference radius, with improved logarithmic density-profile matching. This is a short damping interval, roughly 0.23 stellar dynamical times. Lower-resolution undamped test stars continue to contract substantially, so the source-derived stellar weapons remain calibrated **fictional effects** in the playable engine pending a stable multi-dynamical-time stellar model.
+
+Workpaper: [BG-PHY-10](../workpapers/physics/M4_GRAVITY_CUBIC_SHELLS.md). Physical acceptance issue: [#8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8).
+
 ## 11. Unresolved design decisions
 
 - **Fidelity:** whether orbital maneuvers use realistic dynamical constants in all encounters, or curated time/length scales for playable pacing.

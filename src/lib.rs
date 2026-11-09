@@ -418,3 +418,6 @@ pub mod kerr_worldtube;
 
 // BG-PHY-09: radial-shell-balanced degenerate stellar particle sampling.
 pub mod sph_sampling;
+
+// BG-PHY-10: Poisson-consistent M4 cubic spline softened gravitation.
+pub mod sph_gravity_kernel;
