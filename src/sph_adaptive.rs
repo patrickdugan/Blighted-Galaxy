@@ -424,6 +424,30 @@ mod tests {
         assert!(zeta.iter().any(|z|*z<0.0));
     }
     #[test]
+    fn matched_energy_gradient_agrees_with_variational_force() {
+        let (mut particles,physics,old,_)=setup(32);
+        let cfg=old.with_adaptive_gravity();
+        let center=Massive3{
+            pos_m:V3::default(),vel_m_s:V3::default(),
+            mass_kg:0.0,radius_m:0.0,
+        };
+        let mut state=AdaptiveState::new(&particles,8.4e6,cfg);
+        let force=forces(&center,&particles,&mut state,physics,cfg);
+        let predicted=force.accelerations_m_s2[0].x;
+        let step_m=100.0;
+        particles[0].pos_m.x+=step_m;
+        let mut plus=AdaptiveState::new(&particles,8.4e6,cfg);
+        let e_plus=adaptive_energy_j(&center,&particles,&mut plus,physics,cfg);
+        particles[0].pos_m.x-=2.0*step_m;
+        let mut minus=AdaptiveState::new(&particles,8.4e6,cfg);
+        let e_minus=adaptive_energy_j(&center,&particles,&mut minus,physics,cfg);
+        let from_energy=-(e_plus-e_minus)/(2.0*step_m*particles[0].mass_kg);
+        let scale=force.accelerations_m_s2[0].len().max(1.0e3);
+        let disagreement=(predicted-from_energy).abs()/scale;
+        assert!(disagreement<0.04,
+            "energy gradient force mismatch relative {disagreement}, analytic {predicted}, finite {from_energy}");
+    }
+    #[test]
     fn matched_pair_potential_and_force_drift_remain_finite() {
         let (mut p,phys,old,_) =setup(48);
         let cfg=old.with_adaptive_gravity();
