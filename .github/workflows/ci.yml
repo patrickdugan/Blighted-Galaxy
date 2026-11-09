@@ -1,0 +1,14 @@
+name: Rust prototype
+on:
+  push:
+    branches: [main, "recovery/**"]
+  pull_request:
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --all-targets
+      - run: cargo check --all-targets

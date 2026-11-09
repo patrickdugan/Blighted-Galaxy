@@ -1,0 +1,14 @@
+[package]
+name = "blighted-galaxy"
+version = "0.1.0"
+edition = "2021"
+description = "A clean-room Rust reconstruction of the Blighted Galaxy physics sandbox"
+license = "MIT"
+
+[dependencies]
+macroquad = "0.4.14"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
