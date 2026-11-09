@@ -10,7 +10,7 @@
 use crate::kerr::KerrGeometry;
 use std::f64::consts::{PI,TAU};
 
-const MAX_H:f64=0.004;
+const MAX_H:f64=0.002;
 const HORIZON_MARGIN:f64=0.04;
 const MAX_STEPS:usize=1600;
 const TINY:f64=1e-12;
