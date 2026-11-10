@@ -47,6 +47,18 @@ jobs:
             layout: "shell"
             steps: 4
             oracle: "--no-oracle"
+          - n: 32
+            seed: 0
+            layout: "glass"
+            steps: 3
+            oracle: ""
+            deform: "--deform"
+          - n: 64
+            seed: 17
+            layout: "glass"
+            steps: 3
+            oracle: ""
+            deform: "--deform"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -61,13 +73,13 @@ jobs:
             --n ${{ matrix.n }} --seed ${{ matrix.seed }} \
             --layout ${{ matrix.layout }} --eta 1.7 \
             --steps ${{ matrix.steps }} --dt 0.002 \
-            --fd-fraction 0.0001 ${{ matrix.oracle }} \
-            --csv bg-phy22-n${{ matrix.n }}.csv
+            --fd-fraction 0.0001 ${{ matrix.oracle }} ${{ matrix.deform }} \
+            --csv bg-phy22-n${{ matrix.n }}-${{ matrix.seed }}-${{ matrix.deform == '--deform' && 'asymmetric' || 'seed' }}.csv
       - name: Upload analytic total-force and conservation checks
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: bg-phy22-n${{ matrix.n }}
-          path: bg-phy22-n${{ matrix.n }}.csv
+          name: bg-phy22-n${{ matrix.n }}-${{ matrix.seed }}-${{ matrix.deform == '--deform' && 'asymmetric' || 'seed' }}
+          path: bg-phy22-n${{ matrix.n }}-${{ matrix.seed }}-${{ matrix.deform == '--deform' && 'asymmetric' || 'seed' }}.csv
           if-no-files-found: warn
           retention-days: 30
