@@ -272,6 +272,18 @@ cargo run --release --bin phy18_bench -- --n 1024 --seeds 0,17 --targets 100,150
 
 See the [BG-PHY-18 workpaper](workpapers/physics/PRESSURE_GRADIENT_CONSISTENCY.md) and [experiment matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy18.yml). The physical radius and three-dynamical-time undamped gates remain tracked in [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8).
 
+## BG-PHY-19: Quadratic reconstruction of white-dwarf pressure and enthalpy
+
+BG-PHY-18 showed that a linear moment correction amplifies the sharply curved hydrostatic pressure profile near the stellar free surface. BG-PHY-19 tests **local weighted quadratic polynomial fits** with the same frozen particle positions and kernel support. The benchmark compares the simulated pressure and enthalpy fields against independent one-dimensional hydrostatic samples.
+
+For a cold barotrope, the pressure acceleration is the negative gradient of specific enthalpy, `a_P = -grad(H)`. This offers a surface diagnostic with a better-conditioned scalar field than a broad pressure fit divided by low surface density. Each particle's polynomial normal matrix is preconditioned and checked for rank deficiencies. Both local linear and quadratic fits are evaluated on shell/angular-glass seeds with M4 and C4 kernels, including 100–200 realized neighbor populations.
+
+~~~sh
+cargo run --release --bin phy19_bench -- --n 1024 --seeds 0,17 --targets 100,150,200 --csv bg-phy19-n1024.csv
+~~~
+
+See the [BG-PHY-19 workpaper](workpapers/physics/QUADRATIC_ENTHALPY_SURFACE.md) and [matrix workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy19.yml). These corrections are frozen diagnostics, leaving the conservative dynamics and [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) unchanged.
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.
