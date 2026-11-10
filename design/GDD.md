@@ -270,6 +270,14 @@ Each variant undergoes a three-dynamical-time undamped hold. Radius, enclosed-ma
 
 See [BG-PHY-13](../workpapers/physics/ETA_HYDROSTATIC_SWEEP.md).
 
+### BG-PHY-14: True SPH resolution and white-dwarf equilibrium
+
+The white-dwarf research runner now tests a smoothing-length law that increases the physical kernel-support neighbor count with SPH particle resolution. Formal SPH convergence requires rising neighbor counts as the overall particle count grows, alongside decreasing h. The model compares this with the existing fixed-eta baseline at matched simulation times. A safeguarded Newton solver checks the implicit relation between each particle's density and smoothing length and reports the residual and effect on force calculations.
+
+Independent radial-shell orientations permit sensitivity tests that preserve the hydrostatic radial mass-CDF, total mass and center of mass while changing the inter-shell angular geometry. The same cold electron EOS, Poisson-M4 potential and undamped stability criteria remain the reference.
+
+See [BG-PHY-14](../workpapers/physics/NEIGHBOR_GROWTH_HROOT.md) for source-grounded equations and results; [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) tracks the required equilibrium gates before white-dwarf weapon physics can be calibrated.
+
 ## 11. Unresolved design decisions
 
 - **Fidelity:** whether orbital maneuvers use realistic dynamical constants in all encounters, or curated time/length scales for playable pacing.

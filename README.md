@@ -206,6 +206,21 @@ The [BG-PHY-13 GitHub Actions workflow](https://github.com/patrickdugan/Blighted
 
 **Measured outcome:** N=256–1024 all completed their three-dynamical-time holds and all tested eta settings failed at least one stellar equilibrium gate. At N1024, eta=0.85 gives a post-damping radius 8.78% below hydrostatic and a 5.77% maximum outer-radius excursion, despite 4.07% RMS error against the independent gravity field. The playable stellar modes therefore retain the previous constant-damping baseline. Complete methodology, data tables and source references are in the [BG-PHY-13 workpaper](workpapers/physics/ETA_HYDROSTATIC_SWEEP.md), with [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) tracking unresolved stellar equilibrium.
 
+## BG-PHY-14: Growing SPH neighbor counts and exact density-closure audits
+
+The latest white-dwarf experiment compares **fixed** smoothing eta with the consistency-motivated scale eta(N) proportional to N^(1/6), growing the physical kernel-neighbor count roughly as N^(1/2). Each resolution retains the independent zero-temperature electron EOS, M4 Poisson-matched self-gravity and 3-dynamical-time undamped stability gates.
+
+The new safeguarded Newton–bisection solver checks the implicit density/smoothing equation `rho(h) h^3 = eta^3 m`. The original underrelaxed solver remains the default. An opt-in Newton-dynamics mode allows numerical comparisons, while the high-resolution runs audit the exact roots on frozen particle configurations to separate closure errors from stellar equilibrium errors.
+
+~~~sh
+cargo run --release --bin phy14_bench -- --n 512 --seeds 0,17 --relax-steps 300 --hold-steps 788 --csv bg-phy14-n512.csv
+cargo run --release --bin phy14_bench -- --n 32 --seeds 0 --root-dynamics --relax-steps 4 --hold-steps 8
+~~~
+
+The [BG-PHY-14 convergence workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy14.yml) covers N=256, 512 and 1,024, with two independent shell-wise angular layouts at the smaller resolutions. It records physical neighbor counts, implicit h/rho residuals, effect on force vectors, radial mass profiles and undamped motion.
+
+Read the [BG-PHY-14 technical workpaper](workpapers/physics/NEIGHBOR_GROWTH_HROOT.md). [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) remains the source of truth for physical white-dwarf equilibrium acceptance.
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.
