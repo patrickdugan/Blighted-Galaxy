@@ -22,6 +22,7 @@ pub enum Candidate {
     SurfaceMls,
     EnthalpyAffineBlend,
     VacuumGhostBlend,
+    MomentRatioGhostBlend,
 }
 impl Candidate {
     pub fn label(self)->&'static str{
@@ -30,11 +31,12 @@ impl Candidate {
             Self::SurfaceMls=>"surface_mls",
             Self::EnthalpyAffineBlend=>"enthalpy_affine_blend",
             Self::VacuumGhostBlend=>"vacuum_ghost_blend",
+            Self::MomentRatioGhostBlend=>"moment_ratio_ghost_blend",
         }
     }
-    pub fn all()->[Self;4]{
+    pub fn all()->[Self;5]{
         [Self::Original,Self::SurfaceMls,Self::EnthalpyAffineBlend,
-            Self::VacuumGhostBlend]
+            Self::VacuumGhostBlend,Self::MomentRatioGhostBlend]
     }
 }
 fn centroid(p:&[Fluid3])->V3{
@@ -65,6 +67,10 @@ pub struct ScalarState{
     pub enthalpy_outer_gradient_rms:f64,
     pub last_shell_partition:f64,
     pub last_shell_normal_alignment:f64,
+    pub last_shell_moment_ratio:f64,
+    pub last_shell_partition_depth_h:f64,
+    pub last_shell_moment_depth_h:f64,
+    pub last_shell_partition_below_half_fraction:f64,
 }
 /// A full state evaluated from scratch for the supplied geometry.
 /// The reference density and gravity are used *only for scoring*.
@@ -88,12 +94,18 @@ pub fn state(
                 x.method==DensityEstimator::SurfaceBlendedMls).unwrap();
             (field.rho.clone(),field.fallback_fraction,Vec::new())
         }
-        Candidate::EnthalpyAffineBlend|Candidate::VacuumGhostBlend=>{
+        Candidate::EnthalpyAffineBlend|
+        Candidate::VacuumGhostBlend|
+        Candidate::MomentRatioGhostBlend=>{
             let batch=sph_free_boundary::reconstruct(
                 p,&adaptive,cfg.kernel,star.eos);
-            let wanted=if mode==Candidate::EnthalpyAffineBlend{
-                EnthalpyCandidate::BlendedH
-            }else{EnthalpyCandidate::GhostBlendedH};
+            let wanted=match mode{
+                Candidate::EnthalpyAffineBlend=>EnthalpyCandidate::BlendedH,
+                Candidate::VacuumGhostBlend=>EnthalpyCandidate::GhostBlendedH,
+                Candidate::MomentRatioGhostBlend=>
+                    EnthalpyCandidate::MomentRatioGhostBlend,
+                _=>unreachable!(),
+            };
             let field=batch.fields.iter().find(|x|
                 x.mode==wanted).unwrap();
             (field.rho.clone(),field.fallback_fraction,batch.geometry)
@@ -119,6 +131,10 @@ pub fn state(
         density_last_log_rms:0.0,enthalpy_gradient_rms:0.0,
         enthalpy_outer_gradient_rms:0.0,last_shell_partition:0.0,
         last_shell_normal_alignment:0.0,
+        last_shell_moment_ratio:0.0,
+        last_shell_partition_depth_h:0.0,
+        last_shell_moment_depth_h:0.0,
+        last_shell_partition_below_half_fraction:0.0,
     };
     if with_diagnostics {
         if result.geometry.is_empty() {
@@ -163,13 +179,25 @@ pub fn state(
         result.enthalpy_outer_gradient_rms=grad.outer.vector_error[5];
         let mut part=0.0;
         let mut align=0.0;
+        let (mut ratio,mut depth_s,mut depth_ratio,mut below_half)=
+            (0.0,0.0,0.0,0.0);
         for &i in &rank[n-last..] {
             let radial=(p[i].pos_m-c).normalized();
-            part+=result.geometry[i].support;
-            align+=result.geometry[i].outward.dot(radial);
+            let g=result.geometry[i];
+            part+=g.support;
+            align+=g.outward.dot(radial);
+            ratio+=g.first_to_zeroth_ratio;
+            depth_s+=g.plane_distance_h;
+            depth_ratio+=g.ratio_plane_distance_h;
+            if g.support<0.5 {below_half+=1.0;}
         }
         result.last_shell_partition=part/last as f64;
         result.last_shell_normal_alignment=align/last as f64;
+        result.last_shell_moment_ratio=ratio/last as f64;
+        result.last_shell_partition_depth_h=depth_s/last as f64;
+        result.last_shell_moment_depth_h=depth_ratio/last as f64;
+        result.last_shell_partition_below_half_fraction=
+            below_half/last as f64;
     }
     result
 }
