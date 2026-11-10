@@ -204,7 +204,7 @@ cargo run --release --bin phy13_bench -- --n 256 --etas 0.85,1.05,1.20,1.45 --re
 
 The [BG-PHY-13 GitHub Actions workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy13.yml) performs matched-duration tests at N=256, 512 and 1,024, followed by approximately three stellar dynamical times without damping. Results and physical acceptance flags are exported per resolution. A smaller N=64 smoke test is included in ordinary CI.
 
-The playable stellar modes retain the previous constant-damping baseline until a parameter setting meets the separate physical-radius and free-evolution stability tests. Complete methodology and source references are in the [BG-PHY-13 workpaper](workpapers/physics/ETA_HYDROSTATIC_SWEEP.md), with [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) tracking unresolved stellar equilibrium.
+**Measured outcome:** N=256–1024 all completed their three-dynamical-time holds and all tested eta settings failed at least one stellar equilibrium gate. At N1024, eta=0.85 gives a post-damping radius 8.78% below hydrostatic and a 5.77% maximum outer-radius excursion, despite 4.07% RMS error against the independent gravity field. The playable stellar modes therefore retain the previous constant-damping baseline. Complete methodology, data tables and source references are in the [BG-PHY-13 workpaper](workpapers/physics/ETA_HYDROSTATIC_SWEEP.md), with [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) tracking unresolved stellar equilibrium.
 
 ## Simulation modules
 
