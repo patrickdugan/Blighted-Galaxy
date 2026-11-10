@@ -233,7 +233,7 @@ initial glass particle positions and cold EOS.
 | Maximum R99 drift | 9.36% | **4.68%** | 13.22% | **4.62%** |
 | Worst radial CDF RMS | 4.35% | **3.20%** | 5.29% | **3.81%** |
 | Maximum relative Hamiltonian energy drift | 1.56e−8 | 6.70e−8 | 1.21e−8 | 6.06e−8 |
-| Relative angular-momentum drift | 3.76e−16 | (CSV) | 2.98e−16 | 1.16e−15 |
+| Relative angular-momentum drift | 3.76e−16 | 7.34e−16 | 2.98e−16 | 1.16e−15 |
 | Issue #8 physical gate | FAIL | FAIL | FAIL | FAIL |
 
 **Controlled result:** at fixed M4 the density correction reduces
