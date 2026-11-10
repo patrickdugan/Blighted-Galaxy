@@ -71,6 +71,10 @@ pub struct ScalarState{
     pub last_shell_partition_depth_h:f64,
     pub last_shell_moment_depth_h:f64,
     pub last_shell_partition_below_half_fraction:f64,
+    /// Independent 1D stellar radius used only for this score.
+    pub last_shell_true_reference_depth_h:f64,
+    pub last_shell_partition_depth_abs_error_h:f64,
+    pub last_shell_moment_depth_abs_error_h:f64,
 }
 /// A full state evaluated from scratch for the supplied geometry.
 /// The reference density and gravity are used *only for scoring*.
@@ -135,6 +139,9 @@ pub fn state(
         last_shell_partition_depth_h:0.0,
         last_shell_moment_depth_h:0.0,
         last_shell_partition_below_half_fraction:0.0,
+        last_shell_true_reference_depth_h:0.0,
+        last_shell_partition_depth_abs_error_h:0.0,
+        last_shell_moment_depth_abs_error_h:0.0,
     };
     if with_diagnostics {
         if result.geometry.is_empty() {
@@ -181,6 +188,8 @@ pub fn state(
         let mut align=0.0;
         let (mut ratio,mut depth_s,mut depth_ratio,mut below_half)=
             (0.0,0.0,0.0,0.0);
+        let (mut reference_depth,mut s_depth_error,mut ratio_depth_error)=
+            (0.0,0.0,0.0);
         for &i in &rank[n-last..] {
             let radial=(p[i].pos_m-c).normalized();
             let g=result.geometry[i];
@@ -190,6 +199,13 @@ pub fn state(
             depth_s+=g.plane_distance_h;
             depth_ratio+=g.ratio_plane_distance_h;
             if g.support<0.5 {below_half+=1.0;}
+            let radial_distance=(p[i].pos_m-c).len();
+            let reference=(star.radius_m-radial_distance)/
+                adaptive.smoothing_m[i];
+            reference_depth+=reference;
+            s_depth_error+=(g.plane_distance_h-reference).abs();
+            ratio_depth_error+=
+                (g.ratio_plane_distance_h-reference).abs();
         }
         result.last_shell_partition=part/last as f64;
         result.last_shell_normal_alignment=align/last as f64;
@@ -198,6 +214,12 @@ pub fn state(
         result.last_shell_moment_depth_h=depth_ratio/last as f64;
         result.last_shell_partition_below_half_fraction=
             below_half/last as f64;
+        result.last_shell_true_reference_depth_h=
+            reference_depth/last as f64;
+        result.last_shell_partition_depth_abs_error_h=
+            s_depth_error/last as f64;
+        result.last_shell_moment_depth_abs_error_h=
+            ratio_depth_error/last as f64;
     }
     result
 }
