@@ -14,6 +14,7 @@ use blighted_galaxy::sph_kernel::DensityKernel;
 use blighted_galaxy::sph_massprofile::{self,MassProfileDiagnostic};
 use blighted_galaxy::sph_force_audit::{self,FrozenForceAudit};
 use blighted_galaxy::sph_neighbors::CellNeighbors;
+use blighted_galaxy::sph_hroot::{self,RootLocation};
 use blighted_galaxy::stellar_relax::{relax_isolated_adaptive,RelaxParameters};
 use blighted_galaxy::white_dwarf::{DegenerateElectrons,profile_for_mass};
 use blighted_galaxy::sph3::Fluid3;
@@ -48,6 +49,46 @@ fn actual_neighbors(p:&[Fluid3],state:&AdaptiveState)->f64 {
     }).sum::<usize>();
     count as f64/p.len() as f64
 }
+#[derive(Clone,Copy)]
+struct ClosureMetrics {
+    max_free_before:f64,
+    mean_free_before:f64,
+    max_free_exact:f64,
+    cap_fraction:f64,
+    min_omega:f64,
+    omega_floor_fraction:f64,
+}
+fn closure_metrics(p:&[Fluid3],state:&AdaptiveState,cfg:AdaptiveConfig)->ClosureMetrics {
+    let complete=CellNeighbors::new(p,cfg.max_h_m).all_candidates();
+    let mut max_before=0.0_f64;
+    let mut sum_before=0.0_f64;
+    let mut max_exact=0.0_f64;
+    let mut free=0_usize;
+    let mut capped=0_usize;
+    for i in 0..p.len() {
+        let result=sph_hroot::solve_particle_with_kernel(
+            i,p,&complete[i],cfg.eta,cfg.min_h_m,cfg.max_h_m,
+            state.smoothing_m[i],1e-9,64,cfg.kernel);
+        if result.location==RootLocation::Interior {
+            let residual=sph_hroot::closure_residual_with_kernel(
+                i,p,&complete[i],cfg.eta,state.smoothing_m[i],cfg.kernel);
+            max_before=max_before.max(residual);
+            sum_before+=residual;
+            max_exact=max_exact.max(result.residual);
+            free+=1;
+        } else {capped+=1;}
+    }
+    let min_omega=state.omega.iter().copied().fold(f64::INFINITY,f64::min);
+    let floored=state.omega.iter().filter(|&&w|w<=0.0200001).count();
+    ClosureMetrics {
+        max_free_before:max_before,
+        mean_free_before:sum_before/free.max(1) as f64,
+        max_free_exact:max_exact,
+        cap_fraction:capped as f64/p.len() as f64,
+        min_omega,
+        omega_floor_fraction:floored as f64/p.len() as f64,
+    }
+}
 fn emit(
     summary:&mut String,shells:&mut String,
     n:usize,seed:u64,law:&str,eta:f64,
@@ -56,6 +97,7 @@ fn emit(
     optimization:AngularGlassReport,
     p:&[Fluid3],state:&AdaptiveState,
     profile:&MassProfileDiagnostic,a:&FrozenForceAudit,
+    closure:ClosureMetrics,
 ) {
     let m=a.global;
     let contraction_pct=100.0*(profile.radius_max_m/seed_radius-1.0);
@@ -79,6 +121,9 @@ fn emit(
         f(a.shells[0].metrics.pressure_tangent_rms),
         f(a.shells.last().unwrap().metrics.pressure_radial_ratio),
         f(a.shells.last().unwrap().metrics.gravity_radial_ratio),
+        f(closure.max_free_before),f(closure.mean_free_before),
+        f(closure.max_free_exact),f(closure.cap_fraction),
+        f(closure.min_omega),f(closure.omega_floor_fraction),
     ]);
     for (index,s) in a.shells.iter().enumerate() {
         let m=s.metrics;
@@ -113,7 +158,7 @@ fn main() {
     let star=profile_for_mass(0.65*SOLAR_MASS_KG,eos,10_000.0).unwrap();
     let physics=Sph3Config::cold_white_dwarf(2.0).unwrap();
     let seed_radius=star.radius_at_mass_fraction(1.0-1.0/n as f64);
-    let mut summary=String::from("N,seed,eta_law,eta,layout,kernel,stage,elapsed_s,rmax_km,rmax_bias_pct,initial_sampling_pct,contraction_from_seed_pct,cdf_rms,mean_h_km,actual_neighbors,glass_start_objective,glass_end_objective,accepted_glass_sweeps,max_glass_rotation_degrees,pressure_ref_rms,gravity_ref_rms,net_ref_rms,pressure_radial_ratio,gravity_radial_ratio,pressure_tangent_rms,gravity_tangent_rms,net_tangent_rms,inner_shell_pressure_err,inner_shell_pressure_tangent_rms,outer_shell_pressure_ratio,outer_shell_gravity_ratio\n");
+    let mut summary=String::from("N,seed,eta_law,eta,layout,kernel,stage,elapsed_s,rmax_km,rmax_bias_pct,initial_sampling_pct,contraction_from_seed_pct,cdf_rms,mean_h_km,actual_neighbors,glass_start_objective,glass_end_objective,accepted_glass_sweeps,max_glass_rotation_degrees,pressure_ref_rms,gravity_ref_rms,net_ref_rms,pressure_radial_ratio,gravity_radial_ratio,pressure_tangent_rms,gravity_tangent_rms,net_tangent_rms,inner_shell_pressure_err,inner_shell_pressure_tangent_rms,outer_shell_pressure_ratio,outer_shell_gravity_ratio,max_free_closure_residual,mean_free_closure_residual,max_exact_root_residual,h_capped_fraction,min_omega,omega_floor_fraction\n");
     let mut shell_csv=String::from("N,seed,eta_law,eta,layout,kernel,stage,shell,mass_fraction_lo,mass_fraction_hi,particle_count,mean_radius_km,pressure_ref_rms,gravity_ref_rms,net_ref_rms,pressure_radial_ratio,gravity_radial_ratio,pressure_tangent_rms,gravity_tangent_rms,net_tangent_rms\n");
     println!("BG-PHY-16 N={n}, R_ref={:.3} km, initial sampled radius {:.3} km, glass sweeps={sweeps}, dynamic steps={relax_steps}",
         star.radius_m/1000.0,seed_radius/1000.0);
@@ -150,15 +195,19 @@ fn main() {
                     let profile0=sph_massprofile::profile_diagnostics(&p,&star);
                     let a0=sph_force_audit::frozen_force_audit(
                         &p,&mut state,physics,cfg,&star,shells);
+                    let c0=closure_metrics(&p,&state,cfg);
                     emit(&mut summary,&mut shell_csv,n,seed,law,eta,layout,
                         kernel,"initial",0.0,star.radius_m,seed_radius,
-                        optim,&p,&state,&profile0,&a0);
+                        optim,&p,&state,&profile0,&a0,c0);
                     println!("seed={seed} {law:6} {layout:5} {:12} P-err={:.4} G-err={:.4} inner-P={:.4} outer-P={:.4} glass objective {:.4}->{:.4}",
                         kernel.label(),a0.global.pressure_ref_rms,
                         a0.global.gravity_ref_rms,
                         a0.shells[0].metrics.pressure_ref_rms,
                         a0.shells.last().unwrap().metrics.pressure_radial_ratio,
                         optim.starting_objective,optim.ending_objective);
+                    println!("     max residual {:.2e}, min Omega {:.4}, Omega floor {:.1}%, caps {:.1}%",
+                        c0.max_free_before,c0.min_omega,
+                        100.0*c0.omega_floor_fraction,100.0*c0.cap_fraction);
                     if relax_steps>0 {
                         let relaxed=relax_isolated_adaptive(
                             &mut p,physics,&star,cfg,&mut state,
@@ -170,10 +219,11 @@ fn main() {
                         let post=sph_massprofile::profile_diagnostics(&p,&star);
                         let a1=sph_force_audit::frozen_force_audit(
                             &p,&mut state,physics,cfg,&star,shells);
+                        let c1=closure_metrics(&p,&state,cfg);
                         emit(&mut summary,&mut shell_csv,n,seed,law,eta,layout,
                             kernel,"post_damping",relax_steps as f64*dt,
                             star.radius_m,seed_radius,optim,
-                            &p,&state,&post,&a1);
+                            &p,&state,&post,&a1,c1);
                         println!("    post contraction={:+.2}% net={:.4} P={:.4} G={:.4}",
                             100.0*(post.radius_max_m/seed_radius-1.0),
                             a1.global.net_ref_rms,
