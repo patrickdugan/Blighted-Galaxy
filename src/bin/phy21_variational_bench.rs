@@ -65,7 +65,7 @@ fn main(){
             center,1.2,8).0
     }else{original};
     let mut csv=String::from(
-        "N,seed,layout,kernel,density,eta,fd_fraction,fd_step_m,gradient_fd_halving_rms,variational_net_force_ratio,variational_net_torque_ratio,rk_to_variational_force_rms,relative_hamiltonian_drift,relative_momentum_drift,reverse_position_error,reverse_velocity_error,steps,dt_s\n");
+        "N,seed,layout,kernel,density,eta,fd_fraction,fd_step_m,gradient_fd_halving_rms,variational_net_force_ratio,variational_net_torque_ratio,rk_to_variational_force_rms,legacy_sph_to_variational_force_rms,relative_hamiltonian_drift,relative_momentum_drift,reverse_position_error,reverse_velocity_error,steps,dt_s\n");
     for kernel in [DensityKernel::CubicM4,DensityKernel::WendlandC4] {
         let mut cfg=AdaptiveConfig::from_star_radius(star.radius_m)
             .with_cubic_gravity().with_newton_density();
@@ -106,13 +106,16 @@ fn main(){
                 kernel.label().into(),kind.into(),fmt(eta),fmt(frac),
                 fmt(g0.finite_difference_step_m),fmt(halving),
                 fmt(g0.net_force_ratio),fmt(g0.net_torque_ratio),
-                fmt(g0.rk_discrepancy_rms),fmt(drift),fmt(mom),
+                fmt(g0.rk_discrepancy_rms),
+                fmt(g0.conventional_pressure_discrepancy_rms),
+                fmt(drift),fmt(mom),
                 fmt(dx),fmt(dv),steps.to_string(),fmt(dt),
             ];
             let _=writeln!(csv,"{}",row.join(","));
-            println!("BG-PHY-21B N={n} {} {kind:18} eta={eta:.3} fd-halving={halving:.2e} netF={:.2e} netTorque={:.2e} RK-vs-var={:.3} energy={drift:.2e} momentum={mom:.2e} reverse=({dx:.2e},{dv:.2e})",
+            println!("BG-PHY-21B N={n} {} {kind:18} eta={eta:.3} fd-halving={halving:.2e} netF={:.2e} netTorque={:.2e} RK-vs-var={:.3} conventional-vs-var={:.3e} energy={drift:.2e} momentum={mom:.2e} reverse=({dx:.2e},{dv:.2e})",
                 kernel.label(),g0.net_force_ratio,g0.net_torque_ratio,
-                g0.rk_discrepancy_rms);
+                g0.rk_discrepancy_rms,
+                g0.conventional_pressure_discrepancy_rms);
             assert!(g0.net_force_ratio<5e-3);
             assert!(g0.net_torque_ratio<5e-3);
             assert!(halving<0.05);
