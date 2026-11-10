@@ -384,6 +384,40 @@ mod tests{
         }
     }
     #[test]
+    fn nonuniform_volume_bias_confounds_the_first_to_zeroth_ratio(){
+        for kernel in [DensityKernel::CubicM4,DensityKernel::WendlandC4]{
+            let depth=0.6;
+            let normal_ratio=planar_first_moment(depth,kernel)/
+                planar_support_fraction(depth,kernel);
+            // A local source-volume error 1+b*q_z creates a new
+            // first moment Q'=-Q+b*M_zz, so Q'/S' no longer
+            // cancels the volume error. The flat half-space
+            // second normal moment follows the exact angular integral.
+            let n=128;
+            let step=2.0/n as f64;
+            let mut mzz=0.0;
+            for i in 0..n {
+                let q=(i as f64+0.5)*step;
+                let fraction=if q<=depth {
+                    1.0/3.0
+                }else{
+                    (1.0+(depth/q).powi(3))/6.0
+                };
+                mzz+=4.0*PI*q.powi(4)*
+                    sph_kernel::kernel_and_dh(q,1.0,kernel).0*
+                    fraction*step;
+            }
+            let b=-0.3;
+            let s=planar_support_fraction(depth,kernel);
+            let q=planar_first_moment(depth,kernel);
+            let tilted_ratio=(q-b*mzz)/(s-b*q);
+            let inferred=invert_moment_ratio(tilted_ratio,&ratio_lookup(kernel));
+            assert!((inferred-depth).abs()>0.05,
+                "nonuniform volume error should bias boundary depth");
+            assert!((normal_ratio-q/s).abs()<1e-14);
+        }
+    }
+    #[test]
     fn synthetic_one_sided_affine_vacuum_ghost_reproduces_linear_h(){
         let mut samples=Vec::new();
         // z <= 0 is fluid, z=0 is known vacuum H=0.
