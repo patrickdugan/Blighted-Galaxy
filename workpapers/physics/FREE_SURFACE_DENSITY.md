@@ -196,3 +196,54 @@ architectural starting point.
 - Bonet and Lok (1999), *Variational and momentum preservation
   aspects of Smooth Particle Hydrodynamic formulations*,
   DOI 10.1016/S0045-7825(99)00051-1.
+
+## Completed matrix: geometry-gated MLS survives the density and enthalpy tests
+
+The [final BG-PHY-20 four-job matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/runs/42797977435) completed N256 (two independent seed orientations), N1024 (two orientations), and N2048 (seed 0), plus a separate N256 case frozen after the **same ordinary M4 3-second damping**. All numerical jobs succeeded and emitted CSV artifacts with density, kernel partition, fallback and gradient diagnostics.
+
+**Fixed configuration: angular glass, Wendland C4, exact-root 200 realized neighbors, orientation seed 0.**
+
+| Candidate, metric | N256 initial | N1024 initial | N2048 initial |
+|---|---:|---:|---:|
+| Original SPH outer density log-RMS | 0.5529 | 0.4135 | 0.3524 |
+| Surface-gated MLS outer density log-RMS | **0.1762** | **0.1736** | **0.1553** |
+| Original SPH global density log-RMS | 0.3220 | 0.2103 | 0.1776 |
+| Surface-gated MLS global density log-RMS | **0.1910** | **0.0951** | **0.0808** |
+| Original SPH global quadratic enthalpy-vector error | 0.3654 | 0.1561 | 0.1113 |
+| Surface-gated MLS global quadratic enthalpy-vector error | **0.2930** | **0.1369** | **0.0950** |
+| Original SPH outer quadratic enthalpy-vector error | 0.2611 | 0.2237 | 0.1857 |
+| Surface-gated MLS outer quadratic enthalpy-vector error | **0.2333** | **0.1881** | **0.1349** |
+
+At N1024, orientation seed 17 independently reproduces the improved pair of measurements: outer density log-RMS 0.4131→0.1602, global enthalpy-gradient error 0.1552→0.1412. Both seeds retain the same fitted hydrostatic reference and original SPH volume weights.
+
+**Paired C4-target evaluation:** 36 unique test conditions comprise N256, N1024 and N2048, shell/glass layouts, 100/150/200 realized neighbor targets, independent shell-orientation seeds where available, and the separate N256 post-damping experiments. In *all 36*, the surface-gated MLS candidate reduces each of:
+- global density log-RMS (median reduction 40.1%);
+- outer density log-RMS (median reduction 54.0%);
+- global quadratic numerical-enthalpy gradient error (median reduction 14.9%);
+- outer quadratic numerical-enthalpy gradient error (median reduction 26.1%).
+
+The exact **reference-enthalpy oracle** is invariant across all six candidate fields to the precision of the emitted results, and all fits completed with zero fallback. This is a diagnostic comparison using one fixed reference profile across repeated conditions, rather than 36 statistically independent stars or a formal generalization guarantee.
+
+**After 3 seconds M4 damping (N256, seed0, angular glass, C4/200 frozen audit):**
+
+| Measure | Original SPH | Surface-gated MLS |
+|---|---:|---:|
+| Outer density log-RMS | 0.2907 | **0.0928** |
+| Global density log-RMS | 0.2664 | **0.2303** |
+| Global quadratic enthalpy-vector error | 0.4014 | **0.3369** |
+| Outer quadratic enthalpy-vector error | 0.1921 | **0.1324** |
+
+### Failures of the other estimators
+
+Shepard normalization **worsens all four metrics in all 36 C4 target conditions**. The baseline outer kernel partition average is 0.690 at N1024 C4/200 (0.761 at N2048), so division by that incomplete partition raises already positively biased surface densities. A constant-completeness correction alone does not solve the white-dwarf free-surface problem.
+
+Affine MLS alone reduces outer density log-RMS in all 36 cases, while it reduces global enthalpy-vector error in only 3 of 36. Its global gradient performance commonly deteriorates because a local intercept correction extends into parts of the star with adequate support. Quadratic MLS is worse than the original SPH density globally and at the outer boundary for these cases.
+
+The spherical radial mass secant gives global frozen enthalpy errors 0.0758 at N1024 and 0.0497 at N2048, close to the reference oracle. This comparison is especially favorable on the *initial exact reference mass-CDF seed*. After ordinary M4 damping at N256/C4/200, its outer enthalpy-gradient error grows from the SPH baseline 0.1921 to 0.3216. The spherical symmetry assumption therefore remains unsuitable for general three-dimensional stellar weapon and disruption dynamics.
+
+### Next physical implementation gate
+
+BG-PHY-20 provides a promising *density field* and reproducible acceptance metrics, with a differentiable smoothstep boundary exposure determined by the existing particle partition. A live implementation of rho_blended requires derivatives with respect to both particle positions and smoothing lengths, including the MLS normal-matrix coefficients, partition S_i, and h/rho closure. Simply assigning the blended density inside the previous symmetric pressure-force formula would break its Lagrangian derivation.
+
+A dedicated conservative reproducing-kernel milestone should derive compatible pair forces and thermodynamic work terms, then verify total linear momentum, angular momentum, energy, and translation/rotation invariance on small isolated systems before the same 0.65-Msun white dwarf is re-evaluated under Issue #8's undamped physical gate. Current gameplay dynamics are unchanged.
+
