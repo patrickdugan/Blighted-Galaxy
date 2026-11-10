@@ -427,3 +427,6 @@ pub mod sph_neighbors;
 
 // BG-PHY-11: mass-radius percentiles and hydrostatic profile diagnostics.
 pub mod sph_massprofile;
+
+// BG-PHY-12: hydrostatic radial force budgets and local virial diagnostics.
+pub mod stellar_balance;

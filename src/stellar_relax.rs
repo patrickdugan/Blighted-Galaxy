@@ -167,12 +167,69 @@ fn adaptive_log_density(
 /// Ω_i grad-h terms, while central and self-gravity use fixed Plummer
 /// softening. Damping removes kinetic energy and is disabled during
 /// subsequent undamped hold tests.
+/// Time-dependent damping in the center-of-mass rest frame. The geometric
+/// schedule starts with strong velocity damping, relaxes it over the chosen
+/// fractional window and turns it off completely at the end of that window.
+#[derive(Debug,Clone,Copy)]
+pub enum DampingSchedule {
+    Constant{tau_s:f64},
+    TaperToFree {
+        tau_initial_s:f64,
+        tau_final_s:f64,
+        taper_start:f64,
+        taper_end:f64,
+    },
+}
+impl DampingSchedule {
+    pub fn valid(&self)->bool {
+        match *self {
+            Self::Constant{tau_s}=>tau_s.is_finite()&&tau_s>0.0,
+            Self::TaperToFree{
+                tau_initial_s,tau_final_s,taper_start,taper_end
+            }=>tau_initial_s.is_finite()&&tau_initial_s>0.0&&
+                tau_final_s.is_finite()&&tau_final_s>=tau_initial_s&&
+                taper_start.is_finite()&&taper_end.is_finite()&&
+                taper_start>=0.0&&taper_start<taper_end&&taper_end<=1.0,
+        }
+    }
+    /// Exactly one multiplier per full step of duration dt; valid values
+    /// are in (0,1], with 1 signifying free evolution.
+    pub fn multiplier(&self,step:usize,total:usize,dt:f64)->f64 {
+        assert!(self.valid()&&total>0&&step<total&&dt.is_finite()&&dt>0.0);
+        let tau=match *self {
+            Self::Constant{tau_s}=>Some(tau_s),
+            Self::TaperToFree{
+                tau_initial_s,tau_final_s,taper_start,taper_end
+            }=>{
+                let fraction=(step as f64+0.5)/total as f64;
+                if fraction>=taper_end {None}
+                else if fraction<=taper_start {Some(tau_initial_s)}
+                else {
+                    let f=(fraction-taper_start)/(taper_end-taper_start);
+                    Some(tau_initial_s*
+                        (tau_final_s/tau_initial_s).powf(f))
+                }
+            }
+        };
+        tau.map(|t|(-dt/t).exp()).unwrap_or(1.0)
+    }
+}
+/// Preserve the original constant-damping API and its measured baselines.
 pub fn relax_isolated_adaptive(
     p:&mut [Fluid3],physics:Sph3Config,profile:&WhiteDwarfProfile,
     config:AdaptiveConfig,state:&mut AdaptiveState,
     options:RelaxParameters,
 )->Result<AdaptiveRelaxReport,&'static str> {
-    if !options.valid()||p.len()<4||!physics.valid()||
+    relax_isolated_adaptive_with_schedule(
+        p,physics,profile,config,state,options,
+        DampingSchedule::Constant{tau_s:options.damping_time_s})
+}
+pub fn relax_isolated_adaptive_with_schedule(
+    p:&mut [Fluid3],physics:Sph3Config,profile:&WhiteDwarfProfile,
+    config:AdaptiveConfig,state:&mut AdaptiveState,
+    options:RelaxParameters,schedule:DampingSchedule,
+)->Result<AdaptiveRelaxReport,&'static str> {
+    if !schedule.valid()||!options.valid()||p.len()<4||!physics.valid()||
         !config.valid()||!state.valid_for(p.len())||
         !matches!(physics.eos,Sph3Eos::ColdDegenerate{..}) {
         return Err("invalid adaptive relaxation inputs");
@@ -184,14 +241,14 @@ pub fn relax_isolated_adaptive(
     let first_force=sph_adaptive::isolated_force_rms_m_s2(
         p,state,physics,config);
     let initial_density=adaptive_log_density(p,state,profile,initial_center);
-    let decay=(-options.dt_s/options.damping_time_s).exp();
     let mut central=Massive3{
         pos_m:V3::default(),vel_m_s:V3::default(),
         mass_kg:0.0,radius_m:0.0,
     };
-    for _ in 0..options.iterations {
+    for step in 0..options.iterations {
         sph_adaptive::advance(&mut central,p,state,physics,config,
             options.dt_s);
+        let decay=schedule.multiplier(step,options.iterations,options.dt_s);
         let (_,center,bulk)=barycenter(p);
         for x in p.iter_mut() {
             x.pos_m+=initial_center-center;
@@ -334,6 +391,65 @@ mod tests {
         assert!(report.report.center_shift_m<1e-5);
         assert!(report.report.final_density_log_rms.is_finite());
         assert!(report.minimum_omega>=0.02);
+    }
+    #[test]
+    fn damping_schedule_turns_off_at_selected_fraction() {
+        let t=DampingSchedule::TaperToFree{
+            tau_initial_s:0.15,tau_final_s:1.5,
+            taper_start:0.4,taper_end:0.9,
+        };
+        assert!(t.valid());
+        let a=t.multiplier(5,100,0.01);
+        let b=t.multiplier(50,100,0.01);
+        let c=t.multiplier(88,100,0.01);
+        assert!(a>0.0&&a<b&&b<c&&c<1.0);
+        assert_eq!(t.multiplier(95,100,0.01),1.0);
+        assert!(!DampingSchedule::TaperToFree{
+            tau_initial_s:0.1,tau_final_s:1.0,
+            taper_start:0.9,taper_end:0.7,
+        }.valid());
+    }
+    #[test]
+    fn constant_schedule_matches_old_relaxation_path() {
+        let (profile,seed,physics)=setup(48);
+        let cfg=AdaptiveConfig::from_star_radius(profile.radius_m)
+            .with_cubic_gravity();
+        let mut a=seed.clone();let mut b=seed;
+        let mut state_a=AdaptiveState::new(&a,profile.radius_m,cfg);
+        let mut state_b=state_a.clone();
+        let opts=RelaxParameters{
+            iterations:25,dt_s:0.004,damping_time_s:0.12,
+        };
+        let old=relax_isolated_adaptive(
+            &mut a,physics,&profile,cfg,&mut state_a,opts).unwrap();
+        let explicit=relax_isolated_adaptive_with_schedule(
+            &mut b,physics,&profile,cfg,&mut state_b,opts,
+            DampingSchedule::Constant{tau_s:0.12}).unwrap();
+        assert_eq!(old.report.max_radius_m,explicit.report.max_radius_m);
+        for (x,y) in a.iter().zip(&b) {
+            assert_eq!(x.pos_m,y.pos_m);
+            assert_eq!(x.vel_m_s,y.vel_m_s);
+        }
+    }
+    #[test]
+    fn tapered_schedule_preserves_mass_and_bulk_frame() {
+        let (profile,mut p,physics)=setup(48);
+        let cfg=AdaptiveConfig::from_star_radius(profile.radius_m)
+            .with_cubic_gravity();
+        let mut state=AdaptiveState::new(&p,profile.radius_m,cfg);
+        let baseline=barycenter(&p);
+        let result=relax_isolated_adaptive_with_schedule(
+            &mut p,physics,&profile,cfg,&mut state,
+            RelaxParameters{iterations:90,dt_s:0.004,damping_time_s:0.7},
+            DampingSchedule::TaperToFree{
+                tau_initial_s:0.15,tau_final_s:1.5,
+                taper_start:0.40,taper_end:0.92,
+            }).unwrap();
+        let final_state=barycenter(&p);
+        assert!(result.report.final_accel_rms_m_s2.is_finite());
+        assert!((final_state.0-baseline.0).abs()/baseline.0<1e-12);
+        assert!((final_state.1-baseline.1).len()<1e-5);
+        assert!((final_state.2-baseline.2).len()<1e-6);
     }
     #[test]
     fn adaptive_hold_after_damping_preserves_bulk_momentum() {
