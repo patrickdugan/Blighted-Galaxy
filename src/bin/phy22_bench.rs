@@ -63,7 +63,7 @@ fn main(){
     assert!(layout=="shell"||layout=="glass");
     assert!(steps>0&&steps<=30&&dt.is_finite()&&dt>0.0&&dt<=0.02);
     assert!(eta>0.5&&eta<3.0);
-    assert!(oracle==false||n<=32);
+    assert!(!oracle||n<=64);
     assert!((1e-7..=1e-2).contains(&step_fraction));
     let star=profile_for_mass(0.65*SOLAR_MASS_KG,
         DegenerateElectrons::new(2.0).unwrap(),10_000.0).unwrap();
@@ -160,6 +160,8 @@ fn main(){
             assert!(analytic.net_force_ratio<1e-9);
             assert!(analytic.net_torque_ratio<1e-9);
             assert!(analytic.max_mls_relative_disagreement<1e-9);
+            if n==64 {assert!(analytic.capped_fraction<1e-12,
+                "N64 benchmark should exercise uncapped implicit h derivatives");}
             assert!(drift<1e-5);
             assert!(linear_drift<1e-9&&angular_drift<1e-9);
         }
