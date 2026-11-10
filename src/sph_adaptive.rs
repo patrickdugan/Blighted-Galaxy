@@ -16,6 +16,7 @@ use crate::sph3::{
 };
 use std::f64::consts::PI;
 use crate::sph_gravity_kernel;
+use crate::sph_neighbors::CellNeighbors;
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum GravityModel {
@@ -105,10 +106,13 @@ fn kernel_and_derivative_h(distance_m:f64,h:f64)->(f64,f64) {
     let dwdh=-norm/h*(3.0*f+q*dfdq);
     (w,dwdh)
 }
-fn density_of_particle(i:usize,particles:&[Fluid3],h:f64)->(f64,f64) {
+fn density_of_particle(
+    i:usize,particles:&[Fluid3],h:f64,candidates:&[usize],
+)->(f64,f64) {
     let mut rho=0.0;
     let mut derivative=0.0;
-    for x in particles {
+    for &j in candidates {
+        let x=&particles[j];
         let (w,dwdh)=kernel_and_derivative_h(
             (particles[i].pos_m-x.pos_m).len(),h);
         rho+=x.mass_kg*w;
@@ -124,10 +128,14 @@ pub fn update_adaptive_densities(
     particles:&[Fluid3],state:&mut AdaptiveState,cfg:AdaptiveConfig,
 ) {
     assert!(cfg.valid()&&state.valid_for(particles.len()));
+    // Positions are fixed across the iterative h/rho closure. Reuse the
+    // compact-support cell-list candidates on every inner iteration.
+    let neighbors=CellNeighbors::new(particles,cfg.max_h_m);
+    let candidates=neighbors.all_candidates();
     for _ in 0..cfg.density_iterations {
         for i in 0..particles.len() {
             let h=state.smoothing_m[i];
-            let (rho,_)=density_of_particle(i,particles,h);
+            let (rho,_)=density_of_particle(i,particles,h,&candidates[i]);
             assert!(rho>0.0&&rho.is_finite());
             let target=cfg.eta*
                 (particles[i].mass_kg/rho).cbrt();
@@ -137,7 +145,7 @@ pub fn update_adaptive_densities(
     }
     for i in 0..particles.len() {
         let h=state.smoothing_m[i];
-        let (rho,drho_dh)=density_of_particle(i,particles,h);
+        let (rho,drho_dh)=density_of_particle(i,particles,h,&candidates[i]);
         state.densities_kg_m3[i]=rho;
         let at_cap=(h-cfg.min_h_m).abs()<cfg.min_h_m*1e-8||
             (h-cfg.max_h_m).abs()<cfg.max_h_m*1e-8;
@@ -171,14 +179,22 @@ pub fn adaptive_gravity_zeta(
 )->Vec<f64> {
     assert!(state.valid_for(particles.len()));
     let mut zeta=vec![0.0;particles.len()];
+    // Plummer's dphi/dh has infinite support. Only the compact M4 model
+    // can safely prune the gravitational zeta summation at distance 2*h.
+    let compact=if cfg.gravity_model==GravityModel::MatchedCubicSpline {
+        Some(CellNeighbors::new(particles,cfg.max_h_m).all_candidates())
+    } else {None};
     for (i,p) in particles.iter().enumerate() {
         let h=state.smoothing_m[i];
         let capped=(h-cfg.min_h_m).abs()<=cfg.min_h_m*1e-8 ||
             (h-cfg.max_h_m).abs()<=cfg.max_h_m*1e-8;
         if capped {continue;}
         let mut derivative_sum=0.0;
-        for (j,q) in particles.iter().enumerate() {
+        let candidates=compact.as_ref().map(|x|x[i].clone())
+            .unwrap_or_else(||(0..particles.len()).collect());
+        for j in candidates {
             if i==j {continue;}
+            let q=&particles[j];
             let r=(p.pos_m-q.pos_m).len();
             let derivative=match cfg.gravity_model {
                 GravityModel::FixedPlummer=>0.0,
@@ -412,6 +428,29 @@ mod tests {
             mass_kg:0.0,radius_m:0.0
         },&particles,&mut state,phys,cfg);
         assert!(f.minimum_omega>0.0);
+    }
+    #[test]
+    fn cell_list_density_matches_full_pairwise_sum() {
+        let (particles,_,cfg,mut state)=setup(128);
+        update_adaptive_densities(&particles,&mut state,cfg);
+        for i in 0..particles.len() {
+            let h=state.smoothing_m[i];
+            let mut full=0.0;
+            let mut deriv=0.0;
+            for j in 0..particles.len() {
+                let r=(particles[i].pos_m-particles[j].pos_m).len();
+                let (w,dwdh)=kernel_and_derivative_h(r,h);
+                full+=particles[j].mass_kg*w;
+                deriv+=particles[j].mass_kg*dwdh;
+            }
+            let diff=(full-state.densities_kg_m3[i]).abs()/full;
+            assert!(diff<1e-13,"cell density mismatch particle {i}: {diff}");
+            let expected_omega=if (h-cfg.min_h_m).abs()<cfg.min_h_m*1e-8||
+                (h-cfg.max_h_m).abs()<cfg.max_h_m*1e-8 {
+                1.0
+            } else {(1.0+h*deriv/(3.0*full)).max(0.02)};
+            assert!((state.omega[i]-expected_omega).abs()<1e-11);
+        }
     }
     #[test]
     fn symmetric_adaptive_forces_preserve_total_momentum() {
