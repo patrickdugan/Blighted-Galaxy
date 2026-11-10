@@ -26,6 +26,8 @@ pub enum EnthalpyCandidate {
     BlendedH,
     GhostH,
     GhostBlendedH,
+    /// Compensate common volume bias via |Q|/S before placing H=0 ghost.
+    MomentRatioGhostBlend,
 }
 impl EnthalpyCandidate {
     pub fn label(self)->&'static str {
@@ -34,6 +36,7 @@ impl EnthalpyCandidate {
             Self::BlendedH=>"enthalpy_affine_blend",
             Self::GhostH=>"vacuum_ghost_enthalpy",
             Self::GhostBlendedH=>"vacuum_ghost_blend",
+            Self::MomentRatioGhostBlend=>"moment_ratio_ghost_blend",
         }
     }
 }
@@ -55,6 +58,9 @@ pub struct BoundaryGeometry{
     /// Estimated distance to the locally planar vacuum in units h.
     pub plane_distance_h:f64,
     pub ghost_weight:f64,
+    pub first_to_zeroth_ratio:f64,
+    pub ratio_plane_distance_h:f64,
+    pub ratio_ghost_weight:f64,
     pub blend_weight:f64,
 }
 #[derive(Clone,Debug)]
@@ -151,6 +157,47 @@ fn plane_lookup(k:DensityKernel)->[f64;65]{
     }
     out
 }
+/// For q>a, the fluid-side angular first-moment coefficient
+/// is [(a/q)^2-1]/4. Return its positive magnitude.
+fn planar_first_moment(a:f64,k:DensityKernel)->f64{
+    assert!((0.0..=2.0).contains(&a));
+    let n=128;
+    let step=2.0/n as f64;
+    let mut magnitude=0.0;
+    for i in 0..n{
+        let q=(i as f64+0.5)*step;
+        if q<=a {continue;}
+        let w=sph_kernel::kernel_and_dh(q,1.0,k).0;
+        magnitude+=PI*q.powi(3)*w*(1.0-(a/q).powi(2))*step;
+    }
+    magnitude
+}
+fn ratio_lookup(k:DensityKernel)->[f64;65]{
+    let mut out=[0.0;65];
+    for i in 0..=64{
+        let a=2.0*i as f64/64.0;
+        out[i]=planar_first_moment(a,k)/
+            planar_support_fraction(a,k).max(1e-12);
+    }
+    out
+}
+fn invert_moment_ratio(r:f64,lut:&[f64;65])->f64{
+    if r>=lut[0]{return 0.0;}
+    if r<=0.0{return 2.0;}
+    for i in 1..=64{
+        if lut[i]<=r{
+            let denom=(lut[i-1]-lut[i]).max(1e-12);
+            return 2.0/64.0*((i-1) as f64+
+                ((lut[i-1]-r)/denom).clamp(0.0,1.0));
+        }
+    }
+    2.0
+}
+fn ideal_fraction_at_depth(a:f64,lut:&[f64;65])->f64{
+    let x=(a*32.0).clamp(0.0,64.0);
+    let i=(x.floor() as usize).min(63);
+    lut[i]+(x-i as f64)*(lut[i+1]-lut[i])
+}
 fn inverse_planar_fraction(s:f64,lut:&[f64;65])->f64{
     if s<=0.5{return 0.0;}
     if s>=1.0{return 2.0;}
@@ -174,6 +221,7 @@ pub fn reconstruct(
     let enthalpy=rho.iter().map(|x|eos.enthalpy_m2_s2(*x))
         .collect::<Vec<_>>();
     let lut=plane_lookup(kernel);
+    let ratio_lut=ratio_lookup(kernel);
     let max_h=state.smoothing_m.iter().copied().fold(0.0_f64,f64::max);
     let candidates=CellNeighbors::new(p,max_h).all_candidates();
     let mut geometry=Vec::with_capacity(n);
@@ -181,8 +229,11 @@ pub fn reconstruct(
     let mut blended=Vec::with_capacity(n);
     let mut ghost_plain=Vec::with_capacity(n);
     let mut ghost_blended=Vec::with_capacity(n);
-    let (mut failed_plain,mut failed_ghost)=(0usize,0usize);
-    let (mut worst_plain,mut worst_ghost)=(0.0_f64,0.0_f64);
+    let mut ratio_ghost_blended=Vec::with_capacity(n);
+    let (mut failed_plain,mut failed_ghost,mut failed_ratio)=
+        (0usize,0usize,0usize);
+    let (mut worst_plain,mut worst_ghost,mut worst_ratio)=
+        (0.0_f64,0.0_f64,0.0_f64);
     for i in 0..n{
         let h=state.smoothing_m[i];
         let mut samples=Vec::new();
