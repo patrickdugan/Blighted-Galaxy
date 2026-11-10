@@ -132,6 +132,74 @@ runs N1024 and N2048 separately and uploads summary and radial-shell
 CSVs. Ordinary CI checks unit tests, a small N64 numerical smoke and
 the Windows release binary.
 
+## Completed frozen-state measurements (10 November 2026)
+
+The [N1024 and N2048 Actions matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/runs/42767907376)
+succeeded and published separate summary and radial-shell CSV artifacts.
+Every 100, 150, 200 neighbor target was reached with <0.1 mean-neighbor
+absolute calibration error, at both resolutions, each geometry and each
+kernel. No target case hits an upper smoothing-length cap or the Omega
+floor. Exact Newton closures have <1e-9 dimensionless free-particle
+h/rho equation residual, matching the prescribed tolerance.
+
+**Wendland C4 on angular-glass seeds, exact Newton closure:**
+
+| N | seed | target neighbors | eta | pressure vector RMS | gravity vector RMS | outer pressure/reference ratio | inner E0 RMS | outer E0 RMS |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+|1024|0|100|1.4503|0.3288|0.0199|0.8299|0.1021|0.5298|
+|1024|0|150|1.6605|0.1662|0.0208|0.7781|0.0572|0.5723|
+|1024|0|200|1.8410|0.1204|0.0232|0.7495|0.0354|0.6097|
+|1024|17|100|1.4529|0.3451|0.0205|0.8348|0.1125|0.5375|
+|1024|17|150|1.6611|0.1576|0.0211|0.7807|0.0568|0.5787|
+|1024|17|200|1.8420|0.1133|0.0236|0.7516|0.0340|0.6158|
+|2048|0|100|1.4483|0.5592|0.0156|0.9282|0.1195|0.4683|
+|2048|0|150|1.6477|0.2398|0.0138|0.8559|0.0633|0.4797|
+|2048|0|200|1.8154|0.1416|0.0146|0.8192|0.0394|0.5081|
+
+Increasing target neighbors from 100 to 200 reduces C4 initial pressure
+force RMS and inner E0 residual sharply in every tested arrangement.
+The outer E0 residual grows at N1024, while the outer radial pressure
+support decreases from ~0.83 to ~0.75. This is a clear smoothing/boundary
+bias tradeoff and motivates tracking both indicators in dynamics.
+
+The matched-neighbor **M4 glass control** still has lower frozen pressure
+error at 200 neighbors: 0.1175 (N1024, seed 0) and 0.0903 (N2048, seed
+0). M4's high-neighbor pairing/clumping stability is a separate physical
+question, so these snapshots cannot establish superior dynamics for
+either kernel.
+
+At 200 neighbors, C4 glass pressure RMS changes 0.1204 (N1024) to
+0.1416 (N2048). This finite-resolution comparison shows no monotone
+decrease at fixed neighbor count. The neighbor-growth rule in BG-PHY-14
+requires a larger suite of N with corresponding neighbor growth
+for any convergence conclusion.
+
+### Exact-root cross-check
+
+At N1024, seed 0, glass layout, C4 target 200, the 24-pass closure has
+maximum uncapped residual 1.78e-7; Newton closes to 4.14e-10. Both
+pressure vector errors round to 0.120367. At N2048 the corresponding
+max residuals are 1.99e-7 and 4.23e-10. This eliminates significant
+underrelaxed-closure error as an explanation for remaining pressure bias.
+
+### Selected physical holds
+
+The [BG-PHY-17 full-hold workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy17-hold.yml)
+runs three N1024 jobs, all using the same glass initializer and seed 0:
+
+- Wendland C4 calibrated to 200 neighbors: best initial pressure-vector
+  RMS among C4 target candidates at N1024; outer support ~0.75
+- Wendland C4 calibrated to 150 neighbors: intermediate smoothing length
+  with greater outer support (~0.78) and pressure RMS ~0.166
+- Matched M4 control at eta=1.20: reference playable physics configuration
+  with a safe lower realized neighbor population
+
+Each physical hold keeps 3 seconds damping, 7.88 seconds undamped,
+the reference radius and CDF gates, energy/momentum invariants,
+and the exact recorded initial sampling offset. The new
+`phy17_hold` runner emits a longitudinal 30-snapshot trace.
+The workflow publishes output after each job completes.
+
 ## Follow-up dynamics gate
 
 After the frozen matrix, shortlist C4 choices that satisfy all of:
