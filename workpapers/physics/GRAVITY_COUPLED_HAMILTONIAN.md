@@ -216,6 +216,52 @@ Its outermost-particle drift remains slightly above 5%, and its
 post-damping stellar radius is 22.49% below the independent 1D
 reference.
 
+### Matched-kernel density ablation at N256
+
+The first physical comparison varied the density estimator and kernel
+together. A second [six-job hold matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/runs/42827024133)
+isolated the effect of the BG-PHY-20 surface correction **at fixed
+kernel, eta, particle seed and timestep**. All six jobs completed
+their original 3.00s damping / 7.88s undamped protocol; the
+two N128 controls are retained. Every N256 run has identical
+initial glass particle positions and cold EOS.
+
+| N256 metric | M4 original, eta1.20 | M4 surface MLS, eta1.20 | C4 original, eta1.70 | C4 surface MLS, eta1.70 |
+|---|---:|---:|---:|---:|
+| Post-damped radius bias | −17.00% | −20.13% | −17.26% | −22.49% |
+| Maximum Rmax drift | 10.95% | **5.34%** | 15.10% | **5.43%** |
+| Maximum R99 drift | 9.36% | **4.68%** | 13.22% | **4.62%** |
+| Worst radial CDF RMS | 4.35% | **3.20%** | 5.29% | **3.81%** |
+| Maximum relative Hamiltonian energy drift | 1.56e−8 | 6.70e−8 | 1.21e−8 | 6.06e−8 |
+| Relative angular-momentum drift | 3.76e−16 | (CSV) | 2.98e−16 | 1.16e−15 |
+| Issue #8 physical gate | FAIL | FAIL | FAIL | FAIL |
+
+**Controlled result:** at fixed M4 the density correction reduces
+maximum undamped Rmax excursions by approximately 51%, while at fixed
+Wendland C4 it reduces them by approximately 64%. Both kernels gain
+R99 stability and improve the radial mass-CDF error.
+
+The same correction shifts the post-damping equilibrium inward
+by approximately 3.13 percentage points of reference radius under
+M4 and 5.23 percentage points under C4. These are numerical
+outcomes of the complete Hamiltonian, already verified against
+independent energy differentiation, rather than consequences
+of a force or EOS normalization change.
+
+All six physical acceptance Booleans remain **false**.
+For both corrected N256 systems, R99 and CDF pass their 5%
+individual gates; maximum Rmax remains narrowly above 5%
+(5.34% for M4; 5.43% for C4), while the independent
+hydrostatic radius remains 20–22.5% too small.
+
+The density correction is therefore the causal source of
+improved stability **within the tested kernel and eta values**.
+The larger equilibrium contraction remains the next blocking
+hydrostatic discrepancy. A radial virial/outer-shell force
+decomposition at common frozen positions would isolate whether
+this is surface support truncation or a broader pressure-density
+functional bias.
+
 ### Scientific implication
 
 The analytic variational correction now makes it possible to
