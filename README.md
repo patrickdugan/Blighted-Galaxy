@@ -306,6 +306,18 @@ cargo run --release --bin phy21_bench -- --n 32 --seed 17 --layout glass --eta 1
 
 See the [BG-PHY-21 technical workpaper](workpapers/physics/CONSERVATIVE_RK_PILOT.md) and [N32/64/128 conservation matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy21.yml). [Issue #22](https://github.com/patrickdugan/Blighted-Galaxy/issues/22) tracks the required total variable-h, density/MLS and gravity derivatives and thermodynamic compatibility before a full [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) white-dwarf acceptance run.
 
+## BG-PHY-22: Analytic variational force for the surface-gated density
+
+The next pressure-only research solver differentiates the **complete cold-EOS internal energy** through the implicit SPH smoothing length, kernel weights, source volumes, local affine MLS coefficients, and partition-gated density blend. Its analytic reverse accumulation uses a small number of N² passes and is checked against BG-PHY-21B's independent full-coordinate finite-difference energy-gradient oracle.
+
+An opt-in N16/24/32 comparison measures analytic/finite-difference force error, exact scalar energy agreement, total-force/torque invariance, and short reversible Hamiltonian evolution. N64 exercises the faster analytic force without the full-coordinate numerical oracle. This remains a gravity-free pressure pilot and leaves the shipped game physics and [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) hydrostatic stellar gate unchanged.
+
+~~~sh
+cargo run --release --bin phy22_bench -- --n 16 --seed 17 --layout shell --eta 1.7 --steps 3 --dt 0.002 --csv bg-phy22-n16.csv
+~~~
+
+See the [complete analytic derivation](workpapers/physics/ANALYTIC_SURFACE_VARIATION.md) and [BG-PHY-22 numerical workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy22.yml). The reproducing-kernel/thermodynamic research contract remains tracked in [Issue #22](https://github.com/patrickdugan/Blighted-Galaxy/issues/22).
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.
