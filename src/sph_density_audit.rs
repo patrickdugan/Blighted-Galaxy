@@ -25,6 +25,9 @@ pub enum DensityEstimator {
     Shepard,
     MlsLinear,
     MlsQuadratic,
+    /// Weight affine MLS by the missing kernel partition, preserving the
+    /// original density in fully supported interior regions.
+    SurfaceBlendedMls,
     RadialMassSecant,
 }
 impl DensityEstimator {
@@ -34,6 +37,7 @@ impl DensityEstimator {
             Self::Shepard=>"shepard",
             Self::MlsLinear=>"mls_linear",
             Self::MlsQuadratic=>"mls_quadratic",
+            Self::SurfaceBlendedMls=>"surface_blended_mls",
             Self::RadialMassSecant=>"radial_mass_secant",
         }
     }
@@ -192,6 +196,16 @@ pub fn estimate(
         } else {failed2+=1;}
     }
     let half_window=((n as f64).sqrt()/2.0).round() as usize;
+    // A half-space through a smooth free surface contributes roughly half
+    // the compact kernel's volume. Interpolate the correction by the
+    // normalized missing partition fraction, with a C1 smoothstep to
+    // avoid a sharp transition in the diagnostic scalar field.
+    let mut blended=baseline.to_vec();
+    for i in 0..n {
+        let x=((1.0-partition[i])/0.5).clamp(0.0,1.0);
+        let weight=x*x*(3.0-2.0*x);
+        blended[i]=baseline[i]*(1.0-weight)+affine[i]*weight;
+    }
     let radial=radial_secant(particles,center,half_window.max(4));
     let failed_radial=radial.iter().filter(|x|x.is_none()).count();
     let radial_values=radial.into_iter().enumerate()
@@ -215,6 +229,11 @@ pub fn estimate(
                 method:DensityEstimator::MlsQuadratic,rho:quadratic,
                 fallback_fraction:failed2 as f64/n as f64,
                 maximum_pivot_spread:max2,
+            },
+            DensityField {
+                method:DensityEstimator::SurfaceBlendedMls,rho:blended,
+                fallback_fraction:failed1 as f64/n as f64,
+                maximum_pivot_spread:max1,
             },
             DensityField {
                 method:DensityEstimator::RadialMassSecant,rho:radial_values,
@@ -270,7 +289,7 @@ mod tests {
         let mut state=AdaptiveState::new(&p,star.radius_m,cfg);
         update_adaptive_densities(&p,&mut state,cfg);
         let report=estimate(&p,&state,cfg.kernel);
-        assert_eq!(report.fields.len(),5);
+        assert_eq!(report.fields.len(),6);
         assert_eq!(report.fields[0].rho,state.densities_kg_m3);
         assert!(report.partition.iter().all(|v|v.is_finite()&&*v>0.0));
         for field in &report.fields {
