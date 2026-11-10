@@ -155,6 +155,70 @@ records its fallback fraction. The 4×4 normal equations
 use diagonal preconditioning and a Cholesky pivot-spread
 limit of 1e8, matching the existing MLS contract.
 
+## Follow-on test: first-to-zeroth kernel moment ratio
+
+The first four-job N64/N128/N256 matrix passed. On N256 seed0, the
+partition-inferred vacuum ghost worsened last-shell pressure support
+and moved the discrete homology energy minimum inward. At fixed C4
+the original density's last-shell pressure/reference-g was 0.681;
+the BG-PHY-20 surface MLS yielded 0.661, ordinary affine-enthalpy
+blend 0.679, and partition-only vacuum ghost 0.568. The ghost
+raised last-shell density log-RMS from 0.712 (original) to 1.407
+and shifted the preferred homology radius bias to -11.16%, compared
+with -2.85% under original SPH. Seed17 independently reproduces
+the poor ghost response.
+
+The inferred outward normal itself aligned well with the stellar
+radial direction (0.997 mean cosine in the N256 C4 last shell).
+The last shell's measured volume partition was only 0.466,
+already **below the 0.5 half-space ideal**. The first ghost model
+therefore placed the vacuum boundary at zero distance from many
+nonzero-enthalpy interior particles. This exposes a confound:
+the volume-weighted partition includes errors in SPH volume
+estimation as well as actual missing geometric support.
+
+A second parameter-free geometric hypothesis uses the ratio of
+the **first and zeroth kernel moments** to eliminate a common
+multiplicative source-volume bias. For a locally planar boundary
+at depth `a*h`, the truncated normal first-moment magnitude is
+
+```text
+Q_flat(a) = pi integral_(q=a)^2
+              q^3 W(q,1) [1-(a/q)^2] dq.
+
+R_flat(a) = Q_flat(a)/S_flat(a),
+R_observed = |Q_i|/S_i.
+```
+
+If each local source volume has the same factor `c` error,
+then `S_observed=c S_flat(a)` and
+`|Q_observed|=c Q_flat(a)`, so their ratio is invariant.
+The new candidate inverts the monotone function R_flat(a)
+using a kernel-specific 65-node lookup. Its ghost weight is
+the **ideal missing geometric volume**
+`1-S_flat(a_ratio)`, independent of the observed
+partition's multiplicative bias. The outward normal continues
+to come only from the observed Q direction.
+
+The fifth screening candidate is
+`moment_ratio_ghost_blend`, with the same cold EOS,
+affine enthalpy fit, positivity checks and BG-PHY-20
+smooth surface exposure as before. The kernel
+shape, lookup resolution and ratio inversion are fixed
+across both particle-orientation seeds, M4 and C4.
+A synthetic test checks that inferred depth is unchanged
+under source-volume scalings 0.63, 0.81 and 1.0 for
+several actual half-space depths.
+
+This is a *new exploratory hypothesis motivated by the
+observed failed partition-only ghost*, and its evidence
+should be identified separately from the original
+preregistered four-candidate experiment. It may still
+fail if the SPH volume bias varies systematically over
+the support or the physical surface departs strongly
+from a plane. Its N256 holdout seed17 comparison is
+retained and no reference stellar label enters the formula.
+
 ## Synthetic verification
 
 Before white-dwarf screening, unit tests require:
