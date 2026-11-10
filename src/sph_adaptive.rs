@@ -231,6 +231,11 @@ pub fn adaptive_gravity_zeta(
 pub struct AdaptiveForces {
     pub central_acceleration_m_s2:V3,
     pub accelerations_m_s2:Vec<V3>,
+    /// Pressure acceleration, including the hydrodynamic grad-h correction.
+    /// Kept separate for radial hydrostatic-force diagnostics.
+    pub pressure_accelerations_m_s2:Vec<V3>,
+    /// Self-gravity, central field, and gravitational grad-h corrections.
+    pub gravity_accelerations_m_s2:Vec<V3>,
     pub minimum_omega:f64,
     pub minimum_h_m:f64,
     pub maximum_h_m:f64,
@@ -243,6 +248,8 @@ pub fn forces(
     update_adaptive_densities(particles,state,cfg);
     let n=particles.len();
     let mut acceleration=vec![V3::default();n];
+    let mut pressure_acc=vec![V3::default();n];
+    let mut gravity_acc=vec![V3::default();n];
     let mut central_acc=V3::default();
     let inv_eps2=cfg.gravity_softening_m.powi(2);
     let zeta=if cfg.gravity_model!=GravityModel::FixedPlummer {
@@ -259,6 +266,7 @@ pub fn forces(
         let r2=d.len_sq()+inv_eps2;
         let g=d*(crate::physics::G_SI/(r2*r2.sqrt()));
         acceleration[i]-=g*central.mass_kg;
+        gravity_acc[i]-=g*central.mass_kg;
         central_acc+=g*p.mass_kg;
     }
     for i in 0..n {
@@ -286,6 +294,8 @@ pub fn forces(
             let grav=d*(crate::physics::G_SI*grav_scalar);
             acceleration[i]+=grav*particles[j].mass_kg;
             acceleration[j]-=grav*particles[i].mass_kg;
+            gravity_acc[i]+=grav*particles[j].mass_kg;
+            gravity_acc[j]-=grav*particles[i].mass_kg;
             if r==0.0 {continue;}
             let grad_i=sph3::spline_radial_derivative_3d(
                 r,state.smoothing_m[i]);
@@ -298,6 +308,8 @@ pub fn forces(
                 (-coeff/r);
             acceleration[i]+=push*particles[j].mass_kg;
             acceleration[j]-=push*particles[i].mass_kg;
+            pressure_acc[i]+=push*particles[j].mass_kg;
+            pressure_acc[j]-=push*particles[i].mass_kg;
             if cfg.gravity_model!=GravityModel::FixedPlummer {
                 // Price-Monaghan zeta correction derived by differentiating
                 // the pair gravitational potential through h_i(rho_i).
@@ -307,12 +319,16 @@ pub fn forces(
                 let correction=d*gcoeff;
                 acceleration[i]+=correction*particles[j].mass_kg;
                 acceleration[j]-=correction*particles[i].mass_kg;
+                gravity_acc[i]+=correction*particles[j].mass_kg;
+                gravity_acc[j]-=correction*particles[i].mass_kg;
             }
         }
     }
     AdaptiveForces {
         central_acceleration_m_s2:central_acc,
         accelerations_m_s2:acceleration,
+        pressure_accelerations_m_s2:pressure_acc,
+        gravity_accelerations_m_s2:gravity_acc,
         minimum_omega:state.omega.iter().copied().fold(f64::INFINITY,f64::min),
         minimum_h_m:state.smoothing_m.iter().copied().fold(f64::INFINITY,f64::min),
         maximum_h_m:state.smoothing_m.iter().copied().fold(0.0_f64,f64::max),
@@ -621,6 +637,37 @@ mod tests {
         let e1=adaptive_energy_j(&central,&particles,&mut state,phys,cfg);
         assert!((p1-p0).len()/(particles[0].mass_kg*3e5)<1e-8);
         assert!((e1-e0).abs()/e0.abs()<1e-3);
+    }
+    #[test]
+    fn force_decomposition_reconstructs_total_and_pair_momentum() {
+        for model in [
+            GravityModel::FixedPlummer,
+            GravityModel::MatchedAdaptivePlummer,
+            GravityModel::MatchedCubicSpline,
+        ] {
+            let (p,phys,mut cfg,_)=setup(48);
+            cfg.gravity_model=model;
+            cfg.density_iterations=24;
+            let mut state=AdaptiveState::new(&p,8.4e6,cfg);
+            let central=Massive3{
+                pos_m:V3::default(),vel_m_s:V3::default(),
+                mass_kg:0.0,radius_m:0.0,
+            };
+            let f=forces(&central,&p,&mut state,phys,cfg);
+            let mut net_pressure=V3::default();
+            let mut net_gravity=V3::default();
+            for (i,part) in p.iter().enumerate() {
+                let reconstructed=f.pressure_accelerations_m_s2[i]+
+                    f.gravity_accelerations_m_s2[i];
+                let err=(reconstructed-f.accelerations_m_s2[i]).len();
+                assert!(err/f.accelerations_m_s2[i].len().max(1.0)<1e-11);
+                net_pressure+=f.pressure_accelerations_m_s2[i]*part.mass_kg;
+                net_gravity+=f.gravity_accelerations_m_s2[i]*part.mass_kg;
+            }
+            let scale=p[0].mass_kg*f.accelerations_m_s2[0].len().max(1.0);
+            assert!(net_pressure.len()/scale<1e-9);
+            assert!(net_gravity.len()/scale<1e-9);
+        }
     }
     #[test]
     fn adaptive_zero_step_and_short_drift() {

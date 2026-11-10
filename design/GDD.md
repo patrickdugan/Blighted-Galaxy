@@ -254,6 +254,14 @@ The dedicated high-resolution benchmark evaluates a 1,024-particle star after 3 
 
 See [BG-PHY-11](../workpapers/physics/NEIGHBOR_MASS_PROFILE_HOLD.md) and [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8).
 
+### BG-PHY-12: Why the white dwarf oscillates
+
+The stellar physics engine now measures the cold-degenerate star's *pressure* and *self-gravity* contributions separately in radial mass shells. It compares the SPH force budget against the independent Newtonian hydrostatic profile, including net radial and tangential force fluctuations. A local pressure-to-gravity force-virial ratio helps diagnose large-scale imbalance.
+
+The experimental preparation stage offers a time-dependent damping schedule with a strong early phase and gradually weakening damping before a fully undamped hold. A matched-duration A/B benchmark records the star's radius, 99%-mass radius, radial mass-CDF mismatch, force budget and energy/momentum invariants. The finite-volume/timestep tests determine whether a schedule improves equilibrium. The story-derived stellar-shearing mechanics remain explicitly provisional until the hydrostatic acceptance gates pass.
+
+See [BG-PHY-12](../workpapers/physics/RADIAL_FORCE_RELAX_SCHEDULE.md) and [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8).
+
 ## 11. Unresolved design decisions
 
 - **Fidelity:** whether orbital maneuvers use realistic dynamical constants in all encounters, or curated time/length scales for playable pacing.

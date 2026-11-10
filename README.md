@@ -180,6 +180,20 @@ A separate [BG-PHY-11 high-resolution GitHub Actions workflow](https://github.co
 
 Full methods: [BG-PHY-11 physics workpaper](workpapers/physics/NEIGHBOR_MASS_PROFILE_HOLD.md). Convergence tracker: [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8).
 
+## BG-PHY-12: Pressure/gravity balance and tapered relaxation
+
+The cold white-dwarf research engine now calculates **outward pressure and inward self-gravity separately** in enclosed-mass shells. Its diagnostics show the local hydrostatic gravity reference, radial and tangential residual acceleration, an SPH force-virial ratio, and the stellar mass-radius profile throughout undamped evolution.
+
+Two relaxation schedules can be compared with identical particle seeds and physical time: the previous constant velocity damping and a new strong-to-weak geometric taper that turns damping off near the end of the preparation stage.
+
+~~~sh
+cargo run --release --bin phy12_bench -- --n 128 --relax-steps 300 --hold-steps 262 --csv bg-phy12-timeseries.csv --shell-csv bg-phy12-shells.csv
+~~~
+
+A dedicated [BG-PHY-12 GitHub Actions workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy12.yml) tests the 512-particle reference over 6 seconds of relaxation and 7.88 seconds of undamped evolution for both schedules. The resulting CSV files keep numerical conservation checks and the physical hydrostatic-equilibrium verdict separate.
+
+See the [BG-PHY-12 workpaper](workpapers/physics/RADIAL_FORCE_RELAX_SCHEDULE.md) and open [stellar-equilibrium Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8).
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.
