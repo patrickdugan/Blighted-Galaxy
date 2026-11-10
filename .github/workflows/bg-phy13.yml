@@ -1,0 +1,57 @@
+name: BG-PHY-13 eta and resolution sweep
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+on:
+  pull_request:
+    paths:
+      - "src/bin/phy13_bench.rs"
+      - "src/sph_adaptive.rs"
+      - "src/sph_sampling.rs"
+      - "src/stellar_balance.rs"
+      - ".github/workflows/bg-phy13.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/bin/phy13_bench.rs"
+      - "src/sph_adaptive.rs"
+      - "src/sph_sampling.rs"
+      - "src/stellar_balance.rs"
+      - ".github/workflows/bg-phy13.yml"
+  workflow_dispatch:
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - n: 256
+            etas: "0.85,1.05,1.20,1.45"
+          - n: 512
+            etas: "0.85,1.20,1.45"
+          - n: 1024
+            etas: "0.85,1.20,1.45"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Matched-duration white-dwarf relaxation and 3 t_dyn hold
+        shell: bash
+        run: |
+          cargo run --release --bin phy13_bench -- \
+            --n ${{ matrix.n }} --etas ${{ matrix.etas }} \
+            --relax-steps 300 --hold-steps 788 --dt 0.01 \
+            --csv bg-phy13-${{ matrix.n }}.csv \
+            --shell-csv bg-phy13-shells-${{ matrix.n }}.csv
+      - name: Publish radial force and equilibrium results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy13-n${{ matrix.n }}
+          path: |
+            bg-phy13-${{ matrix.n }}.csv
+            bg-phy13-shells-${{ matrix.n }}.csv
+          if-no-files-found: warn
+          retention-days: 30
