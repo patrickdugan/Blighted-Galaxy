@@ -213,6 +213,54 @@ pub fn seed_approximately_cubic_shells(
     (particles,report)
 }
 
+/// Independent shell-wise angular orientations of the same hydrostatic
+/// radial mass-CDF seed. Each radial shell receives a proper 3D rotation
+/// from a deterministic splitmix64 stream. Antipodal pairs, center of
+/// mass, velocity, mass, radial quantiles and within-shell angular geometry
+/// are invariant. Inter-shell angular alignment changes meaningfully.
+fn splitmix64(x:&mut u64)->u64 {
+    *x=x.wrapping_add(0x9e3779b97f4a7c15);
+    let mut z=*x;
+    z=(z^(z>>30)).wrapping_mul(0xbf58476d1ce4e5b9);
+    z=(z^(z>>27)).wrapping_mul(0x94d049bb133111eb);
+    z^(z>>31)
+}
+fn random_unit(x:&mut u64)->f64 {
+    ((splitmix64(x)>>11) as f64)/((1_u64<<53) as f64)
+}
+fn rotate_shell_vector(v:V3,cosa:f64,sina:f64,
+    cosb:f64,sinb:f64,cosc:f64,sinc:f64)->V3 {
+    let x1=cosa*v.x-sina*v.y;
+    let y1=sina*v.x+cosa*v.y;
+    let x2=cosb*x1+sinb*v.z;
+    let z2=-sinb*x1+cosb*v.z;
+    V3::new(cosc*x2-sinc*y1,sinc*x2+cosc*y1,z2)
+}
+pub fn seed_cubic_shells_oriented(
+    profile:&WhiteDwarfProfile,
+    center:V3,velocity:V3,count:usize,orientation_seed:u64,
+)->(Vec<Fluid3>,EqualVolumeSeedReport) {
+    let (mut particles,report)=seed_approximately_cubic_shells(
+        profile,center,velocity,count);
+    if orientation_seed==0 {return (particles,report);}
+    let mut generator=orientation_seed;
+    for shell in &report.shells {
+        let a=2.0*PI*random_unit(&mut generator);
+        let b=(1.0-2.0*random_unit(&mut generator)).acos();
+        let c=2.0*PI*random_unit(&mut generator);
+        let (sa,ca)=a.sin_cos();
+        let (sb,cb)=b.sin_cos();
+        let (sc,cc)=c.sin_cos();
+        for pair in shell.first_pair..shell.first_pair+shell.pair_count {
+            let offset=particles[2*pair].pos_m-center;
+            let rotated=rotate_shell_vector(offset,ca,sa,cb,sb,cc,sc);
+            particles[2*pair].pos_m=center+rotated;
+            particles[2*pair+1].pos_m=center-rotated;
+        }
+    }
+    (particles,report)
+}
+
 pub fn seeded_star(
     profile:&WhiteDwarfProfile,center:V3,velocity:V3,
     count:usize,method:StarSampling,
@@ -301,6 +349,43 @@ mod tests {
             let reference=profile.radius_at_mass_fraction(
                 (i as f64+0.5)/(count/2) as f64);
             assert!((r-reference).abs()<1e-7);
+        }
+    }
+    #[test]
+    fn independent_shell_orientations_preserve_radius_cdf_and_center() {
+        let profile=setup();
+        let center=V3::new(1e8,-7e7,2e7);
+        let a=seed_cubic_shells_oriented(
+            &profile,center,V3::default(),256,1).0;
+        let b=seed_cubic_shells_oriented(
+            &profile,center,V3::default(),256,2).0;
+        let c=seed_cubic_shells_oriented(
+            &profile,center,V3::default(),256,1).0;
+        let original=seed_cubic_shells_oriented(
+            &profile,center,V3::default(),256,0).0;
+        assert_eq!(a[0].pos_m,c[0].pos_m);
+        assert!((a[0].pos_m-b[0].pos_m).len()>1e3);
+        let mut mass=0.0;let mut cm=V3::default();
+        for i in 0..256 {
+            let da=(a[i].pos_m-center).len();
+            let db=(b[i].pos_m-center).len();
+            let dr=(original[i].pos_m-center).len();
+            assert!((da-dr).abs()<1e-6);
+            assert!((db-dr).abs()<1e-6);
+            cm+=a[i].pos_m*a[i].mass_kg;
+            mass+=a[i].mass_kg;
+        }
+        assert!((cm/mass-center).len()<1e-5);
+        assert!((mass-profile.mass_kg).abs()/mass<1e-12);
+    }
+    #[test]
+    fn orientation_varies_each_shell_without_breaking_antipodes() {
+        let profile=setup();
+        let (particles,shells)=seed_cubic_shells_oriented(
+            &profile,V3::default(),V3::default(),128,987);
+        assert!(shells.shells.len()>2);
+        for pair in particles.chunks_exact(2) {
+            assert!((pair[0].pos_m+pair[1].pos_m).len()<1e-7);
         }
     }
     #[test]
