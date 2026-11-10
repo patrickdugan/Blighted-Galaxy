@@ -28,7 +28,7 @@ jobs:
       - run: cargo run --release --bin phy14_bench -- --n 64 --seeds 0 --relax-steps 10 --hold-steps 20 --csv bg-phy14-smoke.csv
       - run: cargo run --release --bin phy14_bench -- --n 32 --seeds 0 --relax-steps 4 --hold-steps 8 --root-dynamics --csv bg-phy14-newton-smoke.csv
       - run: cargo run --release --bin phy15_bench -- --n 64 --seeds 0 --relax-steps 6 --shells 8 --csv bg-phy15-smoke.csv --shell-csv bg-phy15-smoke-shells.csv
-      - run: cargo run --release --bin phy16_bench -- --n 64 --seeds 0 --glass-sweeps 6 --relax-steps 8 --shells 8 --csv bg-phy16-smoke.csv --shell-csv bg-phy16-smoke-shells.csv
+      - run: cargo run --release --bin phy16_bench -- --n 64 --seeds 0 --glass-sweeps 6 --relax-steps 8 --root-compare --shells 8 --csv bg-phy16-smoke.csv --shell-csv bg-phy16-smoke-shells.csv
       - name: Upload BG-PHY-16 kernel/glass numerical smoke
         uses: actions/upload-artifact@v4
         with:
