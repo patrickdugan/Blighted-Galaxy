@@ -1,0 +1,68 @@
+name: BG-PHY-22 analytic total surface-density variation
+on:
+  pull_request:
+    paths:
+      - "src/sph_surface_variation.rs"
+      - "src/bin/phy22_bench.rs"
+      - "src/sph_density_audit.rs"
+      - "src/sph_rk_variational.rs"
+      - ".github/workflows/bg-phy22.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/sph_surface_variation.rs"
+      - "src/bin/phy22_bench.rs"
+      - ".github/workflows/bg-phy22.yml"
+  workflow_dispatch:
+jobs:
+  analytic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - n: 16
+            seed: 17
+            layout: "shell"
+            steps: 3
+            oracle: ""
+          - n: 24
+            seed: 0
+            layout: "glass"
+            steps: 3
+            oracle: ""
+          - n: 32
+            seed: 17
+            layout: "glass"
+            steps: 3
+            oracle: ""
+          - n: 64
+            seed: 0
+            layout: "glass"
+            steps: 4
+            oracle: "--no-oracle"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Unit regressions for EOS total derivative and surface MLS
+        run: |
+          cargo test --lib sph_surface_variation -- --nocapture
+          cargo test --lib sph_rk_variational -- --nocapture
+      - name: Analytic full density/h/MLS gradient and Hamiltonian tests
+        run: |
+          cargo run --release --bin phy22_bench -- \
+            --n ${{ matrix.n }} --seed ${{ matrix.seed }} \
+            --layout ${{ matrix.layout }} --eta 1.7 \
+            --steps ${{ matrix.steps }} --dt 0.002 \
+            --fd-fraction 0.0001 ${{ matrix.oracle }} \
+            --csv bg-phy22-n${{ matrix.n }}.csv
+      - name: Upload analytic total-force and conservation checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy22-n${{ matrix.n }}
+          path: bg-phy22-n${{ matrix.n }}.csv
+          if-no-files-found: warn
+          retention-days: 30
