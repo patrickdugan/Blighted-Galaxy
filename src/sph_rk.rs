@@ -103,8 +103,8 @@ pub fn query_coefficient(
                 for gamma in 0..3{
                     dm2[alpha][beta][gamma]+=
                         gradw[gamma]*q[alpha]*q[beta]+
-                        (w/h)*(if alpha==gamma{q[beta]}else{0.0}+
-                            if beta==gamma{q[alpha]}else{0.0});
+                        (w/h)*((if alpha==gamma{q[beta]}else{0.0})+
+                            (if beta==gamma{q[alpha]}else{0.0}));
                 }
             }
         }
