@@ -260,6 +260,18 @@ The calibrated N1024/N2048 frozen-force matrix passed and found that Wendland C4
 
 See the [high-neighbor workpaper](workpapers/physics/HIGH_NEIGHBOR_C4_SWEEP.md), [frozen-sweep matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy17.yml), and [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) for unchanged physical acceptance criteria.
 
+## BG-PHY-18: Hydrostatic pressure-gradient consistency at the free surface
+
+The latest frozen-state experiment tests **linear-consistent SPH pressure gradients** against the independent one-dimensional white-dwarf hydrostatic field. It computes a three-dimensional Bonet–Lok first-moment matrix for each particle and measures the effect of inverting that matrix. A second reference-pressure oracle evaluates the same operators on pressure samples from the independent cold-electron profile, separating particle/kernel interpolation effects from density-estimation bias.
+
+A new benchmark compares the current conservative M4 forces against diagnostic direct and corrected pressure gradients across shell and angular-glass seeds. Wendland C4 is tested at 100, 150, and 200 realized neighbors. No diagnostic force enters the integrator, preserving the existing gravity, EOS, and conservation behavior.
+
+~~~sh
+cargo run --release --bin phy18_bench -- --n 1024 --seeds 0,17 --targets 100,150,200 --csv bg-phy18-n1024.csv
+~~~
+
+See the [BG-PHY-18 workpaper](workpapers/physics/PRESSURE_GRADIENT_CONSISTENCY.md) and [experiment matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy18.yml). The physical radius and three-dynamical-time undamped gates remain tracked in [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8).
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.
