@@ -176,3 +176,80 @@ physical acceptance remain unchanged.
 - Dehnen and Aly (2012), *Improving convergence in smoothed
   particle hydrodynamics simulations without pairing instability*,
   https://doi.org/10.1111/j.1365-2966.2012.21439.x.
+
+## Completed measurements (10 November 2026)
+
+The [BG-PHY-19 matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/runs/42772937695)
+passed every N256/N1024/N2048 job. Each CSV records original conservative
+SPH forces alongside numerical/reference pressure and enthalpy
+linear/quadratic fits for every original-shell and angular-glass case.
+
+**Wendland C4 angular glass, seed 0, target 200 realized neighbors,
+exact-root smoothing:**
+
+| Normalized vector-error measure | N256 | N1024 | N2048 |
+|---|---:|---:|---:|
+| Existing conservative pressure force | 0.1886 | 0.1204 | 0.1416 |
+| Quadratic fit to SPH pressure | 0.4805 | 0.2977 | 0.2587 |
+| Quadratic fit to reference pressure | 1.4451 | 0.6210 | 0.6506 |
+| Linear fit to SPH enthalpy | 0.4587 | 0.1493 | 0.0969 |
+| Quadratic fit to SPH enthalpy | 0.3654 | 0.1561 | 0.1113 |
+| Linear fit to reference enthalpy | 0.3055 | 0.0740 | 0.0450 |
+| **Quadratic fit to reference enthalpy** | **0.2113** | **0.0716** | **0.0454** |
+| Outer reference-enthalpy quadratic radial support | 1.172 | 0.975 | 0.965 |
+| Fraction with valid quadratic moment matrix | 100% | 100% | 100% |
+
+N1024 independent seed 17 reproduces the finding. Its C4/200
+quadratic reference-enthalpy vector error is 0.07237, with outer
+support ratio 0.98137; the reference-pressure quadratic error
+remains 0.70536. N1024 C4/200 seed 0 had 0.07161 and 0.97499,
+respectively. The matrix condition guard accepted all particles.
+
+**Controls:** At M4 eta1.20 and glass seed 0, the quadratic
+reference-enthalpy error is 0.1135 (N256), 0.0472 (N1024) and
+0.0301 (N2048). At N2048 C4/100, it is 0.0306. Increasing neighbors
+eventually worsens the enthalpy-gradient spatial resolution at fixed
+N even while helping the original SPH pressure-force E0 noise.
+
+### Physical interpretation
+
+The independent hydrostatic *enthalpy* is an accurately differentiable
+field at the free surface. At N1024 C4/200, the new quadratic oracle
+recovers approximately 97.5% of the mean outer-shell reference
+acceleration with only ~7.2% global normalized vector error.
+Its N2048 global error falls to 4.5%, indicating improving resolution
+of the same continuum reference field at fixed neighbor count.
+
+The simulated-enthalpy reconstruction remains substantially worse
+(15.6% at N1024, 11.1% at N2048). The outer-quartile SPH density has
+a measured positive log bias of +0.242 at N1024 and +0.192 at N2048,
+from BG-PHY-18. The surviving discrepancy is therefore consistent
+with biased SPH density/enthalpy samples, and should be isolated before
+any new dynamical force formulation.
+
+Pressure fits remain intrinsically sensitive to the high curvature and
+near-vacuum division by rho; even quadratic exactness on synthetic
+polynomials is insufficient to make their reference-pressure oracle
+accurate in this star. The enthalpy-gradient identity yields a more
+useful diagnostic target.
+
+### Next research gate
+
+BG-PHY-20 should audit **density and enthalpy reconstruction** on the
+same frozen stars, comparing partition-of-unity/Shepard or MLS-style
+candidate estimates with the independent 1D densities, alongside
+explicit free-surface support measures. A candidate must reduce both
+outer density log-bias and numerical enthalpy-gradient error without
+reference-profile labels entering any candidate estimator.
+
+Only after a density/enthalpy method succeeds should we consider a
+conservative reproducing-kernel dynamical formulation. Frontiere,
+Raskin & Owen, *CRKSPH: A Conservative Reproducing Kernel Smoothed
+Particle Hydrodynamics Scheme*, JCP 332 (2017), DOI
+10.1016/j.jcp.2016.12.004, derive momentum- and energy-conserving
+reproducing-kernel equations. Their approach approximately preserves
+angular momentum, which must be explicitly checked for white-dwarf
+orbital and weapon physics. Straight replacement of the symmetric
+pair force by the directed fits in this workpaper would violate the
+existing conservation contracts.
+
