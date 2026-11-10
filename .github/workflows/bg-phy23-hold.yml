@@ -39,6 +39,18 @@ jobs:
             label: "n256-m4-control"
           - n: 256
             seed: 0
+            kernel: "m4"
+            density: "blend"
+            eta: "1.2"
+            label: "n256-m4-blend"
+          - n: 256
+            seed: 0
+            kernel: "c4"
+            density: "original"
+            eta: "1.7"
+            label: "n256-c4-original"
+          - n: 256
+            seed: 0
             kernel: "c4"
             density: "blend"
             eta: "1.7"
