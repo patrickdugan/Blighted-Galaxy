@@ -9,7 +9,7 @@
 //! is compared with the exact reference inverse mass CDF at 1-1/N.
 //! Snapshot force error metrics have their own reference-gravity RMS scale.
 use blighted_galaxy::physics::SOLAR_MASS_KG;
-use blighted_galaxy::sph3::{self,Sph3Config,V3};
+use blighted_galaxy::sph3::{Sph3Config,V3};
 use blighted_galaxy::sph_adaptive::{AdaptiveConfig,AdaptiveState};
 use blighted_galaxy::sph_sampling::seed_cubic_shells_oriented;
 use blighted_galaxy::sph_massprofile::{self,MassProfileDiagnostic};
@@ -56,7 +56,7 @@ fn append_snapshot(
     for (index,s) in a.shells.iter().enumerate() {
         let m=s.metrics;
         let _=writeln!(shell_csv,
-            "{n},{seed},{law},{eta:.7},{stage},{index},{:.6},{:.6},{},{:.6},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8}",
+            "{n},{seed},{law},{eta:.7},{stage},{index},{:.6},{:.6},{},{:.6},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8}",
             s.mass_fraction_lo,s.mass_fraction_hi,m.particle_count,
             m.mean_radius_m/1000.0,
             m.reference_gravity_rms_m_s2,
