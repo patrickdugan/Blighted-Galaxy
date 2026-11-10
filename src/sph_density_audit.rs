@@ -158,9 +158,9 @@ pub fn estimate(
         .fold(0.0_f64,f64::max);
     let candidates=CellNeighbors::new(particles,maxh).all_candidates();
     let mut partition=vec![0.0;n];
-    let mut shepard=baseline.clone();
-    let mut affine=baseline.clone();
-    let mut quadratic=baseline.clone();
+    let mut shepard=baseline.to_vec();
+    let mut affine=baseline.to_vec();
+    let mut quadratic=baseline.to_vec();
     let mut failed1=0_usize;
     let mut failed2=0_usize;
     let mut max1=0.0_f64;
@@ -199,7 +199,7 @@ pub fn estimate(
     DensityBatch{
         fields:vec![
             DensityField {
-                method:DensityEstimator::Original,rho:baseline.clone(),
+                method:DensityEstimator::Original,rho:baseline.to_vec(),
                 fallback_fraction:0.0,maximum_pivot_spread:0.0,
             },
             DensityField {
