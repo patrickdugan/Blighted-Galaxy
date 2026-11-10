@@ -278,6 +278,29 @@ mod tests {
         }
     }
     #[test]
+    fn rotation_covariance_for_full_query_gradients(){
+        let (p,volumes)=seeded_grid();
+        let rotated=p.iter().map(|x|Fluid3 {
+            pos_m:V3::new(-x.pos_m.y,x.pos_m.x,x.pos_m.z),
+            vel_m_s:V3::default(),mass_kg:x.mass_kg,
+        }).collect::<Vec<_>>();
+        let i=0;
+        let j=7;
+        let h=2.0e6;
+        for kernel in [DensityKernel::CubicM4,DensityKernel::WendlandC4]{
+            let a=query_coefficient(p[i].pos_m,&p,&volumes,h,kernel);
+            let b=query_coefficient(rotated[i].pos_m,&rotated,&volumes,h,kernel);
+            assert!(a.valid&&b.valid);
+            let (w,g)=weight_gradient(p[i].pos_m,p[j].pos_m,h,kernel,a);
+            let (wr,gr)=weight_gradient(rotated[i].pos_m,rotated[j].pos_m,
+                h,kernel,b);
+            let rotated_g=V3::new(-g.y,g.x,g.z);
+            let scale=g.len().max(1e-40);
+            assert!((w-wr).abs()/w.abs().max(1e-40)<1e-10);
+            assert!((gr-rotated_g).len()/scale<1e-9);
+        }
+    }
+    #[test]
     fn full_query_derivative_matches_central_difference(){
         let (p,volume)=seeded_grid();
         let i=7;
