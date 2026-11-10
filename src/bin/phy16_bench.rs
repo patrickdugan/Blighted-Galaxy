@@ -145,6 +145,7 @@ fn main() {
     let n:usize=opt(&args,"--n",128);
     let sweeps:usize=opt(&args,"--glass-sweeps",20);
     let relax_steps:usize=opt(&args,"--relax-steps",0);
+    let root_compare=args.iter().any(|a|a=="--root-compare");
     let dt:f64=opt(&args,"--dt",0.01);
     let shells:usize=opt(&args,"--shells",8);
     let fixed_eta:f64=opt(&args,"--fixed-eta",1.2);
@@ -160,7 +161,7 @@ fn main() {
     let seed_radius=star.radius_at_mass_fraction(1.0-1.0/n as f64);
     let mut summary=String::from("N,seed,eta_law,eta,layout,kernel,stage,elapsed_s,rmax_km,rmax_bias_pct,initial_sampling_pct,contraction_from_seed_pct,cdf_rms,mean_h_km,actual_neighbors,glass_start_objective,glass_end_objective,accepted_glass_sweeps,max_glass_rotation_degrees,pressure_ref_rms,gravity_ref_rms,net_ref_rms,pressure_radial_ratio,gravity_radial_ratio,pressure_tangent_rms,gravity_tangent_rms,net_tangent_rms,inner_shell_pressure_err,inner_shell_pressure_tangent_rms,outer_shell_pressure_ratio,outer_shell_gravity_ratio,max_free_closure_residual,mean_free_closure_residual,max_exact_root_residual,h_capped_fraction,min_omega,omega_floor_fraction\n");
     let mut shell_csv=String::from("N,seed,eta_law,eta,layout,kernel,stage,shell,mass_fraction_lo,mass_fraction_hi,particle_count,mean_radius_km,pressure_ref_rms,gravity_ref_rms,net_ref_rms,pressure_radial_ratio,gravity_radial_ratio,pressure_tangent_rms,gravity_tangent_rms,net_tangent_rms\n");
-    println!("BG-PHY-16 N={n}, R_ref={:.3} km, initial sampled radius {:.3} km, glass sweeps={sweeps}, dynamic steps={relax_steps}",
+    println!("BG-PHY-16 N={n}, R_ref={:.3} km, initial sampled radius {:.3} km, glass sweeps={sweeps}, dynamic steps={relax_steps}, root_compare={root_compare}",
         star.radius_m/1000.0,seed_radius/1000.0);
     for seed in seeds(&args) {
         let center=V3::new(1e8,0.0,0.0);
@@ -199,6 +200,23 @@ fn main() {
                     emit(&mut summary,&mut shell_csv,n,seed,law,eta,layout,
                         kernel,"initial",0.0,star.radius_m,seed_radius,
                         optim,&p,&state,&profile0,&a0,c0);
+                    if root_compare {
+                        // Recompute at exactly the same frozen positions with an
+                        // independent safeguarded root and new Omega factors.
+                        // The original state remains available for dynamics.
+                        let root_cfg=cfg.with_newton_density();
+                        let mut root_state=state.clone();
+                        let exact=sph_force_audit::frozen_force_audit(
+                            &p,&mut root_state,physics,root_cfg,&star,shells);
+                        let root_metric=closure_metrics(&p,&root_state,root_cfg);
+                        emit(&mut summary,&mut shell_csv,n,seed,law,eta,layout,
+                            kernel,"initial_exact_root",0.0,star.radius_m,
+                            seed_radius,optim,&p,&root_state,&profile0,
+                            &exact,root_metric);
+                        println!("    exact root comparison P={:.4}, G={:.4}, net={:.4}",
+                            exact.global.pressure_ref_rms,
+                            exact.global.gravity_ref_rms,exact.global.net_ref_rms);
+                    }
                     println!("seed={seed} {law:6} {layout:5} {:12} P-err={:.4} G-err={:.4} inner-P={:.4} outer-P={:.4} glass objective {:.4}->{:.4}",
                         kernel.label(),a0.global.pressure_ref_rms,
                         a0.global.gravity_ref_rms,
@@ -224,6 +242,17 @@ fn main() {
                             kernel,"post_damping",relax_steps as f64*dt,
                             star.radius_m,seed_radius,optim,
                             &p,&state,&post,&a1,c1);
+                        if root_compare {
+                            let root_cfg=cfg.with_newton_density();
+                            let mut root_state=state.clone();
+                            let exact=sph_force_audit::frozen_force_audit(
+                                &p,&mut root_state,physics,root_cfg,&star,shells);
+                            let root_metric=closure_metrics(&p,&root_state,root_cfg);
+                            emit(&mut summary,&mut shell_csv,n,seed,law,eta,
+                                layout,kernel,"post_exact_root",relax_steps as f64*dt,
+                                star.radius_m,seed_radius,optim,&p,&root_state,
+                                &post,&exact,root_metric);
+                        }
                         println!("    post contraction={:+.2}% net={:.4} P={:.4} G={:.4}",
                             100.0*(post.radius_max_m/seed_radius-1.0),
                             a1.global.net_ref_rms,
