@@ -308,6 +308,41 @@ mod tests{
         assert!(flat[1..4].iter().all(|x|x.abs()<1e-10));
     }
     #[test]
+    fn half_space_normal_and_curved_enthalpy_are_finite(){
+        let mut samples=Vec::new();
+        let mut qmoment=V3::default();
+        let mut total=0.0;
+        for x in [-1.0,-0.4,0.4,1.0] {
+            for y in [-0.8,0.1,0.9] {
+                for z in [-1.6,-1.0,-0.4,0.0] {
+                    let q=V3::new(x,y,z+0.6);
+                    let depth=-z;
+                    // Physical vacuum H(z=0)=0 with finite near-surface
+                    // curvature. The affine fit is a first-order model.
+                    let h=10.0*depth+3.0*depth*depth;
+                    let w=(-q.len_sq()).exp();
+                    qmoment+=q*w;
+                    total+=w;
+                    samples.push(Sample{q,w,h});
+                }
+            }
+        }
+        let outward=qmoment*(-1.0/qmoment.len());
+        assert!(outward.z>0.3,
+            "the geometry-only outward normal should face the vacuum");
+        let (regular,_)=weighted_affine(&samples,None).unwrap();
+        let (ghost,_)=weighted_affine(
+            &samples,Some((outward*0.6,0.4*total))).unwrap();
+        let true_center=10.0*0.6+3.0*0.6*0.6;
+        // For finite curvature the two extrapolants may differ.
+        // This synthetic test requires physical finite positive
+        // enthalpy; the white dwarf experiment measures error.
+        assert!(regular[0].is_finite()&&regular[0]>0.0);
+        assert!(ghost[0].is_finite()&&ghost[0]>0.0);
+        assert!((ghost[0]-true_center).abs()<true_center);
+        assert!((regular[0]-true_center).abs()<true_center);
+    }
+    #[test]
     fn real_star_surface_candidates_positive_and_finite(){
         let star=profile_for_mass(0.65*SOLAR_MASS_KG,
             DegenerateElectrons::new(2.0).unwrap(),10_000.0).unwrap();
