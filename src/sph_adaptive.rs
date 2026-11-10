@@ -128,11 +128,15 @@ pub fn update_adaptive_densities(
     particles:&[Fluid3],state:&mut AdaptiveState,cfg:AdaptiveConfig,
 ) {
     assert!(cfg.valid()&&state.valid_for(particles.len()));
-    // Positions are fixed across the iterative h/rho closure. Reuse the
-    // compact-support cell-list candidates on every inner iteration.
-    let neighbors=CellNeighbors::new(particles,cfg.max_h_m);
-    let candidates=neighbors.all_candidates();
+    // Rebuild the candidate list at the *current* h_max on every
+    // smoothing-length iteration. Reusing cfg.max_h as the cell width
+    // would span most of a small star and erase the intended speedup.
+    // Each iteration queries neighbors before modifying h, so its list
+    // always contains the full compact support at that iteration.
     for _ in 0..cfg.density_iterations {
+        let max_h=state.smoothing_m.iter().copied()
+            .fold(0.0_f64,f64::max);
+        let candidates=CellNeighbors::new(particles,max_h).all_candidates();
         for i in 0..particles.len() {
             let h=state.smoothing_m[i];
             let (rho,_)=density_of_particle(i,particles,h,&candidates[i]);
@@ -143,6 +147,9 @@ pub fn update_adaptive_densities(
                 (0.45*h+0.55*target).clamp(cfg.min_h_m,cfg.max_h_m);
         }
     }
+    let final_max_h=state.smoothing_m.iter().copied()
+        .fold(0.0_f64,f64::max);
+    let candidates=CellNeighbors::new(particles,final_max_h).all_candidates();
     for i in 0..particles.len() {
         let h=state.smoothing_m[i];
         let (rho,drho_dh)=density_of_particle(i,particles,h,&candidates[i]);
@@ -182,7 +189,9 @@ pub fn adaptive_gravity_zeta(
     // Plummer's dphi/dh has infinite support. Only the compact M4 model
     // can safely prune the gravitational zeta summation at distance 2*h.
     let compact=if cfg.gravity_model==GravityModel::MatchedCubicSpline {
-        Some(CellNeighbors::new(particles,cfg.max_h_m).all_candidates())
+        Some(CellNeighbors::new(particles,
+            state.smoothing_m.iter().copied().fold(0.0_f64,f64::max))
+            .all_candidates())
     } else {None};
     for (i,p) in particles.iter().enumerate() {
         let h=state.smoothing_m[i];
