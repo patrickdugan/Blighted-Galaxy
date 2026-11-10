@@ -1,4 +1,7 @@
 name: Rust prototype
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 on:
   push:
     branches: [main, "recovery/**", "feat/**"]
@@ -19,6 +22,14 @@ jobs:
       - run: cargo run --release --bin phy08_bench -- --csv bg-phy08-adaptive.csv
       - run: cargo run --release --bin phy09_bench -- --csv bg-phy09-comparison.csv
       - run: cargo run --release --bin phy10_bench -- --csv bg-phy10-comparison.csv
+      - run: cargo run --release --bin phy11_bench -- --n 64 --relax-steps 20 --hold-steps 30 --csv bg-phy11-smoke.csv
+      - name: Upload BG-PHY-11 smoke diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy11-smoke
+          path: bg-phy11-smoke.csv
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload BG-PHY-10 kernel gravity and shell comparison
         uses: actions/upload-artifact@v4
         with:
@@ -93,6 +104,7 @@ jobs:
             target/release/phy08_bench.exe
             target/release/phy09_bench.exe
             target/release/phy10_bench.exe
+            target/release/phy11_bench.exe
             target/release/kerr_moving_lab.exe
             target/release/white_dwarf_bench.exe
           if-no-files-found: error

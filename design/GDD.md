@@ -246,6 +246,14 @@ After 0.6 simulated seconds, the 1,024-particle M4 model falls within 5% of the 
 
 Workpaper: [BG-PHY-10](../workpapers/physics/M4_GRAVITY_CUBIC_SHELLS.md). Physical acceptance issue: [#8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8).
 
+### BG-PHY-11: Computational scale and stellar equilibrium validation
+
+The cold-degenerate white-dwarf branch now uses a spatial cell index for compact-support adaptive SPH density and gravitational softening corrections. It retains exact long-range pairwise gravity for controlled numerical comparison and reproducible summation. Additional physical diagnostics measure 50%, 90%, 95% and 99% enclosed-mass radii and mismatch from the continuum hydrostatic mass profile.
+
+The dedicated high-resolution benchmark evaluates a 1,024-particle star after 3 simulated seconds of damping and approximately three subsequent stellar dynamical times without damping. Radius, mass CDF, energy and momentum are observed throughout the hold, and failed *physical* acceptance gates are recorded alongside passing software numerical invariants. A stable initial star remains a prerequisite for promoting the fictional white-dwarf shotgun and tidal-breakup effects to a calibrated physical simulation.
+
+See [BG-PHY-11](../workpapers/physics/NEIGHBOR_MASS_PROFILE_HOLD.md) and [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8).
+
 ## 11. Unresolved design decisions
 
 - **Fidelity:** whether orbital maneuvers use realistic dynamical constants in all encounters, or curated time/length scales for playable pacing.

@@ -421,3 +421,9 @@ pub mod sph_sampling;
 
 // BG-PHY-10: Poisson-consistent M4 cubic spline softened gravitation.
 pub mod sph_gravity_kernel;
+
+// BG-PHY-11: deterministic compact-support SPH cell neighbors.
+pub mod sph_neighbors;
+
+// BG-PHY-11: mass-radius percentiles and hydrostatic profile diagnostics.
+pub mod sph_massprofile;
