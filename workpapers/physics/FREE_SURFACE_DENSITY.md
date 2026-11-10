@@ -31,7 +31,7 @@ rho_i = sum_j m_j W(|x_i-x_j|, h_i),
 V_j = m_j/rho_j.
 ```
 
-Five density fields are scored:
+Six density fields are scored:
 
 1. **Original SPH**: exactly the prior density values.
 2. **Shepard normalization**:
@@ -48,7 +48,21 @@ Five density fields are scored:
    [dx²/2, dy²/2, dz²/2, dx*dy, dx*dz, dy*dz] / h².
    The normal equations use diagonal preconditioning and Cholesky,
    positive pivots and a maximum pivot-spread proxy of 1e8.
-5. **Spherical radial mass secant**: sort particles by radius
+5. **Surface-blended affine MLS (exploratory)**: use the observed
+   missing partition of unity, S_i, as a geometry-only proxy for
+   surface exposure. A locally planar vacuum interface passes
+   approximately half the compact kernel's support, motivating:
+   ```text
+   x_i = clamp((1-S_i)/0.5, 0, 1)
+   alpha_i = 3*x_i² - 2*x_i³
+   rho_blended,i = (1-alpha_i)*rho_SPH,i + alpha_i*rho_MLS1,i.
+   ```
+   This is a post-initial-matrix hypothesis motivated by the N256
+   result that affine MLS improved outer density while sometimes
+   hurting the global enthalpy gradient. The mapping is fixed for
+   all subsequent N and orientation seeds, and the candidate is
+   compared against both pure endpoints.
+6. **Spherical radial mass secant**: sort particles by radius
    about the mass centroid and estimate rho ~ Delta M/Delta V
    using a local rank window of approximately sqrt(N)/2.
    This uses known *particle masses and positions* but explicitly
