@@ -12,7 +12,7 @@
 //! It is expensive O(N coordinate probes × whole density solve), so N<=32.
 //! It is a research oracle, not a scalable analytic CRKSPH algorithm.
 //! The existing game/stellar integrators and gravity remain untouched.
-use crate::sph3::{self,Fluid3,Sph3Config,V3};
+use crate::sph3::{self,Fluid3,Massive3,Sph3Config,V3};
 use crate::sph_adaptive::{self,AdaptiveConfig,AdaptiveState};
 use crate::sph_density_audit::{self,DensityEstimator};
 use crate::sph_rk_compatible::{self,DensityChoice};
@@ -71,6 +71,10 @@ pub struct VariationalGradient {
     pub net_torque_ratio:f64,
     /// Relative difference from the pairwise compatible-work CRK pressure force.
     pub rk_discrepancy_rms:f64,
+    /// Existing exact-root, variable-h SPH pressure formula against -dU/dx.
+    /// This should approach zero when mode=Original, and serves as the
+    /// independent thermodynamic-control result for the oracle.
+    pub conventional_pressure_discrepancy_rms:f64,
 }
 pub fn total_gradient(
     p:&[Fluid3],physics:Sph3Config,
@@ -114,12 +118,24 @@ pub fn total_gradient(
         torque_scale+=arm.len()*f.len();
     }
     let mut state=AdaptiveState::new(p,reference_radius_m,cfg);
+    let exact_cfg=cfg.with_newton_density();
     let rk=sph_rk_compatible::pressure_snapshot(
-        p,&mut state,physics,cfg,mode);
-    let (mut diff,mut denom)=(0.0,0.0);
+        p,&mut state,physics,exact_cfg,mode);
+    let mut conventional_state=AdaptiveState::new(
+        p,reference_radius_m,exact_cfg);
+    let central=Massive3{
+        pos_m:V3::default(),vel_m_s:V3::default(),
+        mass_kg:0.0,radius_m:0.0,
+    };
+    let conventional=sph_adaptive::forces(
+        &central,p,&mut conventional_state,physics,exact_cfg);
+    let (mut diff,mut conventional_diff,mut denom)=(0.0,0.0,0.0);
     for (i,f) in forces.iter().enumerate(){
         let other=rk.accelerations_m_s2[i]*p[i].mass_kg;
+        let old=conventional.pressure_accelerations_m_s2[i]*
+            p[i].mass_kg;
         diff+=(*f-other).len_sq();
+        conventional_diff+=(*f-old).len_sq();
         denom+=f.len_sq();
     }
     VariationalGradient{
@@ -128,6 +144,8 @@ pub fn total_gradient(
         net_force_ratio:total_force.len()/force_scale.max(1.0),
         net_torque_ratio:total_torque.len()/torque_scale.max(1.0),
         rk_discrepancy_rms:(diff/denom.max(1.0)).sqrt(),
+        conventional_pressure_discrepancy_rms:
+            (conventional_diff/denom.max(1.0)).sqrt(),
     }
 }
 /// Separate research Hamiltonian integrator. For each force evaluation
@@ -216,6 +234,7 @@ mod tests {
         assert!(gradient.net_torque_ratio<2e-3,
             "rotation symmetry discrepancy {}",gradient.net_torque_ratio);
         assert!(gradient.rk_discrepancy_rms.is_finite());
+        assert!(gradient.conventional_pressure_discrepancy_rms.is_finite());
         assert!(gradient.forces_n.iter().all(|v|v.finite()));
     }
     #[test]
