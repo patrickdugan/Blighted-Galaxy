@@ -23,6 +23,16 @@ jobs:
       - run: cargo run --release --bin phy09_bench -- --csv bg-phy09-comparison.csv
       - run: cargo run --release --bin phy10_bench -- --csv bg-phy10-comparison.csv
       - run: cargo run --release --bin phy11_bench -- --n 64 --relax-steps 20 --hold-steps 30 --csv bg-phy11-smoke.csv
+      - run: cargo run --release --bin phy12_bench -- --n 64 --relax-steps 20 --hold-steps 30 --csv bg-phy12-smoke.csv --shell-csv bg-phy12-smoke-shells.csv
+      - name: Upload BG-PHY-12 force-balance smoke
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy12-force-balance-smoke
+          path: |
+            bg-phy12-smoke.csv
+            bg-phy12-smoke-shells.csv
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload BG-PHY-11 smoke diagnostics
         uses: actions/upload-artifact@v4
         with:
@@ -105,6 +115,7 @@ jobs:
             target/release/phy09_bench.exe
             target/release/phy10_bench.exe
             target/release/phy11_bench.exe
+            target/release/phy12_bench.exe
             target/release/kerr_moving_lab.exe
             target/release/white_dwarf_bench.exe
           if-no-files-found: error
