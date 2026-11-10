@@ -455,3 +455,7 @@ pub mod sph_quadratic_audit;
 
 // BG-PHY-20: frozen density reconstruction and free-surface bias audits.
 pub mod sph_density_audit;
+
+// BG-PHY-21: opt-in reproducing-kernel geometry and compatible pressure work.
+pub mod sph_rk;
+pub mod sph_rk_compatible;
