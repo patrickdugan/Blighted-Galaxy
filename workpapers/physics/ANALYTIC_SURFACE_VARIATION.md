@@ -257,3 +257,90 @@ white-dwarf physical radius and undamped stability gate.
   form of SPH*, DOI 10.1002/fld.3912.
 - [BG-PHY-20 density workpaper](FREE_SURFACE_DENSITY.md).
 - [BG-PHY-21 total-energy oracle](CONSERVATIVE_RK_PILOT.md).
+
+## Measured BG-PHY-22 analytic/finite-difference matrix
+
+The [final seven-job CI matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/runs/42821047335) succeeded. The jobs cover N16/24/32/64 with a re-solved total discrete cold-EOS energy oracle, N128 analytic-only, plus separate N32/N64 **asymmetric** tests that deterministically perturb positions and assign unequal masses. Every job compares matched M4 and Wendland C4 kernels with original and BG-PHY-20 surface-gated MLS density.
+
+**Direct analytic-versus-oracle measurements:**
+
+| N | Particle geometry | Worst relative force RMS over M4/C4 and both densities | Range of h-capped particle fractions | State of independent oracle |
+|---:|---|---:|---:|---|
+|16|antipodal shell|1.17e-8|100%|full FD|
+|24|angular glass|2.70e-8|41.7%–100%|full FD|
+|32|angular glass|3.48e-8|25%–50%|full FD|
+|32|asymmetric, unequal masses|2.95e-8|18.8%–50%|full FD|
+|64|angular glass|**3.91e-8**|**0%**|full FD|
+|64|asymmetric, unequal masses|3.65e-8|1.6%–3.1%|full FD|
+|128|antipodal shell|analytic-only|0%|not run|
+
+Across the six independent finite-difference job configurations,
+the maximum normalized force RMS difference is **3.915e-8**.
+The maximum analytic scalar MLS-density disagreement relative to
+BG-PHY-20 is zero at emitted precision, with zero MLS fallbacks
+and zero Omega-floor hits.
+
+The N64 uncapped validation is especially important because
+it exercises the implicit relation
+`dh_i=-h_i/(3 rho_i Omega_i) d rho_i|_h` for every particle.
+The N32/64 asymmetric tests independently establish agreement
+away from exact antipodal symmetry and with unequal masses.
+The N24 and N32 capped tests exercise the piecewise hard-cap
+branch of the same energy derivative.
+
+**Conservation and performance across all 28 kernel/density records:**
+
+| Statistic | Observed |
+|---|---:|
+| Maximum normalized net force | 1.02e-16 |
+| Maximum normalized net torque | 5.76e-17 |
+| Maximum relative Hamiltonian energy drift (3–4 short steps) | 8.63e-11 |
+| Maximum normalized linear momentum drift | 5.07e-19 |
+| Maximum normalized angular momentum drift | 3.50e-18 |
+| Maximum MLS fallback fraction | 0 |
+| Maximum Omega-floor fraction | 0 |
+| Median analytic/FD full-gradient speedup, N<=64 | 196.5× |
+| Observed speedup range on GitHub Actions | 56.3× to 441.9× |
+
+The original density case matches the existing conservative
+adaptive-h SPH pressure formula to at most about 6e-16
+relative force RMS, a stronger internal reference than numerical
+finite differences. The surface-blended potential yields a
+different Hamiltonian force, with a conventional-SPH-to-analytic
+relative RMS discrepancy up to about 0.202 in these records.
+This is the density correction's real thermodynamic chain-rule
+contribution, formerly missing from the naive SPH substitution.
+
+N64 surface-blended gradients are computed in 1.52ms (M4) and
+1.90ms (C4) on CI hardware. The corresponding full numerical
+coordinate-probe oracles took 446ms and 591ms, respectively.
+At N128 without the full FD oracle, the surface-blended
+gradient took about 6.0–6.2ms; the short Hamiltonian
+integration passes the identical momentum, torque and energy checks.
+These timings are single-gradient CPU measurements and do not
+establish scaling under full self-gravitating stellar dynamics.
+
+The analytic result is the derivative of the specified **scalar
+cold-EOS energy** and is consequently central to a conservative
+pressure-only solver. It is not the old antisymmetric CRK pair
+expression. The earlier CRK-compatible-work scheme can conserve
+a separately evolved internal-energy account while differing
+from the cold-EOS Hamiltonian by 45–160% relative force RMS.
+The new analytic method provides a thermodynamically matched
+pressure force at significantly lower cost than the complete
+finite-difference oracle.
+
+### New research gate
+
+Integrate the analytic pressure potential with the original
+Poisson-matched gravitational potential and its full implicit
+variable-h corrections in a **separate opt-in** solver.
+The combined pressure-plus-gravity energy gradient should be
+checked against finite differences before any physical white-dwarf
+claims. Validate energy and angular momentum over multiple
+time steps, quantify active-set transition errors, then run
+the pre-existing BG-PHY-14/BG-PHY-17 3s-damped and at least
+3-dynamical-time undamped physical acceptance experiment at
+N256, N512 and N1024. Preserve the original playable physics
+until those gates succeed.
+
