@@ -50,9 +50,21 @@ fn gravity_reference_rms(balance:&StellarBalance)->f64 {
         });
     (numerator/denominator).sqrt()
 }
-fn mean_candidates(particles:&[Fluid3],state:&AdaptiveState)->f64 {
+/// A cell candidate is only a possible neighbor. Report how many
+/// particles lie inside each particle's physical kernel support 2*h_i.
+fn neighbor_counts(particles:&[Fluid3],state:&AdaptiveState)->(f64,f64) {
     let h=state.smoothing_m.iter().copied().fold(0.0_f64,f64::max);
-    CellNeighbors::new(particles,h).mean_candidate_count()
+    let lists=CellNeighbors::new(particles,h).all_candidates();
+    let candidate_total=lists.iter().map(|x|x.len()).sum::<usize>();
+    let mut actual=0_usize;
+    for (i,list) in lists.iter().enumerate() {
+        let cut2=(2.0*state.smoothing_m[i]).powi(2);
+        actual+=list.iter().filter(|&&j|
+            (particles[i].pos_m-particles[j].pos_m).len_sq()<cut2
+        ).count();
+    }
+    (candidate_total as f64/particles.len() as f64,
+     actual as f64/particles.len() as f64)
 }
 struct Case {
     eta:f64,
@@ -68,6 +80,7 @@ struct Case {
     omega_min:f64,
     cap_fraction:f64,
     mean_neighbors:f64,
+    actual_kernel_neighbors:f64,
     largest_outer_drift_pct:f64,
     largest_r99_drift_pct:f64,
     max_cdf_rms:f64,
@@ -122,7 +135,7 @@ fn main() {
         println!("  HOLD LENGTH INSUFFICIENT: numerical smoke only, equilibrium acceptance disabled");
     }
     let mut csv=String::from(
-        "N,eta,relax_s,hold_s,hydro_radius_km,post_rmax_km,post_radius_bias_pct,post_r99_km,post_cdf_rms,post_gravity_reference_rms,post_net_gravity_rms,post_force_virial,inner_gravity_reference_ratio,outer_gravity_reference_ratio,min_omega,cap_fraction,mean_neighbors,worst_rmax_drift_pct,worst_r99_drift_pct,max_cdf_rms,final_energy_drift,final_momentum_drift,wall_seconds,complete_three_dyn,physical_gate_pass\n"
+        "N,eta,relax_s,hold_s,hydro_radius_km,post_rmax_km,post_radius_bias_pct,post_r99_km,post_cdf_rms,post_gravity_reference_rms,post_net_gravity_rms,post_force_virial,inner_gravity_reference_ratio,outer_gravity_reference_ratio,min_omega,cap_fraction,cell_candidates,actual_kernel_neighbors,worst_rmax_drift_pct,worst_r99_drift_pct,max_cdf_rms,final_energy_drift,final_momentum_drift,wall_seconds,complete_three_dyn,physical_gate_pass\n"
     );
     let mut shell_csv=String::from(
         "N,eta,phase,shell,mass_lo,mass_hi,n,mean_radius_km,pressure_out_m_s2,gravity_in_m_s2,hydro_gravity_in_m_s2,gravity_reference_ratio,net_radial_m_s2,net_radial_rms_m_s2,tangential_rms_m_s2\n"
@@ -145,7 +158,7 @@ fn main() {
         let balance=stellar_balance::radial_balance(
             &particles,&mut state,physics,cfg,&star,8);
         let gravity_rms=gravity_reference_rms(&balance);
-        let neighbors=mean_candidates(&particles,&state);
+        let (neighbors,actual_neighbors)=neighbor_counts(&particles,&state);
         let inner=balance.shells[0].gravity_in_m_s2/
             balance.shells[0].hydrostatic_gravity_in_m_s2;
         let last=balance.shells.last().unwrap();
@@ -202,9 +215,11 @@ fn main() {
             profile.radial_quantile_rms,
             balance.pressure_to_gravity_virial,
             balance.residual_to_gravity_rms);
-        println!("    omega_min={:.3}, h_range=[{:.3},{:.3}]Mm, mean_neighbors={neighbors:.1}, hold_dRmax={:.2}%, dR99={:.2}%, maxCDF={max_cdf:.4}, dE={final_energy:.3e}, pass={pass}, wall={wall:.2}s",
+        println!("    omega_min={:.3}, h_range=[{:.3},{:.3}]Mm, cell_candidates={neighbors:.1}, support_neighbors={actual_neighbors:.1} (uniform-theory {:.1}), hold_dRmax={:.2}%, dR99={:.2}%, maxCDF={max_cdf:.4}, dE={final_energy:.3e}, pass={pass}, wall={wall:.2}s",
             report.minimum_omega,report.minimum_h_m/1e6,
-            report.maximum_h_m/1e6,100.0*outer_drift,100.0*r99_drift);
+            report.maximum_h_m/1e6,
+            (32.0*std::f64::consts::PI/3.0)*eta.powi(3),
+            100.0*outer_drift,100.0*r99_drift);
         outcomes.push(Case{
             eta,rmax_post_km:profile.radius_max_m/1e3,
             radius_bias_pct:radius_bias,r99_post_km:profile.r99_m/1e3,
@@ -214,7 +229,7 @@ fn main() {
             virial_post:balance.pressure_to_gravity_virial,
             inner_gravity_reference_ratio:inner,outer_gravity_reference_ratio:outer,
             omega_min:report.minimum_omega,cap_fraction:report.capped_fraction,
-            mean_neighbors:neighbors,
+            mean_neighbors:neighbors,actual_kernel_neighbors:actual_neighbors,
             largest_outer_drift_pct:100.0*outer_drift,
             largest_r99_drift_pct:100.0*r99_drift,
             max_cdf_rms:max_cdf,final_energy_drift:final_energy,
@@ -224,13 +239,13 @@ fn main() {
     }
     for x in &outcomes {
         let _=writeln!(csv,
-            "{n},{:.4},{:.5},{:.5},{:.5},{:.5},{:.6},{:.5},{:.8},{:.8},{:.8},{:.8},{:.6},{:.6},{:.8},{:.6},{:.3},{:.6},{:.6},{:.8},{:.9e},{:.9e},{:.4},{},{}",
+            "{n},{:.4},{:.5},{:.5},{:.5},{:.5},{:.6},{:.5},{:.8},{:.8},{:.8},{:.8},{:.6},{:.6},{:.8},{:.6},{:.3},{:.3},{:.6},{:.6},{:.8},{:.9e},{:.9e},{:.4},{},{}",
             x.eta,relax_steps as f64*dt,hold_steps as f64*dt,
             star.radius_m/1e3,x.rmax_post_km,x.radius_bias_pct,
             x.r99_post_km,x.mass_cdf_post,x.gravity_reference_rms_post,
             x.force_ratio_post,x.virial_post,
             x.inner_gravity_reference_ratio,x.outer_gravity_reference_ratio,
-            x.omega_min,x.cap_fraction,x.mean_neighbors,
+            x.omega_min,x.cap_fraction,x.mean_neighbors,x.actual_kernel_neighbors,
             x.largest_outer_drift_pct,x.largest_r99_drift_pct,
             x.max_cdf_rms,x.final_energy_drift,x.final_momentum_drift,
             x.elapsed_wall_s,x.completed_three_dyn,x.physical_gate_pass);
