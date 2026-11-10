@@ -110,7 +110,7 @@ fn emit(
         number(at1.mls_fallback_fraction),
         number(max_fd),unstable.to_string(),
         number(scan.lower_energy_j),number(scan.upper_energy_j),
-        number(started.elapsed().as_secs_f64),
+        number(started.elapsed().as_secs_f64()),
     ]);
     write(summary,&columns);
     for pt in &scan.samples{
