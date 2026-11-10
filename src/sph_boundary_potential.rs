@@ -76,26 +76,27 @@ pub fn state(
     let cfg=cfg.with_newton_density();
     let mut adaptive=AdaptiveState::new(p,star.radius_m,cfg);
     sph_adaptive::update_adaptive_densities(p,&mut adaptive,cfg);
-    let boundary=sph_free_boundary::reconstruct(
-        p,&adaptive,cfg.kernel,star.eos);
-    let (rho,fallback)=match mode{
+    // The original and BG-PHY-20 scalars do not require ghost geometry
+    // during a scalar-energy perturbation. Reserve the expensive boundary
+    // moment calculation for new candidates and diagnostic snapshots.
+    let (rho,fallback,geometry)=match mode{
         Candidate::Original=>(
-            adaptive.densities_kg_m3.clone(),0.0),
+            adaptive.densities_kg_m3.clone(),0.0,Vec::new()),
         Candidate::SurfaceMls=>{
             let batch=sph_density_audit::estimate(p,&adaptive,cfg.kernel);
             let field=batch.fields.iter().find(|x|
                 x.method==DensityEstimator::SurfaceBlendedMls).unwrap();
-            (field.rho.clone(),field.fallback_fraction)
+            (field.rho.clone(),field.fallback_fraction,Vec::new())
         }
-        Candidate::EnthalpyAffineBlend=>{
-            let field=boundary.fields.iter().find(|x|
-                x.mode==EnthalpyCandidate::BlendedH).unwrap();
-            (field.rho.clone(),field.fallback_fraction)
-        }
-        Candidate::VacuumGhostBlend=>{
-            let field=boundary.fields.iter().find(|x|
-                x.mode==EnthalpyCandidate::GhostBlendedH).unwrap();
-            (field.rho.clone(),field.fallback_fraction)
+        Candidate::EnthalpyAffineBlend|Candidate::VacuumGhostBlend=>{
+            let batch=sph_free_boundary::reconstruct(
+                p,&adaptive,cfg.kernel,star.eos);
+            let wanted=if mode==Candidate::EnthalpyAffineBlend{
+                EnthalpyCandidate::BlendedH
+            }else{EnthalpyCandidate::GhostBlendedH};
+            let field=batch.fields.iter().find(|x|
+                x.mode==wanted).unwrap();
+            (field.rho.clone(),field.fallback_fraction,batch.geometry)
         }
     };
     let internal=p.iter().zip(&rho).map(|(x,r)|
@@ -108,7 +109,7 @@ pub fn state(
         (h-cfg.min_h_m).abs()<=cfg.min_h_m*1e-8||
         (h-cfg.max_h_m).abs()<=cfg.max_h_m*1e-8).count();
     let mut result=ScalarState{
-        rho,geometry:boundary.geometry,scalar_internal_j:internal,
+        rho,geometry,scalar_internal_j:internal,
         matched_gravity_j:gravity,total_j:internal+gravity,
         fallback_fraction:fallback,
         minimum_omega:adaptive.omega.iter().copied().fold(
@@ -120,6 +121,10 @@ pub fn state(
         last_shell_normal_alignment:0.0,
     };
     if with_diagnostics {
+        if result.geometry.is_empty() {
+            result.geometry=sph_free_boundary::reconstruct(
+                p,&adaptive,cfg.kernel,star.eos).geometry;
+        }
         let c=centroid(p);
         let mut rank=(0..n).collect::<Vec<_>>();
         rank.sort_by(|&i,&j|(p[i].pos_m-c).len_sq()
