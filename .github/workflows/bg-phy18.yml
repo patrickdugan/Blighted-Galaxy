@@ -1,0 +1,49 @@
+name: BG-PHY-18 frozen pressure gradient consistency
+on:
+  pull_request:
+    paths:
+      - "src/sph_gradient_audit.rs"
+      - "src/bin/phy18_bench.rs"
+      - "src/sph_neighbor_calibration.rs"
+      - "src/sph_consistency.rs"
+      - ".github/workflows/bg-phy18.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/sph_gradient_audit.rs"
+      - "src/bin/phy18_bench.rs"
+      - ".github/workflows/bg-phy18.yml"
+  workflow_dispatch:
+jobs:
+  frozen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - n: 256
+            seeds: "0,17"
+          - n: 1024
+            seeds: "0,17"
+          - n: 2048
+            seeds: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Compare moment-corrected and reference-oracle pressure gradients
+        run: |
+          cargo run --release --bin phy18_bench -- \
+            --n ${{ matrix.n }} --seeds ${{ matrix.seeds }} \
+            --targets 100,150,200 --glass-sweeps 20 \
+            --calibration-steps 12 \
+            --csv bg-phy18-${{ matrix.n }}.csv
+      - name: Upload gradient consistency and density bias
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy18-n${{ matrix.n }}
+          path: bg-phy18-${{ matrix.n }}.csv
+          if-no-files-found: warn
+          retention-days: 30
