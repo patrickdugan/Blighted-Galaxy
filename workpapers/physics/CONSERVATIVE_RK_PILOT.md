@@ -287,3 +287,104 @@ this variational gradient to the fast antisymmetric RK pair force
 will measure the missing density/thermodynamic chain-rule terms
 without assuming their magnitude.
 
+## BG-PHY-21B: total cold-barotropic force oracle
+
+The small-N compatible-work pilot conserves K+evolved-U exactly by
+construction, but its P(rho_hat) and U_work evolution remain only
+approximately cold-EOS-compatible. BG-PHY-21B builds an independent,
+more expensive reference from the **total discrete cold-barotropic
+internal energy**, with no independently evolved thermal reservoir.
+
+For the same original SPH density or surface-gated MLS field define
+
+```text
+U(x) = sum_i m_i u_Fermi(rho_hat_i(x))
+F_var,k = -dU/dx_k.
+```
+
+The EOS identity `du_Fermi/drho = P_Fermi/rho²` gives the exact
+chain-rule expression
+
+```text
+F_var,k = -sum_i m_i [P_i/rho_hat_i²] d(rho_hat_i)/dx_k.
+```
+
+For the BG-PHY-20 blend,
+
+```text
+rho_hat_i = (1-alpha_i)rho_SPH_i + alpha_i rho_MLS_i,
+d rho_hat_i =
+   (1-alpha_i) d rho_SPH_i
+ + alpha_i d rho_MLS_i
+ + (rho_MLS_i-rho_SPH_i) d alpha_i.
+```
+
+In the partial-support regime `0<t_i<1`,
+
+```text
+t_i = 2(1-S_i)
+alpha_i=t_i²(3-2t_i)
+d alpha_i = 6*t_i*(1-t_i)*(-2 d S_i).
+```
+
+The partition factor `S_i=sum_j (m_j/rho_SPH,j) W_ij(h_i)`
+also depends on particle positions and on the h/rho closure.
+For an uncapped smoothing length defined implicitly by
+
+```text
+h_i³ rho_SPH,i(h_i,x)=eta³ m_i,
+```
+
+implicit differentiation gives
+
+```text
+d h_i/dx_k = -[h_i/(3 rho_SPH,i Omega_i)]
+             * (partial rho_SPH,i/partial x_k) at fixed h,
+Omega_i=1+(h_i/(3 rho_SPH,i))*partial_h rho_SPH,i.
+```
+
+At a hard h cap the derivative is piecewise constrained, and
+changes of cap or MLS fallback introduce non-smooth transitions.
+For the affine-MLS coefficient vector `beta_i=M_i^{-1} b_i`,
+the full coefficient derivative is
+
+```text
+d beta_i = M_i^{-1}[d b_i-(d M_i) beta_i].
+```
+
+**What is implemented now:** central differences of the entire
+scalar U(x) with respect to each physical particle coordinate.
+For every +/− perturbation the code reconstructs the exact
+safeguarded h/rho roots, original kernel volumes, partition S,
+affine MLS and surface gate, then recomputes U from the cold EOS.
+This acts as a full finite-difference oracle for the displayed chain
+rule without prematurely claiming an analytic implementation.
+
+BG-PHY-21B measures the RMS difference of this total barotropic
+force from the fast antisymmetric RK pair force, net force and
+net torque of the unprojected variational force, finite-difference
+step-halving consistency, and short pressure-only velocity-Verlet
+energy drift and reverse-step errors.
+
+Because U is a scalar invariant under translation and rotation of
+the entire particle constellation, its **exact** gradient is
+momentum- and angular-momentum-conserving. A finite-difference
+approximation has errors controlled by step size and floating
+roundoff. This oracle still excludes gravity, caps/fallback transition
+regularity proofs and any scalable closed-form derivatives. Its
+purpose is to quantify the missing terms, guide their analytic
+derivation and reject spurious energy-conservation claims.
+
+```bash
+cargo test --lib sph_rk_variational -- --nocapture
+
+cargo run --release --bin phy21_variational_bench -- \
+  --n 16 --seed 17 --layout shell --eta 1.7 \
+  --fd-fraction 0.0001 --steps 2 --dt 0.002 \
+  --csv bg-phy21b-n16.csv
+```
+
+The [N16/N24 variational matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy21b.yml)
+is isolated from the fast N32/N64/N128 compatible-work workflow.
+It is explicitly a research-grade O(N coordinate probes × full
+density recomputation) reference, not a playable solver.
