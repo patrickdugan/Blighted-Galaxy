@@ -255,15 +255,30 @@ pub fn reconstruct(
         let outward=first*(-1.0/first.len().max(1e-30));
         let distance=inverse_planar_fraction(partition,&lut);
         let ghost_weight=(1.0-partition).clamp(0.0,0.5);
+        let moment_ratio=first.len()/partition;
+        let ratio_depth=invert_moment_ratio(moment_ratio,&ratio_lut);
+        // Use the ideal missing *geometric* volume at this depth,
+        // so an overall biased source volume does not over-weight
+        // the vacuum ghost in the affine normal equations.
+        let ratio_ghost_weight=
+            (1.0-ideal_fraction_at_depth(ratio_depth,&lut))
+                .clamp(0.0,0.5);
         let alpha=blend_weight(partition);
         geometry.push(BoundaryGeometry{
             support:partition,first_moment:first,outward,
             plane_distance_h:distance,ghost_weight,
+            first_to_zeroth_ratio:moment_ratio,
+            ratio_plane_distance_h:ratio_depth,
+            ratio_ghost_weight,
             blend_weight:alpha,
         });
         let ordinary=weighted_affine(&samples,None);
         let with_ghost=if ghost_weight>0.0&&first.len()>1e-8{
             weighted_affine(&samples,Some((outward*distance,ghost_weight)))
+        }else{ordinary};
+        let with_ratio_ghost=if ratio_ghost_weight>0.0&&first.len()>1e-8{
+            weighted_affine(&samples,Some((
+                outward*ratio_depth,ratio_ghost_weight)))
         }else{ordinary};
         let to_rho=|fit:Option<([f64;4],f64)>|
             fit.filter(|(beta,_)|beta[0]>0.0)
@@ -271,16 +286,21 @@ pub fn reconstruct(
                 .filter(|(value,_)|value.is_finite()&&*value>0.0);
         let hplain=to_rho(ordinary);
         let hghost=to_rho(with_ghost);
+        let hratio=to_rho(with_ratio_ghost);
         if hplain.is_none(){failed_plain+=1;}
         if hghost.is_none(){failed_ghost+=1;}
+        if hratio.is_none(){failed_ratio+=1;}
         if let Some((_,c))=hplain{worst_plain=worst_plain.max(c);}
         if let Some((_,c))=hghost{worst_ghost=worst_ghost.max(c);}
+        if let Some((_,c))=hratio{worst_ratio=worst_ratio.max(c);}
         let pvalue=hplain.map(|x|x.0).unwrap_or(rho[i]);
         let gvalue=hghost.map(|x|x.0).unwrap_or(rho[i]);
+        let rvalue=hratio.map(|x|x.0).unwrap_or(rho[i]);
         plain.push(pvalue);
         ghost_plain.push(gvalue);
         blended.push((1.0-alpha)*rho[i]+alpha*pvalue);
         ghost_blended.push((1.0-alpha)*rho[i]+alpha*gvalue);
+        ratio_ghost_blended.push((1.0-alpha)*rho[i]+alpha*rvalue);
     }
     BoundaryBatch{
         fields:vec![
@@ -303,6 +323,12 @@ pub fn reconstruct(
                 mode:EnthalpyCandidate::GhostBlendedH,rho:ghost_blended,
                 fallback_fraction:failed_ghost as f64/n as f64,
                 maximum_pivot_spread:worst_ghost,
+            },
+            EnthalpyDensity{
+                mode:EnthalpyCandidate::MomentRatioGhostBlend,
+                rho:ratio_ghost_blended,
+                fallback_fraction:failed_ratio as f64/n as f64,
+                maximum_pivot_spread:worst_ratio,
             },
         ],
         geometry,
@@ -404,7 +430,7 @@ mod tests{
         let mut state=AdaptiveState::new(&p,star.radius_m,cfg);
         update_adaptive_densities(&p,&mut state,cfg);
         let batch=reconstruct(&p,&state,cfg.kernel,star.eos);
-        assert_eq!(batch.fields.len(),4);
+        assert_eq!(batch.fields.len(),5);
         for field in &batch.fields{
             assert_eq!(field.rho.len(),p.len());
             assert!(field.rho.iter().all(|v|v.is_finite()&&*v>0.0));
