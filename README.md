@@ -294,6 +294,18 @@ cargo run --release --bin phy20_bench -- --n 1024 --seeds 0,17 --targets 100,150
 
 The [BG-PHY-20 workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy20.yml) covers N256, 1024, 2048 and a separate N256 snapshot after ordinary 3-second M4 damping. See the [methodology](workpapers/physics/FREE_SURFACE_DENSITY.md). All corrections are diagnostic and [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) remains responsible for physical radius, mass-profile, and undamped stability acceptance.
 
+## BG-PHY-21: Conservative reproducing-kernel pressure pilot
+
+The research branch now contains an **opt-in 3D first-order reproducing kernel** with independently tested analytic spatial-query gradients. It measures constant/linear field reproduction, truncated-support behavior and rotation covariance. The antisymmetrized pair pressure force uses the same baseline SPH volumes as its RK moments and optionally samples the BG-PHY-20 free-surface blended density for the cold-electron pressure.
+
+A pressure-only small-particle integrator uses exactly compatible pair work to evolve an internal-energy reservoir, preserving linear momentum and kinetic-plus-stored internal energy to numerical precision. It separately measures noncentral-force angular-momentum drift and the discrepancy between evolved internal energy and the cold barotropic EOS. This pilot excludes gravity and retains the existing gameplay and stellar physics force paths unchanged.
+
+~~~sh
+cargo run --release --bin phy21_bench -- --n 32 --seed 17 --layout glass --eta 1.7 --steps 16 --dt 0.001 --csv bg-phy21-n32.csv
+~~~
+
+See the [BG-PHY-21 technical workpaper](workpapers/physics/CONSERVATIVE_RK_PILOT.md) and [N32/64/128 conservation matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy21.yml). [Issue #22](https://github.com/patrickdugan/Blighted-Galaxy/issues/22) tracks the required total variable-h, density/MLS and gravity derivatives and thermodynamic compatibility before a full [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) white-dwarf acceptance run.
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.

@@ -1,0 +1,52 @@
+name: BG-PHY-21B full cold-barotropic gradient oracle
+on:
+  pull_request:
+    paths:
+      - "src/sph_rk_variational.rs"
+      - "src/bin/phy21_variational_bench.rs"
+      - "src/sph_density_audit.rs"
+      - ".github/workflows/bg-phy21b.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/sph_rk_variational.rs"
+      - "src/bin/phy21_variational_bench.rs"
+      - ".github/workflows/bg-phy21b.yml"
+  workflow_dispatch:
+jobs:
+  total-derivative:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - n: 16
+            seed: 17
+            steps: 2
+            layout: "shell"
+          - n: 24
+            seed: 0
+            steps: 2
+            layout: "glass"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Derivative symmetry and short-step Hamiltonian unit tests
+        run: cargo test --lib sph_rk_variational -- --nocapture
+      - name: Numerically differentiate complete cold-EOS energy
+        run: |
+          cargo run --release --bin phy21_variational_bench -- \
+            --n ${{ matrix.n }} --seed ${{ matrix.seed }} \
+            --layout ${{ matrix.layout }} --eta 1.7 \
+            --fd-fraction 0.0001 --steps ${{ matrix.steps }} \
+            --dt 0.002 --csv bg-phy21b-n${{ matrix.n }}.csv
+      - name: Upload total-vs-query derivative and Hamiltonian diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy21b-n${{ matrix.n }}
+          path: bg-phy21b-n${{ matrix.n }}.csv
+          if-no-files-found: warn
+          retention-days: 30

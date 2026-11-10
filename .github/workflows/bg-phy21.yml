@@ -1,0 +1,60 @@
+name: BG-PHY-21 reproducing-kernel conservation pilot
+on:
+  pull_request:
+    paths:
+      - "src/sph_rk.rs"
+      - "src/sph_rk_compatible.rs"
+      - "src/bin/phy21_bench.rs"
+      - "src/sph_density_audit.rs"
+      - ".github/workflows/bg-phy21.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/sph_rk.rs"
+      - "src/sph_rk_compatible.rs"
+      - "src/bin/phy21_bench.rs"
+      - ".github/workflows/bg-phy21.yml"
+  workflow_dispatch:
+jobs:
+  compatible-work:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - n: 32
+            steps: 16
+            seed: 17
+            layout: "glass"
+          - n: 64
+            steps: 16
+            seed: 0
+            layout: "glass"
+          - n: 128
+            steps: 12
+            seed: 17
+            layout: "shell"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Verify analytic query derivatives and RK reproduction
+        run: |
+          cargo test --lib sph_rk -- --nocapture
+          cargo test --lib sph_rk_compatible -- --nocapture
+      - name: Matched M4/C4, baseline/surface-blend compatible pressure pilots
+        run: |
+          cargo run --release --bin phy21_bench -- \
+            --n ${{ matrix.n }} --seed ${{ matrix.seed }} \
+            --layout ${{ matrix.layout }} --eta 1.7 \
+            --steps ${{ matrix.steps }} --dt 0.001 \
+            --csv bg-phy21-n${{ matrix.n }}.csv
+      - name: Upload RK conservation and EOS consistency table
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy21-n${{ matrix.n }}
+          path: bg-phy21-n${{ matrix.n }}.csv
+          if-no-files-found: warn
+          retention-days: 30
