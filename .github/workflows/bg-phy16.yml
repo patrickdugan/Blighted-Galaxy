@@ -52,7 +52,7 @@ jobs:
         run: |
           cargo run --release --bin phy16_bench -- \
             --n ${{ matrix.n }} --seeds ${{ matrix.seeds }} \
-            --glass-sweeps 20 --relax-steps ${{ matrix.relax }} \
+            --glass-sweeps 20 --relax-steps ${{ matrix.relax }} --root-compare \
             --dt 0.01 --shells 8 --fixed-eta 1.2 \
             --csv bg-phy16-${{ matrix.suffix }}.csv \
             --shell-csv bg-phy16-${{ matrix.suffix }}-shells.csv
