@@ -41,6 +41,11 @@ jobs:
             seed: 0
             layout: "glass"
             steps: 4
+            oracle: ""
+          - n: 128
+            seed: 17
+            layout: "shell"
+            steps: 4
             oracle: "--no-oracle"
     steps:
       - uses: actions/checkout@v4
