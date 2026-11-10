@@ -238,6 +238,20 @@ mod tests {
         assert!(gradient.forces_n.iter().all(|v|v.finite()));
     }
     #[test]
+    fn original_density_agrees_with_variational_sph_pressure_force(){
+        let original=fixture();
+        for kernel in [crate::sph_kernel::DensityKernel::CubicM4,
+                       crate::sph_kernel::DensityKernel::WendlandC4] {
+            let mut control=original.clone();
+            control.mode=DensityChoice::Original;
+            control.cfg.kernel=kernel;
+            let var=control.gradient();
+            assert!(var.conventional_pressure_discrepancy_rms<1e-6,
+                "ordinary variable-h SPH must match -dU/dx: kernel {:?}, residual {}",
+                kernel,var.conventional_pressure_discrepancy_rms);
+        }
+    }
+    #[test]
     fn short_variational_orbit_has_bounded_energy_error(){
         let mut fixture=fixture();
         let before=fixture.energy();
