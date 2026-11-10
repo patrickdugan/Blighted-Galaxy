@@ -1,0 +1,69 @@
+name: BG-PHY-23 complete gravity-coupled Hamiltonian
+on:
+  pull_request:
+    paths:
+      - "src/sph_surface_gravity.rs"
+      - "src/bin/phy23_bench.rs"
+      - "src/sph_surface_variation.rs"
+      - ".github/workflows/bg-phy23.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/sph_surface_gravity.rs"
+      - "src/bin/phy23_bench.rs"
+      - ".github/workflows/bg-phy23.yml"
+  workflow_dispatch:
+jobs:
+  force-gradient:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - n: 16
+            seed: 17
+            layout: "shell"
+            deform: ""
+            oracle: ""
+          - n: 24
+            seed: 0
+            layout: "glass"
+            deform: ""
+            oracle: ""
+          - n: 32
+            seed: 0
+            layout: "glass"
+            deform: "--deform"
+            oracle: ""
+          - n: 64
+            seed: 17
+            layout: "glass"
+            deform: ""
+            oracle: ""
+          - n: 128
+            seed: 17
+            layout: "shell"
+            deform: ""
+            oracle: "--no-oracle"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Validate exact pressure plus gravity potential and forces
+        run: cargo test --lib sph_surface_gravity -- --nocapture
+      - name: Independently differentiate total barotropic plus gravitational energy
+        run: |
+          cargo run --release --bin phy23_bench -- \
+            --n ${{ matrix.n }} --seed ${{ matrix.seed }} \
+            --layout ${{ matrix.layout }} ${{ matrix.deform }} ${{ matrix.oracle }} \
+            --eta 1.7 --dt 0.002 --steps 4 --fd-fraction 0.0001 \
+            --csv bg-phy23-n${{ matrix.n }}-${{ matrix.seed }}.csv
+      - name: Upload combined gravity-pressure consistency diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy23-n${{ matrix.n }}-${{ matrix.seed }}
+          path: bg-phy23-n${{ matrix.n }}-${{ matrix.seed }}.csv
+          if-no-files-found: warn
+          retention-days: 30
