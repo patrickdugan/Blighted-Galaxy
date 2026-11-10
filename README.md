@@ -194,6 +194,18 @@ A dedicated [BG-PHY-12 GitHub Actions workflow](https://github.com/patrickdugan/
 
 See the [BG-PHY-12 workpaper](workpapers/physics/RADIAL_FORCE_RELAX_SCHEDULE.md) and open [stellar-equilibrium Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8).
 
+## BG-PHY-13: smoothing-length and stellar resolution experiment
+
+The white-dwarf physics laboratory now has a separate benchmark that varies the SPH smoothing parameter **eta**, while preserving the same cold-electron equation of state, M4 Poisson-matched gravitational potential, shell-balanced particle seed, damping duration and undamped hold. It evaluates actual kernel-support neighbor counts, local SPH gravity against the independent hydrostatic field, radial density errors and conservation.
+
+~~~sh
+cargo run --release --bin phy13_bench -- --n 256 --etas 0.85,1.05,1.20,1.45 --relax-steps 300 --hold-steps 788 --csv bg-phy13.csv --shell-csv bg-phy13-shells.csv
+~~~
+
+The [BG-PHY-13 GitHub Actions workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy13.yml) performs matched-duration tests at N=256, 512 and 1,024, followed by approximately three stellar dynamical times without damping. Results and physical acceptance flags are exported per resolution. A smaller N=64 smoke test is included in ordinary CI.
+
+The playable stellar modes retain the previous constant-damping baseline until a parameter setting meets the separate physical-radius and free-evolution stability tests. Complete methodology and source references are in the [BG-PHY-13 workpaper](workpapers/physics/ETA_HYDROSTATIC_SWEEP.md), with [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) tracking unresolved stellar equilibrium.
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.

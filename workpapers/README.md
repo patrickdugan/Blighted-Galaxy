@@ -24,4 +24,6 @@ The historical game-design and setting documents remain in [design/](design/) an
 
 - [BG-PHY-12: Radial stellar force balance and tapered SPH damping](physics/RADIAL_FORCE_RELAX_SCHEDULE.md), separating pressure and gravity accelerations, comparing matched-duration preparation schedules, and testing undamped mass-profile stability.
 
+- [BG-PHY-13: eta sweep and hydrostatic field convergence](physics/ETA_HYDROSTATIC_SWEEP.md), comparing smoothing length, physical neighbor counts, force-balance bias and three-dynamical-time stability at N=256–1,024.
+
 See the consolidated [GDD](../design/GDD.md). New interpretations should cite source manuscripts or a specific physical approximation. Preserve the two originals without silent revision.

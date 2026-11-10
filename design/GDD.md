@@ -262,6 +262,14 @@ The experimental preparation stage offers a time-dependent damping schedule with
 
 See [BG-PHY-12](../workpapers/physics/RADIAL_FORCE_RELAX_SCHEDULE.md) and [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8).
 
+### BG-PHY-13: SPH smoothing scale and cold white-dwarf convergence
+
+The stellar research engine now has a controlled parameter-sweep runner for the dimensionless SPH smoothing length eta. For each resolution it reuses the same nearly cubic particle realization, M4 Poisson self-gravity, cold electron EOS and physical times, then measures radial acceleration against the independent hydrostatic enclosed-mass field. Explicit kernel-support neighbor counts distinguish physical resolution from spatial-index candidates.
+
+Each variant undergoes a three-dynamical-time undamped hold. Radius, enclosed-mass percentiles, radial mass-CDF mismatch, force-virial balance, and energy/momentum invariants feed a separate physical-equilibrium verdict. The benchmark explores N=256, 512 and 1,024 with reproducible CSV artifacts. The next graphics and gameplay stages retain their existing stellar destruction proxy until the [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) requirements are verified.
+
+See [BG-PHY-13](../workpapers/physics/ETA_HYDROSTATIC_SWEEP.md).
+
 ## 11. Unresolved design decisions
 
 - **Fidelity:** whether orbital maneuvers use realistic dynamical constants in all encounters, or curated time/length scales for playable pacing.
