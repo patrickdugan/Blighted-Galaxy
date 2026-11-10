@@ -439,3 +439,6 @@ pub mod sph_force_audit;
 
 // BG-PHY-16: Wendland C4 density and matched Poisson gravity kernels.
 pub mod sph_kernel;
+
+// BG-PHY-16: deterministic antipodal angular-glass seed optimizer.
+pub mod sph_glass;
