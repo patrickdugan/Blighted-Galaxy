@@ -468,3 +468,6 @@ pub mod sph_surface_variation;
 
 // BG-PHY-23: opt-in complete cold EOS plus Poisson-matched gravity Hamiltonian.
 pub mod sph_surface_gravity;
+
+// BG-PHY-24: radial homology energy minima and eight-shell virial diagnostics.
+pub mod sph_homology;
