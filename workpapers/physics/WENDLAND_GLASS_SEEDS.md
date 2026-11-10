@@ -175,7 +175,75 @@ The [BG-PHY-16 Actions workflow](https://github.com/patrickdugan/Blighted-Galaxy
 runs the N256/N512/N1024 frozen factorial and N256 dynamical pilot.
 The regular CI runs the N64 short smoke and compiles the new Windows binary.
 
-## 7. Scientific decision rule
+## 7. Measured reference results (10 November 2026)
+
+The [factorial matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/runs/42765895092)
+passed N256, N512 and N1024 frozen comparisons and an N256
+matched-duration 3-second damping pilot. See each Actions job's
+summary and shell CSV artifacts for full precision. The following
+values use orientation seed 0 and fixed eta=1.20, except where noted.
+
+| N | kernel | original pressure vector RMS | glass pressure vector RMS |
+|---:|---|---:|---:|
+|256|M4|0.3230|0.1798|
+|512|M4|0.3817|0.2074|
+|1024|M4|0.4399|0.2747|
+|256|Wendland C4|0.9375|0.6686|
+|512|Wendland C4|1.1413|0.8846|
+|1024|Wendland C4|1.4156|1.2244|
+
+Glass improves every case in this table, including the inner-shell
+pressure error. The current constrained geometric objective reduces
+pressure noise even though it does not directly optimize the SPH
+equilibrium equation.
+
+The N256 seed 0 3-second dynamical pilot measures:
+
+| eta law | layout | kernel | contraction vs seed Rmax | absolute Rmax bias | post net/reference force RMS |
+|---|---|---|---:|---:|---:|
+|fixed|shell|M4|−11.66%|−17.56%|0.0457|
+|fixed|glass|M4|−11.06%|−17.00%|0.0387|
+|fixed|shell|C4|−7.66%|−13.83%|0.0793|
+|fixed|glass|C4|−8.49%|−14.60%|0.0703|
+|growth|shell|M4|−10.26%|−16.26%|0.0578|
+|growth|glass|M4|−10.21%|−16.21%|0.0494|
+|growth|shell|C4|−3.58%|−10.03%|0.1371|
+|growth|glass|C4|−4.76%|−11.12%|0.1278|
+
+The C4 cases produce less contraction in this short pilot, while their
+post-damping net-force mismatch exceeds the M4 controls. None of these
+configurations passes the independent 5% reference-radius gate.
+
+The new closure audit reveals why the most undersampled C4 cases need
+independent root checks: for N256, growth eta=1.05, seed0, the C4
+underrelaxed closure reaches max uncapped residual 0.01153, compared
+with 1.17e-5 for M4. At fixed eta=1.20, C4 max residual is 6.65e-5.
+All tested configurations have no hard h caps or Omega-floor hits.
+
+**Independent exact-root frozen comparison** (same positions, N256,
+seed 0):
+
+| eta | kernel | 24-pass pressure RMS | safeguarded Newton pressure RMS |
+|---:|---|---:|---:|
+|1.20|M4|0.323026|0.323027|
+|1.20|C4|0.937546|0.937590|
+|1.05|M4|0.582172|0.582176|
+|1.05|C4|3.496443|3.684815|
+
+Exact roots achieve <1e-9 dimensionless residual. The low-neighbor C4
+force noise remains, and under exact root correction it increases by
+about 5.4% in the growth-law case. The smallest Omega for that
+configuration is about 0.178 under Newton, above the 0.02 floor.
+Incomplete h/rho closure is therefore not the primary source of the
+large pressure-gradient mismatch.
+
+The C4 kernel's pairing resistance permits much larger neighbor sets,
+so testing its intended high-neighbor operating regime requires a
+separate eta sweep at matched effective support. Every comparison must
+report realized neighbors and h, while retaining the original EOS and
+white-dwarf equilibrium gates.
+
+## 8. Scientific decision rule
 
 Inspect pressure and gravity error, inner-shell tangential pressure RMS,
 outer-shell pressure support, and post-damping radius contraction
