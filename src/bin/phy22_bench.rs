@@ -59,6 +59,7 @@ fn main(){
     let eta:f64=opt(&args,"--eta",1.7);
     let step_fraction:f64=opt(&args,"--fd-fraction",1e-4);
     let oracle=!args.iter().any(|x|x=="--no-oracle");
+    let deform=args.iter().any(|x|x=="--deform");
     assert!((16..=128).contains(&n)&&n%2==0);
     assert!(layout=="shell"||layout=="glass");
     assert!(steps>0&&steps<=30&&dt.is_finite()&&dt>0.0&&dt<=0.02);
@@ -71,12 +72,25 @@ fn main(){
     let center=V3::new(1e8,0.0,0.0);
     let initial=seed_cubic_shells_oriented(
         &star,center,V3::default(),n,seed).0;
-    let original=if layout=="glass"{
+    let mut original=if layout=="glass"{
         sph_glass::relax_antipodal_angles(&initial,&star,
             center,1.2,8).0
     }else{initial};
+    if deform {
+        // Break antipodal symmetry and equal masses deterministically.
+        // Neither the analytic formula nor the oracle uses the 1D star
+        // mass-CDF after seeding, so this tests a genuinely irregular
+        // off-equilibrium particle geometry.
+        for (i,x) in original.iter_mut().enumerate(){
+            let t=i as f64+0.37;
+            x.pos_m+=V3::new(
+                (0.73*t).sin(),(1.17*t).cos(),(1.53*t).sin())*
+                (0.016*star.radius_m);
+            x.mass_kg*=1.0+0.06*(0.41*t).sin();
+        }
+    }
     let mut csv=String::from(
-        "N,seed,layout,kernel,density,eta,analytic_s,finite_difference_s,analytic_vs_oracle_rms,conventional_vs_analytic_rms,rk_vs_analytic_rms,potential_relative_error,net_force_ratio,net_torque_ratio,maximum_mls_scalar_disagreement,mls_fallback_fraction,capped_fraction,omega_floor_fraction,min_omega,direct_displacement_rms_n,density_chain_rms_n,implicit_h_chain_rms_n,relative_hamiltonian_drift,linear_momentum_drift,angular_momentum_drift,reverse_position_error,reverse_velocity_error,steps,dt_s\n");
+        "N,seed,layout,deformed,kernel,density,eta,analytic_s,finite_difference_s,analytic_vs_oracle_rms,conventional_vs_analytic_rms,rk_vs_analytic_rms,potential_relative_error,net_force_ratio,net_torque_ratio,maximum_mls_scalar_disagreement,mls_fallback_fraction,capped_fraction,omega_floor_fraction,min_omega,direct_displacement_rms_n,density_chain_rms_n,implicit_h_chain_rms_n,relative_hamiltonian_drift,linear_momentum_drift,angular_momentum_drift,reverse_position_error,reverse_velocity_error,steps,dt_s\n");
     for kernel in [DensityKernel::CubicM4,DensityKernel::WendlandC4] {
         let mut cfg=AdaptiveConfig::from_star_radius(star.radius_m)
             .with_cubic_gravity().with_newton_density();
@@ -137,7 +151,7 @@ fn main(){
             };
             let cols=vec![
                 n.to_string(),seed.to_string(),layout.into(),
-                kernel.label().into(),kind.into(),f(eta),
+                deform.to_string(),kernel.label().into(),kind.into(),f(eta),
                 f(analytic_s),f(fd_s),f(fd_error),
                 f(conventional_error),f(rk_error),f(potential_error),
                 f(analytic.net_force_ratio),f(analytic.net_torque_ratio),
@@ -160,7 +174,7 @@ fn main(){
             assert!(analytic.net_force_ratio<1e-9);
             assert!(analytic.net_torque_ratio<1e-9);
             assert!(analytic.max_mls_relative_disagreement<1e-9);
-            if n==64 {assert!(analytic.capped_fraction<1e-12,
+            if n==64&&!deform {assert!(analytic.capped_fraction<1e-12,
                 "N64 benchmark should exercise uncapped implicit h derivatives");}
             assert!(drift<1e-5);
             assert!(linear_drift<1e-9&&angular_drift<1e-9);
