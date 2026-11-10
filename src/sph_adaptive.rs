@@ -128,15 +128,17 @@ pub fn update_adaptive_densities(
     particles:&[Fluid3],state:&mut AdaptiveState,cfg:AdaptiveConfig,
 ) {
     assert!(cfg.valid()&&state.valid_for(particles.len()));
-    // Rebuild the candidate list at the *current* h_max on every
-    // smoothing-length iteration. Reusing cfg.max_h as the cell width
-    // would span most of a small star and erase the intended speedup.
-    // Each iteration queries neighbors before modifying h, so its list
-    // always contains the full compact support at that iteration.
+    // Build a conservative support index once per force evaluation, with
+    // headroom for h changes during the closure. If an iteration exceeds
+    // the cached support, rebuild before the *next* density evaluation.
+    // This preserves exact compact support and avoids 24 separate cell
+    // hash constructions on most force calls.
+    let mut supported_h=(state.smoothing_m.iter().copied()
+        .fold(0.0_f64,f64::max)*1.25)
+        .clamp(cfg.min_h_m,cfg.max_h_m);
+    let mut candidates=CellNeighbors::new(particles,supported_h)
+        .all_candidates();
     for _ in 0..cfg.density_iterations {
-        let max_h=state.smoothing_m.iter().copied()
-            .fold(0.0_f64,f64::max);
-        let candidates=CellNeighbors::new(particles,max_h).all_candidates();
         for i in 0..particles.len() {
             let h=state.smoothing_m[i];
             let (rho,_)=density_of_particle(i,particles,h,&candidates[i]);
@@ -146,10 +148,16 @@ pub fn update_adaptive_densities(
             state.smoothing_m[i]=
                 (0.45*h+0.55*target).clamp(cfg.min_h_m,cfg.max_h_m);
         }
+        let evolved_h=state.smoothing_m.iter().copied()
+            .fold(0.0_f64,f64::max);
+        if evolved_h>supported_h {
+            supported_h=(evolved_h*1.25).min(cfg.max_h_m);
+            candidates=CellNeighbors::new(particles,supported_h)
+                .all_candidates();
+        }
     }
-    let final_max_h=state.smoothing_m.iter().copied()
-        .fold(0.0_f64,f64::max);
-    let candidates=CellNeighbors::new(particles,final_max_h).all_candidates();
+    // Final smoothing lengths remain inside the cached support radius.
+    // A sorted candidate list yields the same summation order as all-pairs.
     for i in 0..particles.len() {
         let h=state.smoothing_m[i];
         let (rho,drho_dh)=density_of_particle(i,particles,h,&candidates[i]);
