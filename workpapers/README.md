@@ -22,4 +22,6 @@ The historical game-design and setting documents remain in [design/](design/) an
 
 - [BG-PHY-11: SPH neighbor search and high-resolution stellar stability](physics/NEIGHBOR_MASS_PROFILE_HOLD.md), with compact-support cell neighbors, radial mass-CDF percentiles and the 1,024-particle undamped reference run.
 
+- [BG-PHY-12: Radial stellar force balance and tapered SPH damping](physics/RADIAL_FORCE_RELAX_SCHEDULE.md), separating pressure and gravity accelerations, comparing matched-duration preparation schedules, and testing undamped mass-profile stability.
+
 See the consolidated [GDD](../design/GDD.md). New interpretations should cite source manuscripts or a specific physical approximation. Preserve the two originals without silent revision.
