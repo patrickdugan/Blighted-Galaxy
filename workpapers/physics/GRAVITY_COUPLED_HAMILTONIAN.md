@@ -174,6 +174,72 @@ cargo run --release --bin phy23_hold -- \
   --trace-csv bg-phy23-n256-hold-trace.csv
 ```
 
+## Measured results: total energy and four physical holds
+
+The [final dedicated full-potential matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/runs/42825830058) passed N16, N24, asymmetric/unequal-mass N32, N64 and analytic-only N128. Each of the first four resolutions evaluated original SPH density and surface-gated MLS with the same M4/Wendland matched Poisson gravitational potential. The direct coupled force reproduces the existing exact-root SPH force in the original-density control to floating-point precision.
+
+| Numerical check | Worst observed |
+|---|---:|
+| Analytic vs independently re-solved total-potential force, N16–64 | **5.104e−7** relative RMS |
+| Original-density coupled force vs existing adaptive SPH force | **4.635e−15** relative RMS |
+| Analytic net force ratio, unprojected | 1.04e−15 |
+| Analytic net torque ratio, unprojected | 1.14e−15 |
+| Short Hamiltonian relative energy drift | 4.59e−12 |
+| Independent total potential scalar discrepancy | 0 at CSV precision |
+
+The new force is the gradient of the full *cold EOS internal plus
+self-gravitational energy*, including MLS/partition and variable-h
+terms. Numerical success is independent of the physical radius and
+stable-hold acceptance.
+
+The [four full-duration stellar holds](https://github.com/patrickdugan/Blighted-Galaxy/actions/runs/42825829940) completed successfully after raising the BG-PHY-22 research-only particle guard from N128 to N256. Every hold includes 3.00 seconds of tau=0.7s damping and 7.88 seconds of undamped Hamiltonian evolution.
+
+| Metric | N128 M4 original | N128 C4 blended | N256 M4 original | N256 C4 blended |
+|---|---:|---:|---:|---:|
+| Post-damping Rmax (km) | 6875.95 | 6569.18 | 6973.46 | 6512.16 |
+| Rmax bias relative to Rref | −18.16% | −21.82% | −17.00% | −22.49% |
+| Contraction from sampled seed radius | −10.24% | −14.24% | −11.06% | −16.94% |
+| Maximum undamped Rmax drift | 14.84% | 10.85% | 10.95% | **5.43%** |
+| Maximum undamped R99 drift | 14.84% | 10.85% | 9.36% | **4.62%** |
+| Worst radial mass-quantile RMS | 6.06% | 6.36% | 4.35% | **3.81%** |
+| Maximum total Hamiltonian energy drift | 2.21e−8 | 1.23e−7 | 1.56e−8 | 6.06e−8 |
+| Maximum normalized momentum drift | 1.09e−16 | 1.96e−16 | 1.43e−16 | 2.12e−16 |
+| Maximum normalized angular-momentum drift | 8.12e−16 | 2.39e−15 | 3.76e−16 | 1.16e−15 |
+| Full duration checked | yes | yes | yes | yes |
+| **Issue #8 physical acceptance** | **FAIL** | **FAIL** | **FAIL** | **FAIL** |
+
+All four simulations pass the numerical conservation checks over
+the full duration. The C4 surface blend produces substantially
+smaller radial oscillations at N256, with R99 excursion and
+radial mass-CDF RMS individually meeting the original 5% thresholds.
+Its outermost-particle drift remains slightly above 5%, and its
+post-damping stellar radius is 22.49% below the independent 1D
+reference.
+
+### Scientific implication
+
+The analytic variational correction now makes it possible to
+compare different density reconstructions without losing the
+cold-barotropic energy contract. It does **not yet** recover the
+correct stellar equilibrium. The better N256 dynamical stability
+of the C4 surface blend coexists with stronger radial contraction,
+suggesting that the main remaining defect involves the equilibrium
+surface/pressure-support model, free-boundary treatment, or
+particle discretization at fixed N.
+
+This experiment keeps the cold EOS and the reference hydrostatic
+integrator unchanged. Any next intervention should be evaluated
+against the *independent radius* and outer-shell force support,
+while preserving the successful Hamiltonian conservation and the
+existing Issue #8 acceptance gates.
+
+A practical next discriminating step is a controlled free-surface
+support closure with boundary-aware volume and gradient moments,
+testing whether the radial force balance at the outer 1–2
+mass shells recovers the reference at N256 before a large N512/1024
+dynamics campaign. Retain the exact EOS energy potential as the
+derivation and conservation target.
+
 ## Limitations and next gate
 
 The solver is research-only. It currently has no compact binary
