@@ -106,6 +106,10 @@ fn evaluate(
         num(q_penultimate.net_ratio),
         num(batch.last_shell_partition),
         num(batch.last_shell_normal_alignment),
+        num(batch.last_shell_moment_ratio),
+        num(batch.last_shell_partition_depth_h),
+        num(batch.last_shell_moment_depth_h),
+        num(batch.last_shell_partition_below_half_fraction),
         num(batch.density_global_log_rms),
         num(batch.density_outer_log_rms),
         num(batch.density_last_log_rms),
@@ -168,7 +172,7 @@ fn main(){
         DegenerateElectrons::new(2.0).unwrap(),10_000.0).unwrap();
     let physics=Sph3Config::cold_white_dwarf(2.0).unwrap();
     let mut summary=String::from(
-        "N,seed,layout,stage,source,kernel,candidate,eta,Rmax_km,Rmax_bias_pct,homology_bracketed,stationary_scale,stationary_Rmax_bias_pct,stationary_curvature_positive,last_pressure_ratio,last_gravity_ratio,last_net_ratio,penultimate_pressure_ratio,penultimate_gravity_ratio,penultimate_net_ratio,last_partition,last_normal_radial_alignment,density_global_log_rms,density_outer_log_rms,density_last_log_rms,enthalpy_gradient_error,enthalpy_outer_gradient_error,fallback_fraction,h_cap_fraction,min_omega,cold_internal_energy_j,matched_gravity_energy_j,total_potential_j,validated_old_force_error,wall_s\n");
+        "N,seed,layout,stage,source,kernel,candidate,eta,Rmax_km,Rmax_bias_pct,homology_bracketed,stationary_scale,stationary_Rmax_bias_pct,stationary_curvature_positive,last_pressure_ratio,last_gravity_ratio,last_net_ratio,penultimate_pressure_ratio,penultimate_gravity_ratio,penultimate_net_ratio,last_partition,last_normal_radial_alignment,last_Q_over_S,last_partition_inferred_depth_h,last_moment_ratio_inferred_depth_h,last_partition_below_half_fraction,density_global_log_rms,density_outer_log_rms,density_last_log_rms,enthalpy_gradient_error,enthalpy_outer_gradient_error,fallback_fraction,h_cap_fraction,min_omega,cold_internal_energy_j,matched_gravity_energy_j,total_potential_j,validated_old_force_error,wall_s\n");
     let mut shell_csv=String::from(
         "N,seed,layout,stage,source,kernel,candidate,eta,shell,mean_radius_km,pressure_ratio,gravity_inward_ratio,net_ratio,pressure_virial_j,gravity_virial_j\n");
     let kernels=if kernel=="both"{vec!["m4","c4"]}else{vec![kernel]};
