@@ -187,6 +187,7 @@ fn main(){
     let mut summary=String::from("N,seed,layout,stage,source_model,kernel,density,eta,Rref_km,Rmax_km,Rmax_bias_pct,mass_cdf_rms,scan_lower,scan_upper,scan_step,minimum_bracketed,stationary_homology_scale,stationary_Rmax_bias_pct,minimum_curvature_positive,stationary_total_energy_j,internal_energy_s1_j,gravity_energy_s1_j,total_energy_s1_j,total_dV_ds_s1_j,pressure_dV_ds_s1_j,gravity_dV_ds_s1_j,shell_pressure_dV_ds_s1_j,shell_gravity_dV_ds_s1_j,outer_two_pressure_support_ratio,outer_two_gravity_ratio,outer_two_partition_mean,h_capped_fraction,min_omega,mls_fallback_fraction,max_stable_analytic_fd_relative_error,active_set_transition_count,lower_energy_j,upper_energy_j,wall_s\n");
     let mut profile=String::from("N,seed,layout,stage,source_model,kernel,density,eta,homology_scale,Rmax_km,Rmax_bias_pct,cold_internal_energy_j,matched_gravity_energy_j,total_potential_j,pressure_dV_ds_j,gravity_dV_ds_j,total_analytic_dV_ds_j,independent_fd_dV_ds_j,relative_dV_ds_error,fd_energy_curvature_j,active_set_stable,h_cap_fraction,min_omega,mls_fallback_fraction,net_force_ratio,net_torque_ratio\n");
     let mut shells=String::from("N,seed,layout,stage,source_model,kernel,density,eta,shell,n_particles,mass_fraction_lo,mass_fraction_hi,mean_radius_km,pressure_support_ratio,gravity_inward_ratio,net_radial_ratio,pressure_tangent_rms,net_tangent_rms,pressure_virial_j,gravity_virial_j,total_virial_j,partition_mean,sp_density_log_bias_mean,h_cap_fraction,min_omega,mls_fallback_fraction\n");
+    let mut cross=String::from("N,seed,layout,stage,source_model,source_kernel,source_density,target_kernel,target_density,eta,Rmax_km,total_homology_derivative_j,pressure_homology_derivative_j,gravity_homology_derivative_j,outer_two_pressure_support_ratio,outer_two_gravity_ratio,outer_two_net_radial_ratio,outer_partition_mean,outer_pressure_virial_j,outer_gravity_virial_j,active_set_stable\n");
     let mut total_cases=0;
     for seed in ids {
         let center=V3::new(1e8,0.0,0.0);
@@ -235,6 +236,53 @@ fn main(){
                             &pilot.particles,&star,physics,&source,cfg,
                             lower,upper,step,epsilon);
                         total_cases+=1;
+                        if arg(&args,"--cross-csv").is_some() {
+                            // Evaluate original and surface-gated density
+                            // at identical post-damping coordinates.
+                            for &target_density in &chosen_densities {
+                                let mode=density_mode(target_density);
+                                let q=sph_homology::point(
+                                    &pilot.particles,&star,physics,cfg,
+                                    mode,1.0,epsilon);
+                                let shell=sph_homology::shell_virial(
+                                    &pilot.particles,&star,physics,cfg,
+                                    mode,8);
+                                let outer=&shell[6..8];
+                                let mean_pressure=outer.iter()
+                                    .map(|x|x.pressure_support_ratio)
+                                    .sum::<f64>()/2.0;
+                                let mean_gravity=outer.iter()
+                                    .map(|x|x.gravity_inward_ratio)
+                                    .sum::<f64>()/2.0;
+                                let mean_net=outer.iter()
+                                    .map(|x|x.net_radial_ratio)
+                                    .sum::<f64>()/2.0;
+                                let mean_partition=outer.iter()
+                                    .map(|x|x.partition_mean)
+                                    .sum::<f64>()/2.0;
+                                let cols=vec![
+                                    n.to_string(),seed.to_string(),
+                                    geom.into(),"post_damping".into(),
+                                    label.clone(),kernel.into(),
+                                    density.into(),kernel.into(),
+                                    target_density.into(),number(cfg.eta),
+                                    number(q.rmax_km),
+                                    number(q.analytic_dv_ds_j),
+                                    number(q.pressure_dv_ds_j),
+                                    number(q.gravity_dv_ds_j),
+                                    number(mean_pressure),
+                                    number(mean_gravity),
+                                    number(mean_net),
+                                    number(mean_partition),
+                                    number(outer.iter().map(|x|x.pressure_virial_j)
+                                        .sum::<f64>()),
+                                    number(outer.iter().map(|x|x.gravity_virial_j)
+                                        .sum::<f64>()),
+                                    q.active_set_stable.to_string(),
+                                ];
+                                write(&mut cross,&cols);
+                            }
+                        }
                     }
                 }
             }
@@ -252,6 +300,10 @@ fn main(){
     }
     if let Some(path)=arg(&args,"--shell-csv"){
         std::fs::write(path,shells).expect("write shell force CSV");
+        println!("wrote {path}");
+    }
+    if let Some(path)=arg(&args,"--cross-csv"){
+        std::fs::write(path,cross).expect("write fixed-position density cross-audit");
         println!("wrote {path}");
     }
     // Read-only geometric comparisons, never a gameplay force switch.
