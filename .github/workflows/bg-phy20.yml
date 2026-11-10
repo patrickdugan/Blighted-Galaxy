@@ -1,0 +1,60 @@
+name: BG-PHY-20 free-surface density and enthalpy reconstruction
+on:
+  pull_request:
+    paths:
+      - "src/sph_density_audit.rs"
+      - "src/sph_quadratic_audit.rs"
+      - "src/bin/phy20_bench.rs"
+      - "src/sph_adaptive.rs"
+      - ".github/workflows/bg-phy20.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/sph_density_audit.rs"
+      - "src/sph_quadratic_audit.rs"
+      - "src/bin/phy20_bench.rs"
+      - ".github/workflows/bg-phy20.yml"
+  workflow_dispatch:
+jobs:
+  density:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - n: 256
+            seeds: "0,17"
+            relax: 0
+            name: "n256-initial"
+          - n: 256
+            seeds: "0"
+            relax: 300
+            name: "n256-m4-prepared"
+          - n: 1024
+            seeds: "0,17"
+            relax: 0
+            name: "n1024"
+          - n: 2048
+            seeds: "0"
+            relax: 0
+            name: "n2048"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Evaluate unlabeled density candidates on frozen white dwarf
+        run: |
+          cargo run --release --bin phy20_bench -- \
+            --n ${{ matrix.n }} --seeds ${{ matrix.seeds }} \
+            --targets 100,150,200 --glass-sweeps 20 \
+            --calibration-steps 12 --relax-steps ${{ matrix.relax }} \
+            --dt 0.01 --csv bg-phy20-${{ matrix.name }}.csv
+      - name: Upload pressure-field density and enthalpy diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy20-${{ matrix.name }}
+          path: bg-phy20-${{ matrix.name }}.csv
+          if-no-files-found: warn
+          retention-days: 30
