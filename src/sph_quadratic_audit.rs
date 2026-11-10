@@ -302,6 +302,32 @@ mod tests{
         assert!(flat.iter().all(|row|row.iter().all(|v|v.abs()<1e-10)));
     }
     #[test]
+    fn density_field_override_keeps_oracle_gradient_and_volume_fixed(){
+        let star=profile_for_mass(0.65*SOLAR_MASS_KG,
+            DegenerateElectrons::new(2.0).unwrap(),10_000.0).unwrap();
+        let (p,_)=seed_cubic_shells_oriented(&star,
+            V3::new(1e8,0.0,0.0),V3::default(),96,17);
+        let cfg=AdaptiveConfig::from_star_radius(star.radius_m)
+            .with_wendland_c4().with_newton_density();
+        let mut state=AdaptiveState::new(&p,star.radius_m,cfg);
+        update_adaptive_densities(&p,&mut state,cfg);
+        let original=audit(&p,&state,cfg.kernel,&star);
+        let same=audit_with_density_samples(
+            &p,&state,&state.densities_kg_m3,cfg.kernel,&star);
+        assert_eq!(original.global.vector_error,same.global.vector_error);
+        assert_eq!(original.outer.radial_ratio,same.outer.radial_ratio);
+        let candidate=state.densities_kg_m3.iter()
+            .map(|x|x*1.15).collect::<Vec<_>>();
+        let changed=audit_with_density_samples(
+            &p,&state,&candidate,cfg.kernel,&star);
+        assert!((changed.global.vector_error[7]-
+            original.global.vector_error[7]).abs()<1e-13);
+        assert!((changed.outer.radial_ratio[7]-
+            original.outer.radial_ratio[7]).abs()<1e-13);
+        assert!((changed.global.vector_error[5]-
+            original.global.vector_error[5]).abs()>1e-5);
+    }
+    #[test]
     fn real_star_fits_are_finite_and_translation_invariant(){
         let star=profile_for_mass(0.65*SOLAR_MASS_KG,
             DegenerateElectrons::new(2.0).unwrap(),10_000.0).unwrap();
