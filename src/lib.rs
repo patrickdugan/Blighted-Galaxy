@@ -459,3 +459,6 @@ pub mod sph_density_audit;
 // BG-PHY-21: opt-in reproducing-kernel geometry and compatible pressure work.
 pub mod sph_rk;
 pub mod sph_rk_compatible;
+
+// BG-PHY-21B: finite-difference total cold-barotropic energy-gradient oracle.
+pub mod sph_rk_variational;
