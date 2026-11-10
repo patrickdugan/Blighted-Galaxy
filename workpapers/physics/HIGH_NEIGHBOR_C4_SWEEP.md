@@ -236,3 +236,36 @@ source of the remaining pressure-gradient bias before longer dynamics.
 - D. Price and J. Monaghan, *An energy-conserving formalism for adaptive
   gravitational force softening*, MNRAS 374 (2007),
   DOI 10.1111/j.1365-2966.2006.11241.x.
+
+## Completed full-duration holds (10 November 2026)
+
+The [BG-PHY-17 hold workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/runs/42768741280) completed **all three N1024 seed-0 angular-glass simulations**, each with 3.00s tau=0.7s damping and 7.88s (3.005 t_dyn) undamped evolution. Every numerical job succeeded and emitted a summary CSV plus a 30-snapshot trajectory CSV.
+
+| Measured quantity | M4, eta=1.20 | C4, target 150 | C4, target 200 |
+|---|---:|---:|---:|
+| Initial mean neighbors | 58.0020 | 149.9590 | 199.9297 |
+| Post-damping mean neighbors | 56.6914 | 143.6973 | 190.3965 |
+| Initial frozen pressure-vector RMS | 0.27472 | 0.16621 | 0.12037 |
+| Post-damping Rmax (km) | 7252.654 | 7204.123 | 7170.033 |
+| Post-damping radius bias vs 1D | −13.6816% | −14.2592% | −14.6649% |
+| Contraction vs exact sampled seed | −10.2422% | −10.8428% | −11.2647% |
+| Post-damping pressure-vector RMS | 0.07144 | 0.08131 | 0.08976 |
+| Post-damping gravity-vector RMS | 0.06221 | 0.07606 | 0.08581 |
+| Post-damping net-force RMS | 0.03492 | 0.02854 | 0.02451 |
+| Worst undamped Rmax drift | 8.0972% | 10.0256% | 11.7982% |
+| Worst undamped R99 drift | 3.4451% | 5.4304% | 7.1010% |
+| Worst mass-quantile RMS | 0.021684 | 0.024423 | 0.027824 |
+| Maximum relative energy drift | 1.285e−8 | 7.440e−9 | 4.853e−9 |
+| Maximum relative momentum drift | 6.72e−17 | 5.30e−17 | 4.93e−17 |
+| Full duration / physical gate | yes / **fail** | yes / **fail** | yes / **fail** |
+
+All cases preserve mass, energy and momentum within the numerical assertions. The original physical acceptance remains a post-damping absolute radius error below 5%, Rmax and R99 excursion below 5%, and radial mass-CDF RMS below 5% for at least 3 dynamical times. The C4 200-neighbor case has the lowest *initial* pressure-vector error, but the worst physical-radius bias and undamped outer-radius excursion of these three.
+
+### Interpretation and next hypothesis
+
+With increasing C4 support, inner E0 noise and initial pressure-vector RMS decline, whereas the free-surface first-moment trace and pressure-gradient support fall. The larger smoothing length broadens the kernel beyond the free stellar surface. The comparison demonstrates a **finite-neighbor vs free-boundary gradient-bias tradeoff** in this discretization.
+
+The near-zero post-damping net force expresses a rebalanced, contracted configuration rather than agreement with the independent reference star. The 200-neighbor C4 star has a smaller post-damping net-force RMS than M4, yet is more compact and less stable through the hold.
+
+The next discriminating experiment should measure an explicitly **diagnostic** renormalized kernel-gradient and linear-consistency correction on frozen particles, especially the outer two mass shells. A corrected gradient evaluated independently of dynamics can expose the contribution of moment-matrix truncation versus sampled density error. Only a separately derived conservative force/energy formulation should be considered for dynamical adoption. See Bonet & Lok (1999), DOI 10.1016/S0045-7825(99)00051-1 and García-Senz, Cabezón & Escartín (2012), DOI 10.1051/0004-6361/201117939.
+
