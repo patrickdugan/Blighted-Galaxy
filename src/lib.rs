@@ -449,3 +449,6 @@ pub mod sph_consistency;
 
 // BG-PHY-18: diagnostic-only linear-consistent gradient and pressure-field audit.
 pub mod sph_gradient_audit;
+
+// BG-PHY-19: frozen quadratic pressure and barotropic enthalpy gradient fits.
+pub mod sph_quadratic_audit;
