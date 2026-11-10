@@ -286,7 +286,7 @@ See the [BG-PHY-19 workpaper](workpapers/physics/QUADRATIC_ENTHALPY_SURFACE.md) 
 
 ## BG-PHY-20: Free-surface density and enthalpy reconstruction
 
-The white-dwarf experiments now compare original SPH density with **Shepard normalization**, local affine and quadratic MLS density estimates, and a spherical enclosed-mass secant diagnostic. At frozen particle positions, each candidate is scored against the independent cold-electron hydrostatic density. The measured candidate enthalpy is also passed through the BG-PHY-19 quadratic-gradient audit using unchanged SPH volume weights, smoothing lengths, particle coordinates, and reference gravity.
+The white-dwarf experiments now compare original SPH density with **Shepard normalization**, local affine and quadratic MLS density estimates, a surface-gated affine MLS blend based on missing kernel support, and a spherical enclosed-mass secant diagnostic. At frozen particle positions, each candidate is scored against the independent cold-electron hydrostatic density. The measured candidate enthalpy is also passed through the BG-PHY-19 quadratic-gradient audit using unchanged SPH volume weights, smoothing lengths, particle coordinates, and reference gravity.
 
 ~~~sh
 cargo run --release --bin phy20_bench -- --n 1024 --seeds 0,17 --targets 100,150,200 --csv bg-phy20-n1024.csv
