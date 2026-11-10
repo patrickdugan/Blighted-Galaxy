@@ -175,8 +175,21 @@ pub fn audit(
     p:&[Fluid3],state:&AdaptiveState,kernel:DensityKernel,
     star:&WhiteDwarfProfile,
 )->PolynomialAudit {
+    audit_with_density_samples(
+        p,state,&state.densities_kg_m3,kernel,star)
+}
+/// Reconstruct pressure and enthalpy from proposed *frozen* density samples
+/// while preserving the ORIGINAL volume weights, h_i and gravity reference.
+/// This holds sampling geometry fixed so comparisons measure the candidate
+/// density field. No candidate enters live conservative SPH dynamics.
+pub fn audit_with_density_samples(
+    p:&[Fluid3],state:&AdaptiveState,
+    candidate:&[f64],kernel:DensityKernel,
+    star:&WhiteDwarfProfile,
+)->PolynomialAudit {
     let n=p.len();
-    assert!(n>=16&&state.valid_for(n));
+    assert!(n>=16&&state.valid_for(n)&&candidate.len()==n);
+    assert!(candidate.iter().all(|x|x.is_finite()&&*x>0.0));
     let mass=p.iter().map(|x|x.mass_kg).sum::<f64>();
     let center=p.iter().fold(V3::default(),
         |s,x|s+x.pos_m*x.mass_kg)/mass;
@@ -186,7 +199,7 @@ pub fn audit(
         let r=(x.pos_m-center).len();
         assert!(r>0.0&&r<star.radius_m);
         radius[i]=r;
-        let rho_num=state.densities_kg_m3[i];
+        let rho_num=candidate[i];
         let rho_ref=star.density_at(r);
         assert!(rho_num>0.0&&rho_ref>0.0);
         fields[i]=[
@@ -219,7 +232,7 @@ pub fn audit(
         let mut spreads=(0.0,0.0);
         if let (Some((a,sa)),Some((b,sb)))=(linear,quadratic) {
             spreads=(sa,sb);
-            let rho_num=state.densities_kg_m3[i];
+            let rho_num=candidate[i];
             let rho_ref=star.density_at(radius[i]);
             for k in 0..4{
                 let denom=if k%2==0{rho_num}else{rho_ref};
@@ -233,7 +246,7 @@ pub fn audit(
             gravity:G_SI*star.enclosed_mass_at(radius[i])/radius[i].powi(2),
             radial,predictions,
             linear_spread:spreads.0,quadratic_spread:spreads.1,
-            density_ln_bias:(state.densities_kg_m3[i]/
+            density_ln_bias:(candidate[i]/
                 star.density_at(radius[i])).ln(),valid,
         });
     }
