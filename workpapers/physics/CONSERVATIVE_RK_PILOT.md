@@ -233,3 +233,57 @@ Keep the original gameplay default untouched throughout this process.
 - PySPH, CRKSPH and corrected-gradient equations:
   https://pysph.readthedocs.io/en/main/reference/equations.html
 - [BG-PHY-20 measured density workpaper](FREE_SURFACE_DENSITY.md).
+
+## Measured N32/64/128 compatible-work results
+
+The dedicated [BG-PHY-21 numerical matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/runs/42801881949) completed all N32, N64 and N128 jobs. Each runs M4 and Wendland C4 with both the baseline SPH density and the BG-PHY-20 surface-gated MLS candidate. Test systems run 12 or 16 pressure-only steps at dt=0.001s, then the same number of reversed steps. Each job published a four-row CSV.
+
+Across 12 runs:
+
+| Invariant or diagnostic | Maximum absolute/normalized measured error |
+|---|---:|
+| Invalid RK correction fraction | 0 |
+| Constant reproduction error | 1.78e-15 |
+| Linear reproduction error | 1.18e-15 |
+| Full corrected query-gradient partition residual | 6.51e-15 |
+| Relative K+stored-U drift | 1.70e-15 |
+| Normalized linear momentum drift | 1.02e-18 |
+| Normalized angular momentum drift | 1.12e-4 |
+| RMS cold-u_EOS vs compatible-work u discrepancy | 3.53e-5 |
+| Maximum reverse position error / reference radius | 3.59e-15 |
+| Maximum reverse velocity error / 1e6 m/s | 1.06e-12 |
+
+The separate lib tests verified the RK moment matrix identities, analytic
+query-gradient finite differences, rotation covariance, pair momentum,
+Galilean boost invariance and short-step energy/reversibility assertions.
+
+**Frozen force-vector error against the 1D hydrostatic pressure acceleration:**
+
+| N | M4 original | M4 blended | C4 original | C4 blended |
+|---:|---:|---:|---:|---:|
+|32|0.5382|0.5337|0.4435|0.4444|
+|64|0.4864|0.4885|0.4695|0.4455|
+|128|0.5524|0.5080|0.4963|0.4530|
+
+These small-N comparisons establish the correctness of the RK
+reproducing identities and compatible-work conservation. The initial
+force field is still appreciably discrepant from the continuum pressure
+reference. The blend's benefit is clearer at N128 than N32, and the
+finite timestep and pressure-only scope limit extrapolation.
+
+**Interpretation:** extremely small relative total-energy drift is a
+consequence of the discrete midpoint-compatible work identity, not
+proof that the evolved thermodynamic u matches the cold barotropic
+u_EOS(rho_hat). The measured EOS consistency residual is small only
+over short 12–16 ms trajectories and must be tested under longer,
+nonlinear compression and expansion. Angular-momentum drift is
+nonzero due to noncentral corrected kernel forces.
+
+The next useful numerical oracle is the expensive total discrete
+energy gradient of U(x)=sum_i m_i u_EOS(rho_hat_i(x)), evaluated by
+finite-difference perturbations that recompute density, h, partition
+gate and MLS coefficients at each changed configuration. Comparing
+this variational gradient to the fast antisymmetric RK pair force
+will measure the missing density/thermodynamic chain-rule terms
+without assuming their magnitude.
+
