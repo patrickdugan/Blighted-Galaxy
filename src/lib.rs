@@ -433,3 +433,6 @@ pub mod stellar_balance;
 
 // BG-PHY-14: safeguarded implicit h/rho root solver with cap diagnostics.
 pub mod sph_hroot;
+
+// BG-PHY-15: frozen 1D-hydrostatic pressure/gravity vector error audit.
+pub mod sph_force_audit;
