@@ -25,6 +25,17 @@ jobs:
       - run: cargo run --release --bin phy11_bench -- --n 64 --relax-steps 20 --hold-steps 30 --csv bg-phy11-smoke.csv
       - run: cargo run --release --bin phy12_bench -- --n 64 --relax-steps 20 --hold-steps 30 --csv bg-phy12-smoke.csv --shell-csv bg-phy12-smoke-shells.csv
       - run: cargo run --release --bin phy13_bench -- --n 64 --etas 0.85,1.20 --relax-steps 20 --hold-steps 30 --csv bg-phy13-smoke.csv --shell-csv bg-phy13-smoke-shells.csv
+      - run: cargo run --release --bin phy14_bench -- --n 64 --seeds 0 --relax-steps 10 --hold-steps 20 --csv bg-phy14-smoke.csv
+      - run: cargo run --release --bin phy14_bench -- --n 32 --seeds 0 --relax-steps 4 --hold-steps 8 --root-dynamics --csv bg-phy14-newton-smoke.csv
+      - name: Upload BG-PHY-14 numerical root/neighbor smoke
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy14-smoke
+          path: |
+            bg-phy14-smoke.csv
+            bg-phy14-newton-smoke.csv
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload BG-PHY-13 smoothing-length smoke
         uses: actions/upload-artifact@v4
         with:
@@ -127,6 +138,7 @@ jobs:
             target/release/phy11_bench.exe
             target/release/phy12_bench.exe
             target/release/phy13_bench.exe
+            target/release/phy14_bench.exe
             target/release/kerr_moving_lab.exe
             target/release/white_dwarf_bench.exe
           if-no-files-found: error

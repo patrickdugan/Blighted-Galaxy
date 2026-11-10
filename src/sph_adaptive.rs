@@ -16,6 +16,7 @@ use crate::sph3::{
 };
 use std::f64::consts::PI;
 use crate::sph_gravity_kernel;
+use crate::sph_hroot;
 use crate::sph_neighbors::CellNeighbors;
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
@@ -28,6 +29,13 @@ pub enum GravityModel {
     /// density and pressure; exact Newtonian interaction for r >= 2h.
     MatchedCubicSpline,
 }
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+pub enum DensityMethod {
+    /// Existing BG-PHY-08 underrelaxed h/rho fixed-point closure.
+    Underrelaxed,
+    /// Bracketed Newton root of rho(h)h³=eta³m, with explicit h caps.
+    SafeguardedNewton,
+}
 #[derive(Clone,Copy,Debug)]
 pub struct AdaptiveConfig {
     pub eta:f64,
@@ -36,6 +44,7 @@ pub struct AdaptiveConfig {
     pub gravity_softening_m:f64,
     pub gravity_model:GravityModel,
     pub density_iterations:usize,
+    pub density_method:DensityMethod,
 }
 impl AdaptiveConfig {
     pub fn from_star_radius(radius_m:f64)->Self {
@@ -46,6 +55,7 @@ impl AdaptiveConfig {
             gravity_softening_m:0.10*radius_m,
             gravity_model:GravityModel::FixedPlummer,
             density_iterations:9,
+            density_method:DensityMethod::Underrelaxed,
         }
     }
     pub fn with_adaptive_gravity(mut self)->Self {
@@ -56,6 +66,10 @@ impl AdaptiveConfig {
     pub fn with_cubic_gravity(mut self)->Self {
         self.gravity_model=GravityModel::MatchedCubicSpline;
         self.density_iterations=24;
+        self
+    }
+    pub fn with_newton_density(mut self)->Self {
+        self.density_method=DensityMethod::SafeguardedNewton;
         self
     }
     pub fn valid(self)->bool {
@@ -128,6 +142,23 @@ pub fn update_adaptive_densities(
     particles:&[Fluid3],state:&mut AdaptiveState,cfg:AdaptiveConfig,
 ) {
     assert!(cfg.valid()&&state.valid_for(particles.len()));
+    if cfg.density_method==DensityMethod::SafeguardedNewton {
+        // The complete admissible interval must be covered, including
+        // potential cap solutions. The expensive root backend is opt-in
+        // until its physical stability and runtime are separately measured.
+        let neighbors=CellNeighbors::new(particles,cfg.max_h_m)
+            .all_candidates();
+        for i in 0..particles.len() {
+            let root=sph_hroot::solve_particle(
+                i,particles,&neighbors[i],cfg.eta,
+                cfg.min_h_m,cfg.max_h_m,state.smoothing_m[i],
+                1e-9,64);
+            state.smoothing_m[i]=root.h_m;
+            state.densities_kg_m3[i]=root.density_kg_m3;
+            state.omega[i]=root.omega;
+        }
+        return;
+    }
     // Build a conservative support index once per force evaluation, with
     // headroom for h changes during the closure. If an iteration exceeds
     // the cached support, rebuild before the *next* density evaluation.
@@ -568,6 +599,40 @@ mod tests {
         assert!((e1-e0).abs()/e0.abs()<1e-3,
             "matched gravitational energy drift = {}",(e1-e0).abs()/e0.abs());
         assert!(momentum/(p[0].mass_kg*3e5)<1e-8);
+    }
+    #[test]
+    fn safeguarded_newton_closure_matches_density_and_caps() {
+        let (p,phys,cfg_old,mut state)=setup(64);
+        let cfg=cfg_old.with_cubic_gravity().with_newton_density();
+        update_adaptive_densities(&p,&mut state,cfg);
+        assert!(state.densities_kg_m3.iter().all(|x|x.is_finite()&&*x>0.0));
+        assert!(state.omega.iter().all(|x|x.is_finite()&&*x>=0.02));
+        let full=(0..p.len()).collect::<Vec<_>>();
+        for i in 0..p.len() {
+            let h=state.smoothing_m[i];
+            let is_cap=(h-cfg.min_h_m).abs()<cfg.min_h_m*1e-8 ||
+                (h-cfg.max_h_m).abs()<cfg.max_h_m*1e-8;
+            let residual=sph_hroot::closure_residual(
+                i,&p,&full,cfg.eta,h);
+            if !is_cap {
+                assert!(residual<1e-8,
+                    "particle {i} h-rho residual {residual}");
+            } else {
+                assert_eq!(state.omega[i],1.0);
+            }
+            let direct=p.iter().map(|j|
+                j.mass_kg*sph3::cubic_spline_3d(
+                    (p[i].pos_m-j.pos_m).len(),h)).sum::<f64>();
+            assert!((direct-state.densities_kg_m3[i]).abs()/direct<1e-12);
+        }
+        // A physical force evaluation must also use the new method.
+        let mut new_state=state.clone();
+        let central=Massive3{
+            pos_m:V3::default(),vel_m_s:V3::default(),
+            mass_kg:0.0,radius_m:0.0,
+        };
+        let f=forces(&central,&p,&mut new_state,phys,cfg);
+        assert!(f.accelerations_m_s2.iter().all(|a|a.finite()));
     }
     #[test]
     fn cubic_kernel_gravity_is_newtonian_beyond_compact_support() {

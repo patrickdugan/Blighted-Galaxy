@@ -430,3 +430,6 @@ pub mod sph_massprofile;
 
 // BG-PHY-12: hydrostatic radial force budgets and local virial diagnostics.
 pub mod stellar_balance;
+
+// BG-PHY-14: safeguarded implicit h/rho root solver with cap diagnostics.
+pub mod sph_hroot;
