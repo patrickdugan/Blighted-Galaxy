@@ -388,3 +388,63 @@ The [N16/N24 variational matrix](https://github.com/patrickdugan/Blighted-Galaxy
 is isolated from the fast N32/N64/N128 compatible-work workflow.
 It is explicitly a research-grade O(N coordinate probes × full
 density recomputation) reference, not a playable solver.
+
+## Measured BG-PHY-21B total-variation and thermodynamic controls
+
+The [BG-PHY-21B N16/N24 matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/runs/42803311423) passed all tests, measuring four kernel/density combinations at each resolution. The complete reference energy uses the existing Fermi EOS and recomputes all particle dependent h/rho/MLS/partition terms on every coordinate perturbation.
+
+| Full-energy oracle diagnostic | Worst of eight tested cases |
+|---|---:|
+| Central-difference step-halving relative force RMS | 2.03e-8 |
+| Unprojected normalized total force | 1.17e-11 |
+| Unprojected normalized torque | 1.80e-9 |
+| Pressure-only Hamiltonian relative energy drift | 6.19e-12 |
+| Relative momentum drift during variational steps | 1.09e-14 |
+
+**The conventional SPH force validates the total-energy gradient.**
+When the same exact-root *original SPH density* is used for the Fermi
+internal energy and for the ordinary adaptive-h SPH pressure formula,
+their relative force RMS discrepancy is 8.7e-9 (N16/M4), 1.17e-8
+(N16/C4), 8.6e-9 (N24/M4), and 1.84e-8 (N24/C4).
+The regression test now enforces agreement below 1e-6.
+
+**Measured force discrepancy from the full cold-EOS gradient:**
+
+| N | Kernel | Density | Fast CRK pressure RMS discrepancy | Original SPH formula RMS discrepancy |
+|---:|---|---|---:|---:|
+| 16 | M4 | original | 1.5612 | 8.73e-9 |
+| 16 | M4 | surface blended | 1.6033 | 0.04056 |
+| 16 | C4 | original | 1.0987 | 1.17e-8 |
+| 16 | C4 | surface blended | 1.0912 | 0.03869 |
+| 24 | M4 | original | 1.3456 | 8.60e-9 |
+| 24 | M4 | surface blended | 1.3877 | 0.06843 |
+| 24 | C4 | original | 0.4901 | 1.84e-8 |
+| 24 | C4 | surface blended | 0.4507 | 0.06734 |
+
+For the surface-blended density, the old symmetric SPH pressure
+formula is being evaluated at its *original* SPH rho and does not
+contain the blend's extra position/h/MLS derivatives; the 4–7%
+discrepancy measures the resulting missing thermodynamic terms
+relative to the full blended-U gradient. The fast reproducing-kernel
+pressure force is substantially farther from the exact discrete
+energy gradient at these resolutions, despite its exact momentum
+and compatible-work account.
+
+The strong separation between the conventional SPH control
+(~1e-8 force mismatch) and CRK pair force (~0.45–1.6 force
+mismatch) validates the measurement method and gives a concrete
+target for an analytic conservative derivation. A CRK force can
+use compatible work to preserve K+evolved-U exactly yet fail to
+correspond to the cold-EOS Hamiltonian U(rho_hat). The energy
+identity in isolation is insufficient to certify the new
+pressure law as a physically faithful white-dwarf model.
+
+**Next gate:** derive the full analytic derivative of the
+surface-gated rho_hat via
+`d rho_SPH/dx`, `d h/dx` from the implicit closure,
+`d S/dx`, `d beta_MLS/dx` from the affine normal matrix,
+and their cross-particle couplings. Compare each term with the
+BG-PHY-21B complete finite-difference reference before designing
+a scalable pairwise/compatible energy implementation. The existing
+ordinary SPH formula remains the exact barotropic control.
+
