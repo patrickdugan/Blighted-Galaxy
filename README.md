@@ -165,6 +165,21 @@ At 1,024 particles, the 0.65-solar-mass M4 star has a radius of 7,999 km versus 
 
 See the [BG-PHY-10 physics workpaper](workpapers/physics/M4_GRAVITY_CUBIC_SHELLS.md) for the exact kernel potential and force formulas, source references, numerical tables and acceptance gates.
 
+## BG-PHY-11: White-dwarf radial profile and undamped stability
+
+A deterministic **SPH spatial cell neighbor index** now skips known-zero cubic-spline density and grad-h interactions while preserving the prior physical equations. Neighbor candidates are sorted into stable particle-index order and the radius is updated as smoothing lengths evolve. Long-range gravity remains all-pairs in this milestone.
+
+The new radial mass-profile evaluator reports R50, R90, R95, R99, maximum radius, and RMS deviation from the independently integrated hydrostatic mass CDF. The headless benchmark tracks these throughout a multi-dynamical-time undamped hold.
+
+~~~sh
+cargo run --release --bin phy11_bench -- --n 128 --relax-steps 150 --hold-steps 262 --csv bg-phy11-quick.csv
+cargo run --release --bin phy11_bench -- --n 1024 --relax-steps 300 --hold-steps 788 --csv bg-phy11-highres.csv
+~~~
+
+A separate [BG-PHY-11 high-resolution GitHub Actions workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy11.yml) produces a 1,024-particle numerical artifact. Its physical acceptance verdict is recorded independently of software build success. The star continues to require a 5%-radius and 5%-undamped-stability pass before it can anchor calibrated stellar destruction mechanics.
+
+Full methods: [BG-PHY-11 physics workpaper](workpapers/physics/NEIGHBOR_MASS_PROFILE_HOLD.md). Convergence tracker: [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8).
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.

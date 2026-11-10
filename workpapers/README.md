@@ -20,4 +20,6 @@ The historical game-design and setting documents remain in [design/](design/) an
 
 - [BG-PHY-10: Poisson-matched cubic M4 gravity and approximately cubic shells](physics/M4_GRAVITY_CUBIC_SHELLS.md), with the Price–Monaghan equations, hydrostatic mass-CDF shell allocation, 64–1024-particle experiments and explicit undamped stability results.
 
+- [BG-PHY-11: SPH neighbor search and high-resolution stellar stability](physics/NEIGHBOR_MASS_PROFILE_HOLD.md), with compact-support cell neighbors, radial mass-CDF percentiles and the 1,024-particle undamped reference run.
+
 See the consolidated [GDD](../design/GDD.md). New interpretations should cite source manuscripts or a specific physical approximation. Preserve the two originals without silent revision.
