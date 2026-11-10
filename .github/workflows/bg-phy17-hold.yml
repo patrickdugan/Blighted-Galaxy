@@ -1,0 +1,63 @@
+name: BG-PHY-17 selected high-neighbor physical holds
+on:
+  pull_request:
+    paths:
+      - "src/bin/phy17_hold.rs"
+      - "src/sph_neighbor_calibration.rs"
+      - "src/sph_adaptive.rs"
+      - "src/sph_glass.rs"
+      - ".github/workflows/bg-phy17-hold.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/bin/phy17_hold.rs"
+      - ".github/workflows/bg-phy17-hold.yml"
+  workflow_dispatch:
+jobs:
+  hold:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: "c4_glass_200"
+            kernel: "c4"
+            target: 200
+            fixed_eta: 1.2
+            seed: 0
+          - label: "c4_glass_150"
+            kernel: "c4"
+            target: 150
+            fixed_eta: 1.2
+            seed: 0
+          - label: "m4_glass_120"
+            kernel: "m4"
+            target: 0
+            fixed_eta: 1.2
+            seed: 0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Three dynamical times after three-second damping
+        run: |
+          cargo run --release --bin phy17_hold -- \
+            --n 1024 --seed ${{ matrix.seed }} \
+            --layout glass --kernel ${{ matrix.kernel }} \
+            --target-neighbors ${{ matrix.target }} \
+            --fixed-eta ${{ matrix.fixed_eta }} \
+            --calibration-steps 12 --glass-sweeps 20 \
+            --relax-steps 300 --hold-steps 788 --dt 0.01 \
+            --csv bg-phy17-hold-${{ matrix.label }}.csv \
+            --trace-csv bg-phy17-hold-${{ matrix.label }}-trace.csv
+      - name: Upload full-duration radius and stability diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy17-hold-${{ matrix.label }}
+          path: |
+            bg-phy17-hold-${{ matrix.label }}.csv
+            bg-phy17-hold-${{ matrix.label }}-trace.csv
+          if-no-files-found: warn
+          retention-days: 30
