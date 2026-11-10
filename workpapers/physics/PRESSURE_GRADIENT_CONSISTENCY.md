@@ -152,7 +152,79 @@ A full matrix CSV allows paired comparisons by N, seed, layout, kernel
 and target, and includes the baseline uncorrected conservative
 SPH pressure-force error for context.
 
-## 6. Scientific decision
+## 6. Completed N256/N1024/N2048 matrix (10 November 2026)
+
+The [BG-PHY-18 matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/runs/42771632724)
+completed every N256, N1024, and N2048 job, publishing
+one CSV per particle resolution. There were no singular / excluded
+moment matrices in the measured seed, kernel and eta combinations,
+so paired RMS scores share identical particle sets.
+
+**C4 angular glass with 200 realized neighbors, seed 0, safeguarded
+exact density roots:**
+
+| Quantity | N256 | N1024 | N2048 |
+|---|---:|---:|---:|
+| Conventional conservative SPH pressure error | 0.1886 | 0.1204 | 0.1416 |
+| Direct difference, numerical SPH pressure | 0.4752 | 0.1552 | 0.1050 |
+| Linear-corrected, numerical SPH pressure | 0.4389 | 0.3285 | 0.2797 |
+| Direct difference, 1D reference pressure | 0.6646 | 0.4474 | 0.3623 |
+| Linear-corrected, 1D reference pressure | 1.4622 | 1.1851 | 0.9756 |
+| Outer direct SPH-pressure radial support | 0.679 | 0.901 | 0.926 |
+| Outer corrected SPH-pressure radial support | 1.216 | 1.555 | 1.456 |
+| Outer direct 1D-reference radial support | 1.589 | 1.352 | 1.235 |
+| Outer corrected 1D-reference radial support | 2.991 | 2.481 | 2.080 |
+| Outer mean log(rho_SPH/rho_1D) | +0.351 | +0.242 | +0.192 |
+| Outer mean first-moment trace | 0.439 | 0.615 | 0.687 |
+| Usable/conditioned matrix fraction | 100% | 100% | 100% |
+
+The same qualitative conclusion holds at N1024 with independent
+orientation seed 17: for glass C4 target 200, the conservative
+pressure-vector error is 0.1133; numerical direct/corrected gradient
+errors are 0.1595/0.3323; reference-pressure direct/corrected
+gradient errors are 0.4485/1.2098. No matrix conditioning failures
+occurred.
+
+### Interpretation
+
+The first-moment inverse makes a linear test field exact on the
+irregular sampled point cloud, but that algebraic property is
+insufficient for the highly nonlinear white-dwarf pressure near
+its free boundary.
+
+At high C4 neighbor counts the outer first-moment trace remains
+well below unity (0.615 at N1024), so moment inversion amplifies
+the *sampled* pressure gradient. The exact reference-pressure
+oracle shows that even perfect scalar pressure samples produce a
+large overestimate (2.48× the outer hydrostatic gradient at N1024
+after linear correction). The mean SPH density in the outer
+quartile is also biased upward in log space by +0.242 (a geometric
+mean density ratio about exp(0.242)=1.27). These effects coexist;
+one correction cannot serve as evidence of a physically correct
+surface pressure force.
+
+The direct scalar-field difference gradient is a useful
+**nonconservative diagnostic**, as are its corrected versions.
+At N1024 C4/200 it has global RMS 0.1552, larger than the
+original symmetric conservative force's 0.1204. The moment-inverse
+diagnostic worsens the global discrepancy to 0.3285.
+
+### Recommended BG-PHY-19 experiment
+
+Use a **frozen local quadratic pressure reconstruction** with
+regularized 3D polynomial moments. Fit a second-order Taylor
+polynomial in normalized separation (r_j-r_i)/h_i to the same
+numerical and 1D pressure fields, retaining the same particle
+volumes. Record condition/rank, inner and outer force error,
+and outer radial pressure support at 100/150/200 C4 neighbors.
+
+A quadratic exactness unit test must pass before any physical
+interpretation. Include a one-dimensional radial profile
+fit/control to distinguish angular sampling noise from radial
+pressure curvature. The benchmark should continue to avoid
+replacing the conservative pair force during integration.
+
+## 7. Scientific decision
 
 If the oracle-gradient correction restores the outer-shell pressure
 ratio to approximately 1 and sharply reduces its RMS error, the
