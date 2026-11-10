@@ -358,6 +358,32 @@ mod tests{
         }
     }
     #[test]
+    fn moment_ratio_recovers_boundary_depth_under_volume_bias(){
+        for kernel in [DensityKernel::CubicM4,DensityKernel::WendlandC4]{
+            let ratio=ratio_lookup(kernel);
+            let fraction=plane_lookup(kernel);
+            assert!(ratio[0]>0.0&&ratio[64]==0.0);
+            for i in 1..=64{
+                assert!(ratio[i]<=ratio[i-1]+1e-13);
+            }
+            for depth in [0.1,0.2,0.5,0.8,1.2,1.6]{
+                let expected_s=planar_support_fraction(depth,kernel);
+                let expected_q=planar_first_moment(depth,kernel);
+                for bias in [0.63,0.81,1.0]{
+                    // V_j -> bias*V_j multiplies both S and Q
+                    // by the same factor, and cancels in |Q|/S.
+                    let found=invert_moment_ratio(
+                        bias*expected_q/(bias*expected_s),&ratio);
+                    assert!((found-depth).abs()<0.006,
+                        "kernel {:?}, depth {depth}, found {found}",
+                        kernel);
+                    let inferred_s=ideal_fraction_at_depth(found,&fraction);
+                    assert!((inferred_s-expected_s).abs()<0.005);
+                }
+            }
+        }
+    }
+    #[test]
     fn synthetic_one_sided_affine_vacuum_ghost_reproduces_linear_h(){
         let mut samples=Vec::new();
         // z <= 0 is fluid, z=0 is known vacuum H=0.
