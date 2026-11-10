@@ -256,7 +256,9 @@ The matrix pairs N1024 seeds 0/17 and N2048 seed 0 with the original antipodal s
 cargo run --release --bin phy17_bench -- --n 1024 --seeds 0,17 --targets 100,150,200 --calibration-steps 12 --glass-sweeps 20 --csv bg-phy17-n1024.csv --shell-csv bg-phy17-n1024-shells.csv
 ~~~
 
-See the [high-neighbor workpaper](workpapers/physics/HIGH_NEIGHBOR_C4_SWEEP.md) and [BG-PHY-17 workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy17.yml). These are frozen-force diagnostics; the white-dwarf radius and three-dynamical-time undamped acceptance requirements remain in [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8).
+The calibrated N1024/N2048 frozen-force matrix passed and found that Wendland C4 glass improves markedly at 150–200 realized neighbors, while outer pressure-gradient support becomes weaker as the smoothing volume grows. A [separate full-duration BG-PHY-17 workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy17-hold.yml) tests 150- and 200-neighbor C4 against the M4 control using 3s damping followed by a 7.88s undamped hold.
+
+See the [high-neighbor workpaper](workpapers/physics/HIGH_NEIGHBOR_C4_SWEEP.md), [frozen-sweep matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy17.yml), and [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) for unchanged physical acceptance criteria.
 
 ## Simulation modules
 
