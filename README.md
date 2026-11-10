@@ -343,6 +343,18 @@ cargo run --release --bin phy24_bench -- --n 256 --seeds 0,17 --layout both --st
 
 See the [radial homology derivation](workpapers/physics/RADIAL_HOMOLOGY_VIRIAL.md), [BG-PHY-24 experimental workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy24.yml) and [Issue #27](https://github.com/patrickdugan/Blighted-Galaxy/issues/27). The gameplay solver and the [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) independent stellar radius/stability criteria remain unchanged.
 
+## BG-PHY-25: One-sided vacuum enthalpy at the SPH free surface
+
+The white-dwarf research branch now evaluates an opt-in **geometry-derived free-boundary enthalpy reconstruction**. Each particle estimates its outward surface normal from the first moment of the truncated M4/Wendland C4 kernel, then estimates its distance to a locally planar vacuum boundary by inverting the kernel's normalized 3D half-space mass fraction. A weighted affine enthalpy fit can incorporate a virtual zero-enthalpy vacuum point and convert the resulting value back to density through the unchanged cold-electron EOS.
+
+The new candidates are **frozen scalar-energy diagnostics**. Their outer-shell pressure and gravity are measured through independently re-solved central differences of the complete cold-EOS plus Poisson-matched gravitational potential, including the implicit smoothing length and all MLS/ghost positions. The existing SPH and BG-PHY-20 surface MLS fields are matched controls; none of the new fields is substituted into the playable dynamics.
+
+~~~sh
+cargo run --release --bin phy25_bench -- --n 256 --seeds 0,17 --layout glass --stage initial --kernel both --summary bg-phy25-summary.csv --shells-csv bg-phy25-shells.csv
+~~~
+
+See the [boundary-enthalpy derivation and acceptance gate](workpapers/physics/FREE_BOUNDARY_ENTHALPY_GHOST.md), [N64/128/256 screening matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy25.yml) and [Issue #29](https://github.com/patrickdugan/Blighted-Galaxy/issues/29). The original [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) stellar physical acceptance conditions remain unchanged.
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.
