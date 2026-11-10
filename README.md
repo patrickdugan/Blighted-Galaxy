@@ -233,6 +233,19 @@ cargo run --release --bin phy15_bench -- --n 256 --seeds 0,17 --relax-steps 300 
 
 The [BG-PHY-15 matrix workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy15.yml) covers N256, N512, and N1024. See the [BG-PHY-15 workpaper](workpapers/physics/FROZEN_FORCE_AUDIT.md). This diagnostic leaves the existing white-dwarf stability and radius acceptance gates unchanged.
 
+## BG-PHY-16: Poisson-matched Wendland C4 and angular-glass seed experiment
+
+The new research runner compares original antipodal cubic-shell seeds with a deterministic tangential angular-glass relaxation, and the original M4 kernel with **normalized Wendland C4**. Its spherical Poisson potential and grad-h correction are derived from the same density kernel, leaving the cold-electron EOS and original playable defaults unchanged.
+
+The glass initializer preserves each particle's radial mass quantile, antipodal partner, mass, bulk momentum and velocity. The factorial benchmark records pressure and gravity errors against the independent 1D hydrostatic star, eight mass-shell force budgets, realized support-neighbor counts and the initial sampling-radius offset. An opt-in N256 damping pilot measures whether the lower initial force errors change the subsequent collapse.
+
+~~~sh
+cargo run --release --bin phy16_bench -- --n 256 --seeds 0,17 --glass-sweeps 20 --csv bg-phy16-n256.csv --shell-csv bg-phy16-n256-shells.csv
+cargo run --release --bin phy16_bench -- --n 256 --seeds 0 --relax-steps 300 --csv bg-phy16-dynamics.csv
+~~~
+
+The [BG-PHY-16 workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy16.yml) covers N256, N512, N1024 frozen comparisons and a matched N256 3-second dynamics pilot. See the [technical workpaper](workpapers/physics/WENDLAND_GLASS_SEEDS.md). [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) remains open until the independent stellar radius and undamped stability gates pass.
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.

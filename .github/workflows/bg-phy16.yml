@@ -1,0 +1,68 @@
+name: BG-PHY-16 C4 kernel and angular-glass force experiment
+on:
+  pull_request:
+    paths:
+      - "src/sph_kernel.rs"
+      - "src/sph_glass.rs"
+      - "src/sph_adaptive.rs"
+      - "src/sph_hroot.rs"
+      - "src/sph_force_audit.rs"
+      - "src/bin/phy16_bench.rs"
+      - ".github/workflows/bg-phy16.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/sph_kernel.rs"
+      - "src/sph_glass.rs"
+      - "src/sph_adaptive.rs"
+      - "src/sph_hroot.rs"
+      - "src/sph_force_audit.rs"
+      - "src/bin/phy16_bench.rs"
+      - ".github/workflows/bg-phy16.yml"
+  workflow_dispatch:
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - n: 256
+            seeds: "0,17"
+            relax: 0
+            suffix: "n256"
+          - n: 512
+            seeds: "0,17"
+            relax: 0
+            suffix: "n512"
+          - n: 1024
+            seeds: "0"
+            relax: 0
+            suffix: "n1024"
+          - n: 256
+            seeds: "0"
+            relax: 300
+            suffix: "n256-dynamics"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Matched shell/glass and M4/C4 SPH force decomposition
+        run: |
+          cargo run --release --bin phy16_bench -- \
+            --n ${{ matrix.n }} --seeds ${{ matrix.seeds }} \
+            --glass-sweeps 20 --relax-steps ${{ matrix.relax }} --root-compare \
+            --dt 0.01 --shells 8 --fixed-eta 1.2 \
+            --csv bg-phy16-${{ matrix.suffix }}.csv \
+            --shell-csv bg-phy16-${{ matrix.suffix }}-shells.csv
+      - name: Upload factorial force and angular-glass diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy16-${{ matrix.suffix }}
+          path: |
+            bg-phy16-${{ matrix.suffix }}.csv
+            bg-phy16-${{ matrix.suffix }}-shells.csv
+          if-no-files-found: warn
+          retention-days: 30
