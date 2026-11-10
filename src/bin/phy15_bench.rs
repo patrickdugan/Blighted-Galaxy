@@ -44,7 +44,7 @@ fn append_snapshot(
     let g=a.global;
     let rmax_bias=100.0*(p.radius_max_m/ref_radius-1.0);
     let _=writeln!(summary,
-        "{n},{seed},{law},{eta:.7},{stage},{seconds:.4},{:.6},{rmax_bias:.7},{sampling_bias_pct:.7},{contraction_pct:.7},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8}",
+        "{n},{seed},{law},{eta:.7},{stage},{seconds:.4},{:.6},{rmax_bias:.7},{sampling_bias_pct:.7},{contraction_pct:.7},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8}",
         p.radius_max_m/1000.0,
         p.radial_quantile_rms,
         g.reference_gravity_rms_m_s2,
