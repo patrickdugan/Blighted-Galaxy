@@ -1,0 +1,37 @@
+name: BG-PHY-11 high-resolution star equilibrium
+on:
+  pull_request:
+    paths:
+      - "src/sph_*"
+      - "src/stellar_relax.rs"
+      - "src/bin/phy11_bench.rs"
+      - ".github/workflows/bg-phy11.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/sph_*"
+      - "src/stellar_relax.rs"
+      - "src/bin/phy11_bench.rs"
+      - ".github/workflows/bg-phy11.yml"
+  workflow_dispatch:
+jobs:
+  highres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: High-resolution undamped white-dwarf stability
+        run: |
+          cargo run --release --bin phy11_bench -- \
+            --n 1024 --relax-steps 300 --hold-steps 788 \
+            --csv bg-phy11-highres.csv
+      - name: Publish profile and stability measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy11-highres-reference
+          path: bg-phy11-highres.csv
+          if-no-files-found: warn
+          retention-days: 30
