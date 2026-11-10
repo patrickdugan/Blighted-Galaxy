@@ -332,6 +332,42 @@ Both vacuum-enforced reconstructions are **rejected at Stage B**. They weaken th
 
 The plain affine enthalpy blend improves the last-shell pressure slightly under M4 seed0 (+0.0114 of reference gravity), but the effect reverses under seed17 and C4. It also produces a more compact preferred radius than original SPH. It therefore does not qualify for Stage C.
 
+### Independent depth-score validation
+
+The final [four-job depth-score rerun](https://github.com/patrickdugan/Blighted-Galaxy/actions/runs/42841372623) also records the last shell's physical depth
+`(Rref-r_i)/h_i` from the *independently integrated* 1D
+hydrostatic reference. These radius labels enter **only the
+diagnostic score**, outside either boundary estimator.
+
+| N / orientation | Kernel | Physical reference depth | Partition-inferred depth | Q/S-inferred depth | Q/S depth absolute error |
+|---|---|---:|---:|---:|---:|
+|64 / seed0|M4|0.3555 h|0.0029 h|0.0278 h|0.3277 h|
+|64 / seed0|C4|0.2484 h|0.0000 h|0.0000 h|0.2484 h|
+|128 / seed17|M4|0.4392 h|0.0154 h|0.0655 h|0.3736 h|
+|128 / seed17|C4|0.3114 h|0.0021 h|0.0001 h|0.3113 h|
+|256 / seed0|M4|**0.5402 h**|0.0616 h|0.1202 h|0.4201 h|
+|256 / seed0|C4|**0.3850 h**|0.0217 h|0.0351 h|0.3499 h|
+|256 / seed17|M4|0.5406 h|0.0707 h|0.1259 h|0.4147 h|
+|256 / seed17|C4|0.3852 h|0.0253 h|0.0384 h|0.3467 h|
+
+The vacuum ghost is fitted approximately where these particles
+are currently located, although the independent physical vacuum
+lies **0.25–0.54 smoothing lengths outward** of the measured
+last-shell sample on these configurations. The field therefore
+loses too much positive enthalpy near a region that should still
+support outward pressure.
+
+The follow-on synthetic test shows analytically that a
+*linearly varying* source-volume scale
+`V(z)=c(1+βz)V_true` changes the measured Q/S ratio.
+It integrates the truncated half-space second normal moment
+`I2(a)` and verifies that `β=-0.3` biases the recovered
+boundary depth by more than 0.05h under both kernels.
+Consequently, the three-moment inverse in
+[Issue #31](https://github.com/patrickdugan/Blighted-Galaxy/issues/31)
+is a direct mathematical response to this measured
+identifiability failure.
+
 ### Implication for the next mathematical model
 
 The kernel first moment provides a good *surface normal* observable. A free-surface **location** inferred from S or |Q|/S of an SPH-density-weighted particle cloud is unreliable in the presence of a steep, spatially varying volume/density error.
