@@ -296,6 +296,48 @@ test compares this independent shell-direction scalar
 derivative against the established analytic shell force
 from BG-PHY-24 at N32.
 
+## Measured initial screening: both vacuum ghosts rejected
+
+The [five-candidate frozen matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/runs/42840197154) completed all four jobs: N64 seed0, N128 seed17, and N256 orientation seeds 0/17. All synthetic planar-support inversion, one-sided affine/curved enthalpy, scalar-potential and original-force validation tests passed.
+
+**N256 angular glass, original reference-CDF seed coordinates:**
+
+| Kernel / seed | Original last-shell pressure | BG-PHY-20 surface MLS | Affine enthalpy blend | Partition-plane ghost | Q/S moment-plane ghost |
+|---|---:|---:|---:|---:|---:|
+| M4 / 0 | **0.7312** | 0.7286 | 0.7426 | 0.7022 | 0.5188 |
+| M4 / 17 | **0.7067** | 0.6871 | 0.6996 | 0.7121 | 0.4946 |
+| C4 / 0 | **0.6807** | 0.6609 | 0.6794 | 0.5681 | 0.3895 |
+| C4 / 17 | **0.6684** | 0.6349 | 0.6540 | 0.5399 | 0.3705 |
+
+All values are the outward **last 12.5%-mass shell pressure** divided by the independent hydrostatic gravity. The actual inward matched self-gravity ratios are approximately 0.94 (M4) and 0.93 (C4). The candidate influence on gravity at identical coordinates is zero by construction.
+
+**N256 initial homology stationary radius bias relative to the independent reference:**
+
+| Kernel / seed0 | Original | Surface MLS | Affine enthalpy blend | Partition-plane ghost | Q/S moment-plane ghost |
+|---|---:|---:|---:|---:|---:|
+| M4 | −2.27% | −3.85% | −3.25% | −8.56% | −8.00% |
+| C4 | −2.85% | −5.44% | −4.38% | −11.16% | −10.95% |
+
+Under C4 at N256 seed0, the original density's last-shell log-density RMS is 0.7119, the previous surface MLS reaches 0.2895, while the partition-vacuum ghost reaches **1.4071** and the Q/S ghost **1.3209**. The enthalpy affine candidate reaches 0.5679, leaving room for improvement but failing to restore last-shell pressure under both kernels and both seeds.
+
+### Geometry diagnosis
+
+Outward normals from the kernel first moment agree remarkably well with the physical spherical radial direction on the initial N256 glass star: last-shell average cosine 0.9870 (M4 seed0) and 0.9973 (C4 seed0). The inferred **distance** to the vacuum is problematic.
+
+At C4/N256 seed0, the mean raw kernel partition in the last shell is only **0.4659**; 62.5% of particles have S<0.5 and therefore lie on the inferred boundary in the partition-only half-space model. The partition-derived mean depth is 0.0217h and the supposedly bias-invariant Q/S-derived mean depth is only 0.0351h. At M4/N256 seed0, 50% have S<0.5, with mean inferred depths 0.0616h (S) and 0.1202h (Q/S).
+
+The Q/S inversion is exact for synthetic normalized isotropic half-space kernels under a **common multiplicative** source-volume scaling, as shown by its unit tests. In the white dwarf, the baseline SPH density changes strongly with radius. Since the source volume V_j=m_j/rho_j has a spatially varying error, the first and zeroth kernel moments need not share a common scaling. Their ratio then fails to identify physical free-surface depth.
+
+Both vacuum-enforced reconstructions are **rejected at Stage B**. They weaken the outermost pressure layer and move the homology energy minimum farther inward in both independent C4 seeds, so a new analytic pressure force and full-duration physical hold are not justified for these candidates. This preserves the experiment's prespecified 5% physical radius and force-quality gates.
+
+The plain affine enthalpy blend improves the last-shell pressure slightly under M4 seed0 (+0.0114 of reference gravity), but the effect reverses under seed17 and C4. It also produces a more compact preferred radius than original SPH. It therefore does not qualify for Stage C.
+
+### Implication for the next mathematical model
+
+The kernel first moment provides a good *surface normal* observable. A free-surface **location** inferred from S or |Q|/S of an SPH-density-weighted particle cloud is unreliable in the presence of a steep, spatially varying volume/density error.
+
+The next viable candidate should infer the vacuum boundary through a jointly constrained enthalpy and geometry model, or use a locally corrected volume quadrature that resolves spatially varying mass density. Its synthetic tests must include **nonuniform** source volume errors and finite enthalpy curvature, and its first N256 screening must improve the last shell and homology radius at matched M4/C4 seeds before any conservatively derived dynamics are attempted.
+
 ## Measurements and decision gate
 
 The dedicated [BG-PHY-25 workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy25.yml)
