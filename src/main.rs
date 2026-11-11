@@ -354,7 +354,7 @@ impl Game {
                         profile.industry,profile.defense,
                         profile.hole_mass_solar,profile.dwarf_mass_solar)
                 };
-                draw_text(&conditions,23.0,267.0,16.0,CYAN);
+                draw_text(&conditions,23.0,267.0,16.0,SKYBLUE);
             }
             draw_text("3 / TAB: RETURN TO GALAXY AND RECORD MISSION RESULT",
                 23.0,286.0,15.0,LIGHTGRAY);
