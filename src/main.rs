@@ -80,7 +80,10 @@ impl Game {
             if is_key_pressed(KeyCode::Key2) { *self=Self::new(Mode::Tidal); }
         }
         if is_key_pressed(KeyCode::R) {
-            let mode=self.mode;*self=Self::new(mode);
+            let mode=self.mode;
+            let mission=self.mission_name;
+            *self=Self::new(mode);
+            self.mission_name=mission;
         }
         if is_key_pressed(KeyCode::Q) {self.sim_rate=(self.sim_rate/2.0).max(0.125);}
         if is_key_pressed(KeyCode::E) {self.sim_rate=(self.sim_rate*2.0).min(64.0);}
