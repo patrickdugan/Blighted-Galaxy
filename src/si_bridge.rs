@@ -121,6 +121,32 @@ impl Craft {
             lorentz_gamma(mid.len()).expect("subluminal midpoint");
     }
 }
+/// All variants retain SI masses, subluminal muzzle velocities, and
+/// relativistic shot/target impact energies. Magazine and cooldown are
+/// fictional game logistics, separate from real propulsion engineering.
+#[derive(Debug,Clone,Copy,PartialEq,Eq)]
+pub enum WeaponKind { Standard, Siege, Fan }
+impl WeaponKind {
+    pub fn name(self)->&'static str {
+        match self{
+            Self::Standard=>"RKM / 2 KG",
+            Self::Siege=>"SIEGE / 6 KG",
+            Self::Fan=>"FLAK / 3x0.7 KG",
+        }
+    }
+    pub fn ammo_cost(self)->u32 {
+        match self {Self::Standard=>1,Self::Siege=>4,Self::Fan=>3}
+    }
+    pub fn cooldown_s(self)->f64 {
+        match self {Self::Standard=>0.25,Self::Siege=>0.90,Self::Fan=>0.55}
+    }
+    pub fn muzzle_beta(self)->f64 {
+        match self {Self::Standard=>0.72,Self::Siege=>0.63,Self::Fan=>0.78}
+    }
+    pub fn mass_kg(self)->f64 {
+        match self {Self::Standard=>2.0,Self::Siege=>6.0,Self::Fan=>0.7}
+    }
+}
 #[derive(Debug, Clone, Copy)]
 pub struct KineticRound {
     pub pos_m:V2,
@@ -132,10 +158,17 @@ pub struct KineticRound {
 }
 impl KineticRound {
     pub fn from_craft(craft:&Craft,is_player:bool)->Self {
-        let muzzle=craft.heading()*(0.72*C_SI);
-        Self{pos_m:craft.pos_m+craft.heading()*120.0,
+        Self::weapon_from_craft(craft,is_player,WeaponKind::Standard,0.0)
+    }
+    pub fn weapon_from_craft(craft:&Craft,is_player:bool,
+        weapon:WeaponKind,barrel_offset_rad:f64)->Self {
+        let heading=V2::from_angle(craft.facing_rad+barrel_offset_rad);
+        let muzzle=heading*(weapon.muzzle_beta()*C_SI);
+        Self{pos_m:craft.pos_m+heading*120.0,
             vel_m_s:boost_velocity_m_s(craft.vel_m_s,muzzle).unwrap(),
-            mass_kg:2.0,radius_m:0.2,is_player,lifetime_s:12.0}
+            mass_kg:weapon.mass_kg(),
+            radius_m:if weapon==WeaponKind::Siege{0.4}else{0.2},
+            is_player,lifetime_s:12.0}
     }
 }
 pub fn relative_impact_energy_j(round:&KineticRound,target:&Craft)->Joules {
@@ -174,6 +207,9 @@ pub struct SiJoust {
     pub next_player_shot_s:f64,
     pub next_enemy_shot_s:f64,
     pub enemy_fire_interval_s:f64,
+    pub player_weapon:WeaponKind,
+    /// Remaining strategic ammo units. Sandbox ships use u32::MAX.
+    pub ammo_units:u32,
     pub shots_fired:u64,
     pub player_history:WorldlineHistory,
     pub opponent_history:WorldlineHistory,
@@ -198,7 +234,8 @@ impl SiJoust {
             player,opponent,player_history,opponent_history,
             escorts:vec![],rounds:vec![],events:vec![],time_s:0.0,
             next_player_shot_s:0.0,next_enemy_shot_s:1.2,
-            enemy_fire_interval_s:2.5,shots_fired:0,
+            enemy_fire_interval_s:2.5,player_weapon:WeaponKind::Standard,
+            ammo_units:u32::MAX,shots_fired:0,
         }
     }
     /// Optical position from a strictly recorded, bounded worldline.
@@ -221,10 +258,18 @@ impl SiJoust {
         let facing=(self.player.pos_m-self.opponent.pos_m).normalized();
         self.opponent.facing_rad=facing.y.atan2(facing.x);
         self.opponent.tick(dt,0.0,&[self.sun]);
-        if input.fire_player && self.time_s>=self.next_player_shot_s && self.player.alive() {
-            self.rounds.push(KineticRound::from_craft(&self.player,true));
-            self.next_player_shot_s=self.time_s+0.25;
-            self.shots_fired+=1;
+        if input.fire_player && self.time_s>=self.next_player_shot_s &&
+            self.player.alive()&&self.ammo_units>=self.player_weapon.ammo_cost(){
+            let offsets:&[f64]=if self.player_weapon==WeaponKind::Fan {
+                &[-0.072,0.0,0.072]
+            }else{&[0.0]};
+            for &offset in offsets {
+                self.rounds.push(KineticRound::weapon_from_craft(
+                    &self.player,true,self.player_weapon,offset));
+                self.shots_fired+=1;
+            }
+            self.ammo_units-=self.player_weapon.ammo_cost();
+            self.next_player_shot_s=self.time_s+self.player_weapon.cooldown_s();
         }
         for (index,escort) in self.escorts.iter_mut().enumerate() {
             if !escort.craft.alive(){continue;}
@@ -503,6 +548,38 @@ mod tests {
         }
         assert!(game.opponent.shield_energy_j<shield);
         assert!(game.last_impact().unwrap().energy_j.0>0.0);
+    }
+    #[test]
+    fn player_weapon_loadouts_consume_finite_ammunition(){
+        let mut g=SiJoust::new();
+        g.ammo_units=5;
+        g.player_weapon=WeaponKind::Siege;
+        g.step(Seconds(1.0/120.0),Control{
+            fire_player:true,player_facing_rad:0.0,..Default::default()
+        });
+        assert_eq!(g.ammo_units,1);
+        assert_eq!(g.shots_fired,1);
+        assert!((g.rounds[0].mass_kg-6.0).abs()<1e-12);
+        for _ in 0..150{g.step(Seconds(1.0/120.0),Control{
+            fire_player:true,player_facing_rad:0.0,..Default::default()
+        });}
+        assert_eq!(g.ammo_units,1);
+        assert_eq!(g.shots_fired,1);
+    }
+    #[test]
+    fn fan_weapon_emits_three_causal_distinct_trajectories(){
+        let mut g=SiJoust::new();
+        g.player_weapon=WeaponKind::Fan;
+        g.ammo_units=3;
+        g.step(Seconds(1.0/120.0),Control{
+            fire_player:true,player_facing_rad:0.0,..Default::default()
+        });
+        assert_eq!(g.ammo_units,0);
+        assert_eq!(g.shots_fired,3);
+        assert_eq!(g.rounds.len(),3);
+        assert!(g.rounds[0].vel_m_s.y<g.rounds[1].vel_m_s.y);
+        assert!(g.rounds[1].vel_m_s.y<g.rounds[2].vel_m_s.y);
+        assert!(g.rounds.iter().all(|r|r.vel_m_s.len()<C_SI));
     }
     #[test]
     fn multi_ship_rkm_hits_escort_and_preserves_sublight_speeds(){
