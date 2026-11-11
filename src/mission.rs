@@ -3,7 +3,7 @@
 //! their SI units, causal observation histories, and existing collision rules.
 use crate::causal::{WorldlineHistory, WorldlineSample};
 use crate::physics::{AU_M, C_SI, G_SI, SOLAR_MASS_KG, SiBody};
-use crate::si_bridge::{SiJoust, SiTidalEncounter, FleetEscort, Craft};
+use crate::si_bridge::{SiJoust, SiTidalEncounter, FleetEscort, Craft,WeaponKind};
 use crate::strategy::{Faction, StrategicState, TacticalKind};
 use crate::V2;
 
@@ -21,6 +21,11 @@ pub struct MissionProfile {
     pub own_shield_j: f64,
     pub enemy_fire_interval_s: f64,
     pub escort_count: u8,
+    pub ammo_units:u32,
+    pub siege_unlocked:bool,
+    pub fan_unlocked:bool,
+    pub incoming_guf_power:f64,
+    pub incoming_guf_count:usize,
     pub enemy_initial_beta: f64,
     pub intercept_range_m: f64,
     pub hole_mass_solar: f64,
@@ -35,6 +40,18 @@ impl MissionProfile {
         kind: TacticalKind) -> Option<Self> {
         if !state.tactical_ready(site){return None;}
         let s=state.systems.get(site)?;
+        let incoming=state.incoming_guf(site);
+        if kind==TacticalKind::GufDefense &&
+            (s.owner!=Faction::Drummers||incoming.is_none()) {return None;}
+        let (guf_count,guf_power)=incoming
+            .map(|(_,n,p)|(n,p)).unwrap_or((0,0.0));
+        // Shipboard magazines and weapon unlocks come from the nearest
+        // Drummer industrial supplier, rather than an enemy foundry.
+        let supplier=state.systems.iter()
+            .filter(|supplier|supplier.owner==Faction::Drummers)
+            .min_by(|a,b|(a.pos-s.pos).len().total_cmp(&(b.pos-s.pos).len()));
+        let support_industry=supplier.map_or(0.5,|s|s.industry.clamp(0.0,10.0));
+        let support_material=supplier.map_or(0.0,|s|s.material.min(600.0));
         let industry=s.industry.clamp(0.0, 10.0);
         let defense=s.defense.clamp(0.0, 25.0);
         let stock=s.kugelblitz.min(10);
@@ -47,11 +64,19 @@ impl MissionProfile {
         Some(Self{
             site,site_name:s.name,kind,owner:s.owner,year:state.year,
             industry,defense,kugelblitz:stock,
-            enemy_shield_j:7.0e17*shield_factor,
+            ammo_units:(35.0+support_industry*9.0+
+                support_material*0.035).round().clamp(25.0,160.0) as u32,
+            siege_unlocked:support_industry>=2.0,
+            fan_unlocked:support_industry>=1.25,
+            incoming_guf_power:guf_power,incoming_guf_count:guf_count,
+            enemy_shield_j:7.0e17*shield_factor*
+                if kind==TacticalKind::GufDefense {1.15+0.035*guf_power}else{1.0},
             own_shield_j:7.0e17*(1.0+support),
             enemy_fire_interval_s:(3.2-industry*0.15-stock as f64*0.055)
                 .clamp(1.15,3.2),
-            escort_count:(industry*0.55+defense*0.09).floor().min(4.0) as u8,
+            escort_count:((industry*0.55+defense*0.09).floor() as usize+
+                if kind==TacticalKind::GufDefense {guf_count.min(2)}else{0})
+                .min(4) as u8,
             enemy_initial_beta:(0.008+industry*0.0017).clamp(0.008,0.032),
             intercept_range_m:(410.0e6+defense*12.0e6)
                 .clamp(410.0e6,710.0e6),
@@ -81,6 +106,8 @@ impl MissionProfile {
         g.player.shield_capacity_j=self.own_shield_j;
         g.player.shield_energy_j=self.own_shield_j;
         g.enemy_fire_interval_s=self.enemy_fire_interval_s;
+        g.player_weapon=WeaponKind::Standard;
+        g.ammo_units=self.ammo_units;
         g.player_history=WorldlineHistory::new(8192);
         g.opponent_history=WorldlineHistory::new(8192);
         g.player_history.push(WorldlineSample{
@@ -160,6 +187,39 @@ mod tests {
         assert!(high.hole_mass_solar>low.hole_mass_solar);
         assert!(high.escort_count>low.escort_count);
         assert!(high.intercept_range_m>low.intercept_range_m);
+    }
+    #[test]
+    fn friendly_industry_unlocks_specialized_finite_ammunition(){
+        let mut state=StrategicState::default();
+        state.systems[3].industry=3.5;
+        let p=MissionProfile::from_strategy(&state,3,TacticalKind::Intercept).unwrap();
+        assert!(p.siege_unlocked&&p.fan_unlocked);
+        let battle=p.joust();
+        assert_eq!(battle.ammo_units,p.ammo_units);
+        assert!(p.ammo_units<200);
+        assert_eq!(battle.player_weapon,WeaponKind::Standard);
+        state.systems.iter_mut().filter(|s|s.owner==Faction::Drummers)
+            .for_each(|s|s.industry=0.1);
+        let low=MissionProfile::from_strategy(&state,3,TacticalKind::Intercept).unwrap();
+        assert!(!low.siege_unlocked&&!low.fan_unlocked);
+        assert!(low.ammo_units<p.ammo_units);
+    }
+    #[test]
+    fn guf_escort_mission_requires_an_approaching_array(){
+        let mut state=StrategicState::default();
+        assert!(MissionProfile::from_strategy(&state,5,TacticalKind::GufDefense).is_none());
+        for i in [2,3,6] {
+            state.set_owner(i,Faction::Weena);
+            state.systems[i].energy=500.0;
+            state.systems[i].array_node=true;
+        }
+        state.array_charged=100.0;
+        state.fire_guf(5).unwrap();
+        let p=MissionProfile::from_strategy(&state,5,TacticalKind::GufDefense).unwrap();
+        assert_eq!(p.incoming_guf_count,3);
+        assert_eq!(p.incoming_guf_power,12.0);
+        assert!(p.escort_count>=3);
+        assert!(p.joust().opponent.shield_energy_j>0.0);
     }
     #[test]
     fn industrial_defender_field_is_a_real_multi_ship_scene(){
