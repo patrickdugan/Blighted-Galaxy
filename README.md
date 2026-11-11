@@ -4,11 +4,13 @@ A recovery project for the lost Rust-based Blighted Galaxy game, preserving its 
 
 The earlier local engine was lost in 2026. This code is a clean-room reconstruction. The surviving 94 pages of source material, approximately 34,000 whitespace-delimited words, are archived as text transcriptions in [recovery/](recovery/README.md).
 
-## Strategic campaign (BG-STR-02)
+## Strategic campaign (BG-STR-03)
 
 The galactic map and SI physics encounters now share a deterministic strategic campaign. The Jenkins Swarm autonomously sends 0.10c invasion packets to reachable industrial systems. The Drummers build industry and fabricate contained kugelblitz black holes, then spend them on **0.76c Halo strikes**. Weena can recruit distant systems, prepare industrial Guf relays, and fire a synchronized three-node energy array. Every strike and capture occurs after finite travel time.
 
 **Controls:** click a named system; `I` builds industry, `K` fabricates a kugelblitz, `Y` launches a Halo strike against a hostile system, `V` recruits for Weena, `U` builds a Guf relay, `P` fires the Guf array, `J` issues a Blight attack order, `N` toggles autonomous Blight expansion, and `T` shows/hides strategic rings. Use `Space` to run the historical clock. `1` opens the SI RKM interception and `2` opens the white-dwarf tidal encounter. When your ship has traveled to the selected star system, the encounter is a **campaign mission**, and `3`/`Tab` records victory, defeat, or withdrawal. Distant selections still open sandbox encounters, without changing strategic ownership. A ship travels at 0.76c after clicking a destination and pressing `Enter`.
+
+**System-specific missions:** The destination's industry, defenses, and stored kugelblitz assets now determine RKM enemy shield strength, opponent fire cadence, encounter distance and available friendly shield support. White-dwarf interdiction selects a stellar-remnant mass and dwarf conditions from the same system. During a campaign tidal mission, `A` and `D` spend limited radial tug burns toward/away from the black hole; a 300-second objective deadline gives that mission a defeat state. Each scored campaign encounter triggers a 250-galactic-year rearm period at its system. A map-side briefing displays the target's current battle conditions. `R` restarts the active mission with its original launch configuration.
 
 Battles affect local shields, hostile control, and industry. The infrared-black Blight texture responds to ownership changes, with small reclaimed or defended enclaves around industrial sites, while the original 0.10c Orion envelope remains an absolute boundary. Strategic resource units and kugelblitz engineering are speculative game rules. See [strategic campaign design and test contracts](workpapers/strategy/STRATEGIC_CAMPAIGN.md).
 
