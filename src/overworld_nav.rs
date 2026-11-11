@@ -391,6 +391,11 @@ impl OverworldNav{
     pub fn update(&mut self,seconds:f64){
         let dt=seconds.clamp(0.0,0.10);
         if is_key_pressed(KeyCode::T){self.strategy_visible=!self.strategy_visible;}
+        if is_key_pressed(KeyCode::N){
+            self.strategy.blight_autonomy=!self.strategy.blight_autonomy;
+            self.encounter_notice=Some(format!("BLIGHT AUTONOMY: {}",
+                if self.strategy.blight_autonomy{"ENABLED"}else{"PAUSED"}));
+        }
         // Site-level industrial actions use the selected navigable waypoint.
         // I: capacity, K: kugelblitz, U: Guf node, P: fire at selected site.
         let action=if is_key_pressed(KeyCode::I){Some(Project::Industry)}
@@ -541,8 +546,10 @@ impl OverworldNav{
         }
         self.model.tick(dt);
         if self.model.year<self.strategy.year {
-            // Timeline seek is a historical replay, rebuilt from the same seed.
+            // Historical rewind clears orders but preserves the user's AI setting.
+            let autonomy=self.strategy.blight_autonomy;
             self.strategy=StrategicState::new(self.model.year);
+            self.strategy.blight_autonomy=autonomy;
         }else{self.strategy.advance_to(self.model.year);}
         if let Some(p)=self.model.last_arrival.take(){
             let near=WAYPOINTS.iter()
@@ -863,7 +870,8 @@ impl OverworldNav{
                     "1 / 2: CAMPAIGN BATTLE READY"
                 }else{"TRAVEL HERE TO PLAY CAMPAIGN BATTLE"},x,y,CYAN);y+=23.0;
             }
-            self.panel_line(&format!("GUF CHARGE {:.0}%  WAVES {}",self.strategy.array_charged,self.strategy.signals.len()),x,y,BONE);
+            self.panel_line(&format!("GUF CHARGE {:.0}%  WAVES {}",self.strategy.array_charged,self.strategy.signals.len()),x,y,BONE);y+=22.0;
+            self.panel_line(&format!("BLIGHT AUTONOMY {}",if self.strategy.blight_autonomy{"ON"}else{"OFF"}),x,y,REDDIM);
         }
         let footer=screen_height()-160.0;
         if let Some(msg)=&self.encounter_notice{
@@ -880,10 +888,10 @@ impl OverworldNav{
             "SPACE PAUSE   , / . = 1 KYR",
             "T STRATEGY  I INDUSTRY  K KUGELBLITZ",
             "U GUF  V WEENA  J BLIGHT  P FIRE",
-            "Y HALO STRIKE   1 / 2 ENCOUNTER",
+            "Y HALO STRIKE  N SWARM AUTONOMY",
         ];
         for (i,line) in hints.iter().enumerate(){
-            draw_text(line,x,footer+18.0+i as f32*18.5,
+            draw_text(line,x,footer+18.0+i as f32*15.7,
                 14.5,Color::new(0.58,0.67,0.78,0.89));
         }
     }
