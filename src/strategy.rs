@@ -1,7 +1,7 @@
 //! BG-STR-01: deterministic thousand-year strategic scenario layer.
 //! Abstract resource units are game balance parameters, not astrophysical yields.
 //! All messages and attacks propagate no faster than light in galactic coordinates.
-use crate::overworld::{Front,ORION_OUTBREAK,WAYPOINTS};
+use crate::overworld::{Front,ORION_OUTBREAK,WAYPOINTS,SectorStatus};
 use crate::V2;
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
@@ -14,6 +14,10 @@ impl Faction {
 }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum Project { Industry, Kugelblitz, GufNode }
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+pub enum TacticalKind { Intercept, Tidal }
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+pub enum TacticalOutcome { Victory, Defeat, Withdrawn }
 #[derive(Clone,Debug)]
 pub struct System {
     pub name:&'static str, pub pos:V2, pub owner:Faction,
@@ -23,7 +27,7 @@ pub struct System {
 #[derive(Clone,Debug)]
 pub struct Signal {
     pub kind:SignalKind, pub source:usize, pub target:usize,
-    pub arrival_year:f64, pub power:f64,
+    pub launch_year:f64, pub arrival_year:f64, pub power:f64,
 }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum SignalKind { BlightSeed, ArrayPulse, WeenaClaim }
@@ -33,6 +37,8 @@ pub struct StrategicState {
     pub signals:Vec<Signal>,pub events:Vec<String>,
     pub array_charged:f64,pub pulses:u32,
     pub historical:bool,
+    /// Incremented whenever a world changes its territorial footprint.
+    pub territory_revision:u64,
 }
 impl Default for StrategicState { fn default()->Self {Self::new(100_000.0)} }
 impl StrategicState {
@@ -52,7 +58,77 @@ impl StrategicState {
             kugelblitz:0,array_node:false,defense:25.0});
         Self{year,systems,signals:vec![],events:vec![
             "STRATEGIC SCENARIO: industrial networks online".into()],
-            array_charged:0.0,pulses:0,historical:false}
+            array_charged:0.0,pulses:0,historical:false,
+            territory_revision:0}
+    }
+    /// Site-scale occupation carved into the procedural historical atlas.
+    /// Every resulting Blight pixel remains inside Orion's causal circle.
+    /// This represents local control bubbles, not a new galactic wave speed.
+    pub fn territory_status(&self,p:V2,front:Front)->SectorStatus{
+        if (p-ORION_OUTBREAK).len()>front.reach_ly(){
+            return SectorStatus::Unaffected;
+        }
+        if let Some(site)=self.systems.iter()
+            .filter(|site| {
+                let radius=(500.0+site.industry.max(0.0)*70.0
+                    +site.defense.max(0.0)*50.0).clamp(300.0,1550.0);
+                (p-site.pos).len()<=radius
+            })
+            .min_by(|a,b|(a.pos-p).len().total_cmp(&(b.pos-p).len())){
+            return match site.owner {
+                Faction::Blight=>SectorStatus::Held,
+                Faction::Drummers=>SectorStatus::Reclaimed,
+                Faction::Weena=>SectorStatus::Defended,
+                Faction::Independent=>front.status(p),
+            };
+        }
+        front.status(p)
+    }
+    pub fn resolve_tactical(&mut self,site:usize,kind:TacticalKind,
+        outcome:TacticalOutcome)->Result<String,&'static str>{
+        let s=self.systems.get_mut(site).ok_or("UNKNOWN TACTICAL SYSTEM")?;
+        let name=s.name;
+        let descriptor=match kind {
+            TacticalKind::Intercept=>"RKM INTERCEPT",
+            TacticalKind::Tidal=>"WHITE-DWARF INTERDICTION",
+        };
+        let message=match outcome {
+            TacticalOutcome::Withdrawn=>format!("{name}: {descriptor} disengaged / no strategic change"),
+            TacticalOutcome::Victory=>{
+                if matches!(s.owner,Faction::Blight|Faction::Weena){
+                    let damage=if kind==TacticalKind::Intercept{3.0}else{2.0};
+                    s.defense-=damage;
+                    s.material=(s.material-25.0).max(0.0);
+                    if s.defense<=0.0{
+                        s.owner=Faction::Drummers;s.array_node=false;
+                        s.industry=(s.industry*0.6).max(0.25);
+                        s.defense=1.0;
+                        format!("{name}: {descriptor} victory / hostile control broken")
+                    }else{
+                        format!("{name}: {descriptor} victory / enemy defense {:.1}",s.defense)
+                    }
+                }else{
+                    s.defense=(s.defense+1.25).min(18.0);
+                    s.energy=(s.energy+20.0).min(1000.0);
+                    format!("{name}: {descriptor} victory / defenses reinforced")
+                }
+            },
+            TacticalOutcome::Defeat=>{
+                s.defense=(s.defense-1.5).max(0.0);
+                s.material=(s.material-18.0).max(0.0);
+                if s.defense<=0.0 && s.owner==Faction::Drummers &&
+                    (s.pos-ORION_OUTBREAK).len()<=Front::new(self.year).reach_ly(){
+                    s.owner=Faction::Blight;s.array_node=false;
+                    s.defense=1.0;
+                    format!("{name}: {descriptor} defeat / site lost to Blight")
+                }else{
+                    format!("{name}: {descriptor} defeat / defenses damaged")
+                }
+            },
+        };
+        if outcome!=TacticalOutcome::Withdrawn{self.territory_revision+=1;}
+        self.events.push(message.clone());
+        Ok(message)
     }
     pub fn nearest(&self,p:V2,max_distance_ly:f64)->Option<usize>{
         self.systems.iter().enumerate()
@@ -87,10 +163,10 @@ impl StrategicState {
                 s.material-=65.0;s.energy-=75.0;s.array_node=true;
                 Ok(format!("{name}: synchronized Guf relay prepared"))
             },
-        }.inspect(|_|{}).map(|msg|{self.events.push(msg.clone());msg})
+        }.map(|msg|{self.territory_revision+=1;self.events.push(msg.clone());msg})
     }
     pub fn set_owner(&mut self,site:usize,owner:Faction){
-        if let Some(s)=self.systems.get_mut(site){s.owner=owner;}
+        if let Some(s)=self.systems.get_mut(site){s.owner=owner;self.territory_revision+=1;}
     }
     pub fn schedule_blight_seed(&mut self,source:usize,target:usize)->Result<(),&'static str>{
         let (a,b)=(self.systems.get(source).ok_or("INVALID SOURCE")?,
@@ -104,7 +180,7 @@ impl StrategicState {
             return Err("OUTSIDE ORION CAUSAL ENVELOPE");
         }
         self.signals.push(Signal{kind:SignalKind::BlightSeed,source,target,
-            arrival_year:arrival,power:1.0});
+            launch_year:self.year,arrival_year:arrival,power:1.0});
         Ok(())
     }
     /// Schedule political/industrial takeover, with a light-speed order
@@ -142,9 +218,14 @@ impl StrategicState {
             .fold(self.year,f64::max);
         for &i in &emitters {self.systems[i].energy-=50.0;}
         self.array_charged=0.0;self.pulses+=1;
-        self.signals.push(Signal{kind:SignalKind::ArrayPulse,
-            source:emitters[0],target,arrival_year:arrival,
-            power:emitters.len() as f64*4.0});
+        // Delayed launches align all beam arrivals at the same target time.
+        // Each separate flight is visible in the overworld and resolves once.
+        for &source in &emitters {
+            let light_time=(self.systems[source].pos-target_pos).len();
+            self.signals.push(Signal{kind:SignalKind::ArrayPulse,
+                source,target,launch_year:arrival-light_time,
+                arrival_year:arrival,power:4.0});
+        }
         self.events.push(format!("CHAMBER OF GUF fired; target arrival T+{arrival:.0} yr"));
         Ok(arrival)
     }
@@ -172,6 +253,7 @@ impl StrategicState {
                         SignalKind::WeenaClaim=>{
                             if s.owner!=Faction::Blight {
                                 s.owner=Faction::Weena;s.array_node=false;
+                                self.territory_revision+=1;
                                 self.events.push(format!("WEENA recruited {}",s.name));
                             }
                         }
@@ -179,11 +261,13 @@ impl StrategicState {
                             if (s.pos-ORION_OUTBREAK).len()<=Front::new(self.year).reach_ly(){
                                 s.defense-=packet.power*2.0;
                                 if s.defense<=0.0{s.owner=Faction::Blight;s.array_node=false;}
+                                self.territory_revision+=1;
                                 self.events.push(format!("BLIGHT wave reached {}",s.name));
                             }
                         }
                         SignalKind::ArrayPulse=>{
                             s.defense-=packet.power;
+                            self.territory_revision+=1;
                             if s.defense<=0.0 {
                                 s.industry=(s.industry*0.25).max(0.0);
                                 s.array_node=false;
@@ -223,6 +307,41 @@ mod tests {
         assert_eq!(s.systems[5].owner,Faction::Drummers);
         s.advance_to(arrival);
         assert!(s.systems[5].defense<4.0);
+    }
+    #[test] fn independent_light_cone_limits_territory(){
+        let mut s=StrategicState::new(100_000.0);
+        s.set_owner(5,Faction::Blight); // outside the Orion causal radius
+        assert_eq!(s.territory_status(s.systems[5].pos,Front::new(100_000.0)),
+            SectorStatus::Unaffected);
+        s.set_owner(1,Faction::Blight);
+        assert_eq!(s.territory_status(s.systems[1].pos,Front::new(100_000.0)),
+            SectorStatus::Held);
+        s.resolve_tactical(1,TacticalKind::Intercept,TacticalOutcome::Victory).unwrap();
+        assert_eq!(s.systems[1].owner,Faction::Drummers);
+        assert_eq!(s.territory_status(s.systems[1].pos,Front::new(100_000.0)),
+            SectorStatus::Reclaimed);
+    }
+    #[test] fn battles_cannot_be_farmed_by_withdrawing(){
+        let mut s=StrategicState::default();
+        let original=(s.systems[5].defense,s.systems[5].energy,s.territory_revision);
+        s.resolve_tactical(5,TacticalKind::Tidal,TacticalOutcome::Withdrawn).unwrap();
+        assert_eq!(original,(s.systems[5].defense,s.systems[5].energy,s.territory_revision));
+    }
+    #[test] fn distributed_pulse_respects_every_emitters_light_cone(){
+        let mut s=StrategicState::new(100_000.0);
+        for i in [2,3,6] {
+            s.set_owner(i,Faction::Weena);
+            s.systems[i].array_node=true;s.systems[i].energy=500.0;
+        }
+        s.array_charged=100.0;
+        let arrival=s.fire_guf(5).unwrap();
+        assert_eq!(s.signals.len(),3);
+        for packet in &s.signals {
+            assert_eq!(packet.kind,SignalKind::ArrayPulse);
+            assert!((packet.arrival_year-packet.launch_year-
+                (s.systems[packet.source].pos-s.systems[5].pos).len()).abs()<1e-8);
+            assert!((packet.arrival_year-arrival).abs()<1e-8);
+        }
     }
     #[test] fn insufficient_nodes_cannot_fire(){
         let mut s=StrategicState::default();s.array_charged=100.0;
