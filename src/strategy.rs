@@ -614,6 +614,34 @@ mod tests {
         assert!(s.convoys.is_empty());
         assert_eq!(s.systems[5].material,before);
     }
+    #[test] fn blight_holds_the_convoy_cordon_until_passage(){
+        let mut s=StrategicState::default();
+        s.blight_autonomy=false;
+        s.set_owner(0,Faction::Drummers);
+        let baseline=s.systems[0].material;
+        s.send_convoy(1,0).unwrap();
+        let eta=s.convoys[0].arrival_year;
+        s.systems.iter_mut().for_each(|system|system.industry=0.0);
+        s.advance_to(eta);
+        assert!(s.convoys.is_empty());
+        assert_eq!(s.systems[0].material,baseline);
+        assert!(s.events.iter().any(|event|event.contains("interdicted")));
+    }
+    #[test] fn losing_a_guf_interception_leaves_beam_energy_intact(){
+        let mut s=StrategicState::default();
+        s.blight_autonomy=false;
+        for i in [2,3,6] {
+            s.set_owner(i,Faction::Weena);
+            s.systems[i].array_node=true;s.systems[i].energy=500.0;
+        }
+        s.array_charged=100.0;
+        s.fire_guf(5).unwrap();
+        assert_eq!(s.incoming_guf(5).unwrap().2,12.0);
+        s.resolve_tactical(5,TacticalKind::GufDefense,
+            TacticalOutcome::Defeat).unwrap();
+        assert_eq!(s.systems[5].guf_ward,0.0);
+        assert_eq!(s.incoming_guf(5).unwrap().2,12.0);
+    }
     #[test] fn timely_guf_interception_absorbs_later_beams(){
         let mut s=StrategicState::default();
         s.blight_autonomy=false;
