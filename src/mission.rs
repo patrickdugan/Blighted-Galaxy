@@ -3,7 +3,7 @@
 //! their SI units, causal observation histories, and existing collision rules.
 use crate::causal::{WorldlineHistory, WorldlineSample};
 use crate::physics::{AU_M, C_SI, G_SI, SOLAR_MASS_KG, SiBody};
-use crate::si_bridge::{SiJoust, SiTidalEncounter};
+use crate::si_bridge::{SiJoust, SiTidalEncounter, FleetEscort, Craft};
 use crate::strategy::{Faction, StrategicState, TacticalKind};
 use crate::V2;
 
@@ -20,6 +20,7 @@ pub struct MissionProfile {
     pub enemy_shield_j: f64,
     pub own_shield_j: f64,
     pub enemy_fire_interval_s: f64,
+    pub escort_count: u8,
     pub enemy_initial_beta: f64,
     pub intercept_range_m: f64,
     pub hole_mass_solar: f64,
@@ -50,6 +51,7 @@ impl MissionProfile {
             own_shield_j:7.0e17*(1.0+support),
             enemy_fire_interval_s:(3.2-industry*0.15-stock as f64*0.055)
                 .clamp(1.15,3.2),
+            escort_count:(industry*0.55+defense*0.09).floor().min(4.0) as u8,
             enemy_initial_beta:(0.008+industry*0.0017).clamp(0.008,0.032),
             intercept_range_m:(410.0e6+defense*12.0e6)
                 .clamp(410.0e6,710.0e6),
@@ -87,6 +89,22 @@ impl MissionProfile {
         g.opponent_history.push(WorldlineSample{
             time_s:0.0,pos_m:g.opponent.pos_m,vel_m_s:g.opponent.vel_m_s
         }).expect("valid enemy mission initial history");
+        for i in 0..self.escort_count {
+            let lane=i as f64/2.0;
+            let flank=if i%2==0 {1.0}else{-1.0};
+            let pos=g.opponent.pos_m+V2::new(
+                -50.0e6-lane.floor()*18.0e6,
+                flank*(70.0e6+lane.floor()*35.0e6));
+            let mut escort=Craft::new(pos,
+                g.opponent.vel_m_s*0.85,std::f64::consts::PI);
+            let shield=self.enemy_shield_j*(0.32+0.065*i as f64);
+            escort.shield_capacity_j=shield;
+            escort.shield_energy_j=shield;
+            escort.cross_section_radius_m=3.4e6;
+            g.escorts.push(FleetEscort {
+                craft:escort,next_shot_s:1.8+i as f64*0.42,
+            });
+        }
         g
     }
 
@@ -140,7 +158,20 @@ mod tests {
         assert!(high.enemy_shield_j>low.enemy_shield_j);
         assert!(high.enemy_fire_interval_s<low.enemy_fire_interval_s);
         assert!(high.hole_mass_solar>low.hole_mass_solar);
+        assert!(high.escort_count>low.escort_count);
         assert!(high.intercept_range_m>low.intercept_range_m);
+    }
+    #[test]
+    fn industrial_defender_field_is_a_real_multi_ship_scene(){
+        let mut state=StrategicState::default();
+        state.systems[1].industry=9.0;
+        state.systems[1].defense=8.0;
+        let p=MissionProfile::from_strategy(&state,1,TacticalKind::Intercept).unwrap();
+        let game=p.joust();
+        assert!(p.escort_count>=3);
+        assert_eq!(game.escorts.len(),p.escort_count as usize);
+        assert!(game.escorts.iter().all(|e|e.craft.alive()));
+        assert!(game.escorts.iter().all(|e|e.craft.vel_m_s.len()<C_SI));
     }
     #[test]
     fn stored_kugelblitz_supports_homeworld_defenses_without_consuming_stock() {
