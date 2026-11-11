@@ -366,7 +366,11 @@ impl OverworldNav{
         }).min_by(|a,b|a.1.total_cmp(&b.1)).map(|x|x.0)
     }
     pub fn selected_tactical_site(&self)->Option<usize>{
+        // A committed campaign battle requires the player's ship to have
+        // completed its relativistic navigation leg to the chosen system.
+        // The 1/2 sandbox encounters remain playable anywhere.
         self.selected.and_then(|point|self.strategy.nearest(point,500.0))
+            .filter(|&site|(self.model.position-self.strategy.systems[site].pos).len()<=500.0)
     }
     pub fn tactical_result(&mut self,site:usize,kind:TacticalKind,
         result:TacticalOutcome){
@@ -403,6 +407,14 @@ impl OverworldNav{
             if let Some(site)=self.selected.and_then(|p|self.strategy.nearest(p,500.0)) {
                 self.encounter_notice=Some(match self.strategy.fire_guf(site){
                     Ok(arrival)=>format!("GUF STRIKE ETA T+{arrival:.0}"),
+                    Err(reason)=>reason.into(),
+                });
+            }
+        }
+        if is_key_pressed(KeyCode::Y){
+            if let Some(site)=self.selected.and_then(|p|self.strategy.nearest(p,500.0)) {
+                self.encounter_notice=Some(match self.strategy.launch_halo_strike(site){
+                    Ok(arrival)=>format!("HALO STRIKE ETA T+{arrival:.0}"),
                     Err(reason)=>reason.into(),
                 });
             }
@@ -667,7 +679,12 @@ impl OverworldNav{
                 let target=self.strategy.systems[signal.target].pos;
                 let a=self.world_to_screen(source);
                 let b=self.world_to_screen(target);
-                let color=if signal.kind==crate::strategy::SignalKind::ArrayPulse{GOLD}else{REDDIM};
+                let color=match signal.kind{
+                    crate::strategy::SignalKind::ArrayPulse=>GOLD,
+                    crate::strategy::SignalKind::HaloStrike=>CYAN,
+                    crate::strategy::SignalKind::WeenaClaim=>GOLD,
+                    crate::strategy::SignalKind::BlightSeed=>REDDIM,
+                };
                 draw_line(a.x,a.y,b.x,b.y,1.1,translucent(color,0.55));
                 let transit=(self.strategy.year-signal.launch_year)/
                     (signal.arrival_year-signal.launch_year).max(1.0);
@@ -842,6 +859,9 @@ impl OverworldNav{
                 self.panel_line(s.owner.label(),x,y,CYAN);y+=23.0;
                 self.panel_line(&format!("IND {:.1}   E {:.0}  M {:.0}",s.industry,s.energy,s.material),x,y,BONE);y+=23.0;
                 self.panel_line(&format!("K-HOLES {}   GUF {}",s.kugelblitz,if s.array_node{"READY"}else{"OFF"}),x,y,GOLD);y+=23.0;
+                self.panel_line(if (self.model.position-s.pos).len()<=500.0{
+                    "1 / 2: CAMPAIGN BATTLE READY"
+                }else{"TRAVEL HERE TO PLAY CAMPAIGN BATTLE"},x,y,CYAN);y+=23.0;
             }
             self.panel_line(&format!("GUF CHARGE {:.0}%  WAVES {}",self.strategy.array_charged,self.strategy.signals.len()),x,y,BONE);
         }
@@ -860,6 +880,7 @@ impl OverworldNav{
             "SPACE PAUSE   , / . = 1 KYR",
             "T STRATEGY  I INDUSTRY  K KUGELBLITZ",
             "U GUF  V WEENA  J BLIGHT  P FIRE",
+            "Y HALO STRIKE   1 / 2 ENCOUNTER",
         ];
         for (i,line) in hints.iter().enumerate(){
             draw_text(line,x,footer+18.0+i as f32*18.5,
