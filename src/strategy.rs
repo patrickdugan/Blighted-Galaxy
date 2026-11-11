@@ -9,7 +9,7 @@ pub enum Faction { Blight, Drummers, Weena, Independent }
 impl Faction {
     pub fn label(self)->&'static str {
         match self { Self::Blight=>"JENKINS BLIGHT",Self::Drummers=>"DRUMMERS / REMNANT",
-            Self::Weena=>"WEEN A / FORMOI",Self::Independent=>"INDEPENDENT" }
+            Self::Weena=>"WEENA / FORMOI",Self::Independent=>"INDEPENDENT" }
     }
 }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
@@ -26,7 +26,7 @@ pub struct Signal {
     pub arrival_year:f64, pub power:f64,
 }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-pub enum SignalKind { BlightSeed, ArrayPulse }
+pub enum SignalKind { BlightSeed, ArrayPulse, WeenaClaim }
 #[derive(Clone,Debug)]
 pub struct StrategicState {
     pub year:f64, pub systems:Vec<System>,
@@ -41,12 +41,15 @@ impl StrategicState {
         let owners=[Faction::Independent,Faction::Drummers,Faction::Independent,
             Faction::Drummers,Faction::Drummers,Faction::Drummers,Faction::Weena,
             Faction::Independent,Faction::Independent];
-        let systems=WAYPOINTS.iter().enumerate().map(|(i,w)|System {
+        let mut systems:Vec<System>=WAYPOINTS.iter().enumerate().map(|(i,w)|System {
             name:w.name,pos:w.pos,owner:owners[i],
             industry:if i==6 {3.0} else if matches!(i,3|4|5){2.0}else{0.5},
             energy:100.0,material:150.0,kugelblitz:0,
             array_node:false, defense:if i==5{4.0}else{2.0},
         }).collect();
+        systems.push(System{name:"ORION SEED",pos:ORION_OUTBREAK,
+            owner:Faction::Blight,industry:4.0,energy:250.0,material:250.0,
+            kugelblitz:0,array_node:false,defense:25.0});
         Self{year,systems,signals:vec![],events:vec![
             "STRATEGIC SCENARIO: industrial networks online".into()],
             array_charged:0.0,pulses:0,historical:false}
@@ -77,7 +80,7 @@ impl StrategicState {
                 Ok(format!("{name}: kugelblitz contained / Halo Drive stock +1"))
             },
             Project::GufNode=>{
-                if s.owner!=Faction::Weena{return Err("WEEN A CONTROL REQUIRED");}
+                if s.owner!=Faction::Weena{return Err("WEENA CONTROL REQUIRED");}
                 if s.industry<2.0||s.material<65.0||s.energy<75.0 {
                     return Err("ARRAY NODE NEEDS INDUSTRY / STORES");
                 }
@@ -103,6 +106,24 @@ impl StrategicState {
         self.signals.push(Signal{kind:SignalKind::BlightSeed,source,target,
             arrival_year:arrival,power:1.0});
         Ok(())
+    }
+    /// Schedule political/industrial takeover, with a light-speed order
+    /// from the nearest Weena-held system. Resistance adds 2 kyr.
+    pub fn claim_for_weena(&mut self,target:usize)->Result<f64,&'static str>{
+        let dst=self.systems.get(target).ok_or("INVALID TARGET")?;
+        if dst.owner!=Faction::Independent && dst.owner!=Faction::Drummers {
+            return Err("TARGET IS ALREADY OCCUPIED");
+        }
+        let source=self.systems.iter().enumerate()
+            .filter(|(_,s)|s.owner==Faction::Weena&&s.energy>=80.0)
+            .min_by(|a,b|(a.1.pos-dst.pos).len().total_cmp(&(b.1.pos-dst.pos).len()))
+            .map(|(i,_)|i).ok_or("NO WEENA RELAY POWER")?;
+        let arrival=self.year+(self.systems[source].pos-dst.pos).len()+2_000.0;
+        self.systems[source].energy-=80.0;
+        self.signals.push(Signal{kind:SignalKind::WeenaClaim,source,target,
+            arrival_year:arrival,power:1.0});
+        self.events.push(format!("WEENA influence relay sent to {}",self.systems[target].name));
+        Ok(arrival)
     }
     /// Requires three independent industrial array nodes; power travels at c.
     /// The remaining beam is game-scale and may be intercepted on arrival.
@@ -148,6 +169,12 @@ impl StrategicState {
                 if packet.arrival_year>self.year {pending.push(packet);continue;}
                 if let Some(s)=self.systems.get_mut(packet.target){
                     match packet.kind {
+                        SignalKind::WeenaClaim=>{
+                            if s.owner!=Faction::Blight {
+                                s.owner=Faction::Weena;s.array_node=false;
+                                self.events.push(format!("WEENA recruited {}",s.name));
+                            }
+                        }
                         SignalKind::BlightSeed=>{
                             if (s.pos-ORION_OUTBREAK).len()<=Front::new(self.year).reach_ly(){
                                 s.defense-=packet.power*2.0;
@@ -161,7 +188,7 @@ impl StrategicState {
                                 s.industry=(s.industry*0.25).max(0.0);
                                 s.array_node=false;
                             }
-                            self.events.push(format!("GU F beam struck {} / defense {:.1}",s.name,s.defense));
+                            self.events.push(format!("GUF beam struck {} / defense {:.1}",s.name,s.defense));
                         }
                     }
                 }
@@ -202,11 +229,18 @@ mod tests {
         s.systems[6].array_node=true;
         assert!(s.fire_guf(5).is_err());
     }
+    #[test] fn weena_claims_are_delayed(){
+        let mut s=StrategicState::new(100_000.0);
+        let eta=s.claim_for_weena(5).unwrap();
+        assert_eq!(s.systems[5].owner,Faction::Drummers);
+        s.advance_to(eta);
+        assert_eq!(s.systems[5].owner,Faction::Weena);
+    }
     #[test] fn expansion_respects_orion_light_cone(){
         let mut s=StrategicState::new(100_000.0);
         s.set_owner(0,Faction::Blight);
-        assert!(s.schedule_blight_seed(0,5).is_ok());
+        assert!(s.schedule_blight_seed(9,1).is_ok());
         let arrival=s.signals[0].arrival_year;
-        assert!(arrival>=s.year+(s.systems[5].pos-s.systems[0].pos).len());
+        assert!(arrival>=s.year+(s.systems[1].pos-s.systems[9].pos).len());
     }
 }
