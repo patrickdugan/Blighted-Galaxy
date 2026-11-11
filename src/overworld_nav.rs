@@ -18,6 +18,7 @@ use crate::overworld::{
 };
 use crate::V2;
 use crate::strategy::{StrategicState,Project,Faction,TacticalKind,TacticalOutcome};
+use crate::mission::MissionProfile;
 use macroquad::prelude::*;
 use std::f64::consts::{PI,TAU};
 
@@ -895,6 +896,38 @@ impl OverworldNav{
                 14.5,Color::new(0.58,0.67,0.78,0.89));
         }
     }
+    fn draw_mission_briefing(&self){
+        let Some(site)=self.selected.and_then(|p|self.strategy.nearest(p,500.0))
+            else{return;};
+        let s=&self.strategy.systems[site];
+        let x=20.0;
+        let y=screen_height()-190.0;
+        let w=(self.map_width()-38.0).max(350.0);
+        draw_rectangle(x,y,w,77.0,Color::new(0.008,0.018,0.035,0.93));
+        draw_rectangle_lines(x,y,w,77.0,1.0,translucent(BLUE,0.52));
+        let onboard=(self.model.position-s.pos).len()<=500.0;
+        let state=if !onboard {
+            "ROUTE REQUIRED / SELECT SYSTEM + ENTER"
+        }else if !self.strategy.tactical_ready(site){
+            "SYSTEM REARMING / ENCOUNTERS ARE SANDBOX ONLY"
+        }else{"MISSION READY / 1 INTERCEPT  2 TIDAL"};
+        shadow_text(&format!("CAMPAIGN TARGET: {}",s.name),
+            x+12.0,y+24.0,20.0,GOLD);
+        shadow_text(state,x+12.0,y+45.0,16.0,
+            if onboard&&self.strategy.tactical_ready(site){CYAN}else{BONE});
+        if let Some(p)=MissionProfile::from_strategy(
+            &self.strategy,site,TacticalKind::Intercept){
+            shadow_text(&format!(
+                "ENEMY SHIELD {:.2e} J  /  FIRE {:.2}s  /  REMNANT {:.1} M_sun",
+                p.enemy_shield_j,p.enemy_fire_interval_s,p.hole_mass_solar),
+                x+12.0,y+65.0,15.0,BLUE);
+        }else{
+            let rearm=self.strategy.tactical_rearm_remaining(site).unwrap_or(0.0);
+            shadow_text(&format!(
+                "INDUSTRY {:.1} / DEFENSE {:.1} / REARM {:.0} galactic yr",
+                s.industry,s.defense,rearm),x+12.0,y+65.0,15.0,BLUE);
+        }
+    }
     fn timeline(&self){
         let x=23.0;
         let y=screen_height()-34.0;
@@ -926,6 +959,7 @@ impl OverworldNav{
         self.draw_travel();
         self.draw_logo();
         self.draw_sidebar();
+        self.draw_mission_briefing();
         self.timeline();
         if self.show_help {
             draw_rectangle(42.0,122.0,self.map_width()-84.0,210.0,
