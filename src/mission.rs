@@ -89,6 +89,25 @@ impl MissionProfile {
         g
     }
 
+    /// A finite supply of off-screen tug burns changes the white dwarf's
+    /// radial velocity. This is an explicit mission gameplay impulse, while
+    /// the resulting trajectory and gravitational acceleration use the
+    /// unchanged SI solver.
+    pub fn available_tugs(self)->u8 {
+        2+if self.owner==Faction::Drummers {
+            self.kugelblitz.min(3) as u8
+        }else{0}
+    }
+    pub fn apply_tidal_tug(scene:&mut SiTidalEncounter,
+        inward:bool,budget:&mut u8)->bool{
+        if *budget==0||scene.disruption.is_some(){return false;}
+        let radial=(scene.black_hole.pos_m-scene.white_dwarf.pos_m).normalized();
+        let delta_v=radial*if inward {80_000.0}else{-80_000.0};
+        if (scene.white_dwarf.vel_m_s+delta_v).len()>=C_SI {return false;}
+        scene.white_dwarf.vel_m_s+=delta_v;
+        *budget-=1;
+        true
+    }
     /// A black-hole/white-dwarf interdiction lab. The black hole here is a
     /// stellar remnant, distinct from the manufactured micro-kugelblitz
     /// stored in the strategic inventory.
@@ -155,6 +174,21 @@ mod tests {
         assert!((scene.black_hole.mass_kg/SOLAR_MASS_KG-12.0).abs()<1e-10);
         assert!(scene.white_dwarf.mass_kg>0.0);
         assert_eq!(state.systems[6].kugelblitz,3);
+    }
+    #[test]
+    fn orbital_tug_is_budgeted_and_changes_relative_motion(){
+        let state=StrategicState::default();
+        let p=MissionProfile::from_strategy(&state,5,TacticalKind::Tidal).unwrap();
+        let mut scene=p.tidal();
+        let mut budget=p.available_tugs();
+        let start=scene.white_dwarf.vel_m_s;
+        assert!(MissionProfile::apply_tidal_tug(&mut scene,true,&mut budget));
+        assert_ne!(start,scene.white_dwarf.vel_m_s);
+        let radial=(scene.black_hole.pos_m-scene.white_dwarf.pos_m).normalized();
+        assert!((scene.white_dwarf.vel_m_s-start).dot(radial)>0.0);
+        while MissionProfile::apply_tidal_tug(&mut scene,true,&mut budget){}
+        assert_eq!(budget,0);
+        assert!(!MissionProfile::apply_tidal_tug(&mut scene,true,&mut budget));
     }
     #[test]
     fn scene_snapshot_is_stable_after_system_development() {
