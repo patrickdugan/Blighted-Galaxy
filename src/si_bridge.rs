@@ -157,10 +157,17 @@ pub struct Control {
     pub player_facing_rad:f64,
     pub fire_player:bool,
 }
+/// A fleet escort has an independent shield and a locally observed fire clock.
+/// Enemy target acquisition is bounded by the player's causal worldline.
+pub struct FleetEscort {
+    pub craft:Craft,
+    pub next_shot_s:f64,
+}
 pub struct SiJoust {
     pub sun:SiBody,
     pub player:Craft,
     pub opponent:Craft,
+    pub escorts:Vec<FleetEscort>,
     pub rounds:Vec<KineticRound>,
     pub events:Vec<ImpactEvent>,
     pub time_s:f64,
@@ -189,7 +196,7 @@ impl SiJoust {
         Self{
             sun:SiBody::new(SOLAR_MASS_KG,6.957e8,V2::default(),V2::default()),
             player,opponent,player_history,opponent_history,
-            rounds:vec![],events:vec![],time_s:0.0,
+            escorts:vec![],rounds:vec![],events:vec![],time_s:0.0,
             next_player_shot_s:0.0,next_enemy_shot_s:1.2,
             enemy_fire_interval_s:2.5,shots_fired:0,
         }
@@ -208,6 +215,8 @@ impl SiJoust {
         self.player.facing_rad=input.player_facing_rad;
         let player_before=self.player.pos_m;
         let opponent_before=self.opponent.pos_m;
+        let escort_before=self.escorts.iter().map(|e|e.craft.pos_m)
+            .collect::<Vec<_>>();
         self.player.tick(dt,input.player_thrust_m_s2,&[self.sun]);
         let facing=(self.player.pos_m-self.opponent.pos_m).normalized();
         self.opponent.facing_rad=facing.y.atan2(facing.x);
@@ -216,6 +225,20 @@ impl SiJoust {
             self.rounds.push(KineticRound::from_craft(&self.player,true));
             self.next_player_shot_s=self.time_s+0.25;
             self.shots_fired+=1;
+        }
+        for (index,escort) in self.escorts.iter_mut().enumerate() {
+            if !escort.craft.alive(){continue;}
+            escort.craft.tick(dt,0.0,&[self.sun]);
+            if self.time_s>=escort.next_shot_s {
+                if let Some(e)=self.player_history.observe(
+                    escort.craft.pos_m,self.time_s){
+                    let aim=(e.pos_m-escort.craft.pos_m).normalized();
+                    escort.craft.facing_rad=aim.y.atan2(aim.x);
+                    self.rounds.push(KineticRound::from_craft(&escort.craft,false));
+                    escort.next_shot_s=self.time_s+
+                        self.enemy_fire_interval_s*(1.2+index as f64*0.12);
+                }
+            }
         }
         if self.time_s>=self.next_enemy_shot_s && self.opponent.alive() {
             // Enemy fire control is limited to signals contained in its
@@ -228,24 +251,54 @@ impl SiJoust {
                 self.next_enemy_shot_s=self.time_s+self.enemy_fire_interval_s;
             }
         }
-        let mut impacts=Vec::new();
+        // An RKM can strike either the flagship or an individual escort.
+        // Pick the earliest swept-circle collision over the entire segment.
+        // Each shot impacts at most one ship; no instant raycast targeting.
+        let mut impacts:Vec<(V2,KineticRound,Option<usize>)>=Vec::new();
         for shot in &mut self.rounds {
             let before=shot.pos_m;
             shot.pos_m+=shot.vel_m_s*dt.0;
             shot.lifetime_s-=dt.0;
-            let (b0,b1,r)=if shot.is_player {
-                (opponent_before,self.opponent.pos_m,self.opponent.cross_section_radius_m)
-            } else {(player_before,self.player.pos_m,self.player.cross_section_radius_m)};
-            if let Some(f)=swept_circle_hit(before,shot.pos_m,shot.radius_m,b0,b1,r) {
-                impacts.push((before+(shot.pos_m-before)*f,*shot));
+            let mut earliest:Option<(f64,Option<usize>)>=None;
+            if shot.is_player {
+                if self.opponent.alive(){
+                    if let Some(f)=swept_circle_hit(before,shot.pos_m,shot.radius_m,
+                        opponent_before,self.opponent.pos_m,
+                        self.opponent.cross_section_radius_m){
+                        earliest=Some((f,None));
+                    }
+                }
+                for (i,escort) in self.escorts.iter().enumerate(){
+                    if !escort.craft.alive(){continue;}
+                    if let Some(f)=swept_circle_hit(before,shot.pos_m,shot.radius_m,
+                        escort_before[i],escort.craft.pos_m,
+                        escort.craft.cross_section_radius_m){
+                        if earliest.map_or(true,|(earlier,_)|f<earlier){
+                            earliest=Some((f,Some(i)));
+                        }
+                    }
+                }
+            } else if self.player.alive() {
+                if let Some(f)=swept_circle_hit(before,shot.pos_m,shot.radius_m,
+                    player_before,self.player.pos_m,self.player.cross_section_radius_m){
+                    earliest=Some((f,None));
+                }
+            }
+            if let Some((f,escort_index))=earliest {
+                impacts.push((before+(shot.pos_m-before)*f,*shot,escort_index));
                 shot.lifetime_s=0.0;
             }
         }
         self.rounds.retain(|shot|shot.lifetime_s>0.0);
-        for (pos,shot) in impacts {
-            let target=if shot.is_player {&mut self.opponent} else {&mut self.player};
+        for (pos,shot,escort_index) in impacts {
+            let target=if shot.is_player {
+                match escort_index {
+                    Some(i)=>&mut self.escorts[i].craft,
+                    None=>&mut self.opponent,
+                }
+            }else{&mut self.player};
             let energy=relative_impact_energy_j(&shot,target);
-            // 90% energy-to-shield coupling is a fictional game tuning value.
+            // 90% energy-to-shield coupling is a fictional game value.
             target.shield_energy_j=(target.shield_energy_j-energy.0*0.9).max(0.0);
             self.events.push(ImpactEvent{pos_m:pos,energy_j:energy,
                 target_is_player:!shot.is_player,time_s:self.time_s+dt.0*0.5});
@@ -450,6 +503,23 @@ mod tests {
         }
         assert!(game.opponent.shield_energy_j<shield);
         assert!(game.last_impact().unwrap().energy_j.0>0.0);
+    }
+    #[test]
+    fn multi_ship_rkm_hits_escort_and_preserves_sublight_speeds(){
+        let mut g=SiJoust::new();
+        let escort=Craft::new(g.player.pos_m+V2::new(6.0e6,0.0),
+            V2::default(),std::f64::consts::PI);
+        g.escorts.push(FleetEscort{craft:escort,next_shot_s:500.0});
+        let initial=g.escorts[0].craft.shield_energy_j;
+        for _ in 0..25 {
+            g.step(Seconds(1.0/120.0),Control {
+                player_thrust_m_s2:0.0,player_facing_rad:0.0,fire_player:true,
+            });
+            if g.escorts[0].craft.shield_energy_j<initial{break;}
+        }
+        assert!(g.escorts[0].craft.shield_energy_j<initial);
+        assert_eq!(g.opponent.shield_energy_j,g.opponent.shield_capacity_j);
+        assert!(g.rounds.iter().all(|shot|shot.vel_m_s.len()<C_SI));
     }
     #[test]
     fn tracer_split_preserves_initial_mass_com_and_momentum() {
