@@ -91,7 +91,9 @@ fn generate_galaxy()->Image {
             let disk=(-r/24_000.0).exp()*
                 (1.0/(1.0+((r-52_000.0)/2600.0).exp()));
             let phase=theta-((r+1400.0)/6500.0).ln()/0.235_f64.tan();
-            let arm=((4.0*phase).cos().max(0.0)).powi(8);
+            // Broad, overlapping stellar clouds avoid the thin
+            // vector-drawn spiral ribbons of the first prototype.
+            let arm=(0.5+0.5*(4.0*phase).cos()).powi(2);
             let dust=(0.49*(world_x/2000.0).sin()+
                 0.26*(world_y/1700.0).cos()+
                 0.25*((world_x+world_y)/1100.0).sin()).abs();
@@ -101,14 +103,14 @@ fn generate_galaxy()->Image {
                 (bary/2900.0).powi(2)).exp();
             let core=(-(r/5000.0).powi(2)).exp();
             let dust_dark=1.0-0.46*dust*arm;
-            let brightness=(disk*(0.18+0.72*arm)*dust_dark)
+            let brightness=(disk*(0.46+0.84*arm)*dust_dark)
                 .clamp(0.0,1.0) as f32;
             let warm=(0.45*core+0.23*bar).clamp(0.0,1.0) as f32;
             let idx=(y*size+x)*4;
             let channels=[
-                0.005+0.105*brightness+0.56*warm,
-                0.007+0.157*brightness+0.40*warm,
-                0.017+0.224*brightness+0.23*warm,
+                0.008+0.15*brightness+0.56*warm,
+                0.012+0.20*brightness+0.40*warm,
+                0.026+0.28*brightness+0.23*warm,
             ];
             for k in 0..3{
                 image.bytes[idx+k]=(255.0_f32*channels[k]
@@ -121,7 +123,7 @@ fn generate_galaxy()->Image {
     for i in 0..56_000usize {
         let u=rng.unit().max(1e-9);
         let v=rng.unit().max(1e-9);
-        let spiral=i%10!=0;
+        let spiral=i%3!=0;
         let r=if i%13==0 {
             (-u.ln()).sqrt()*6100.0
         }else{
@@ -131,14 +133,14 @@ fn generate_galaxy()->Image {
         let arm=(rng.next()%4) as f64;
         let theta=if spiral{
             ((r+1400.0)/6500.0).ln()/0.235_f64.tan()
-                +arm*PI/2.0+gaussian(&mut rng)*(0.055+190.0/r)
+                +arm*PI/2.0+gaussian(&mut rng)*(0.15+440.0/r)
         }else{rng.unit()*TAU};
         let jitter=gaussian(&mut rng)*(150.0+0.006*r);
         let radius=(r+jitter).max(0.0);
         let pos=V2::from_angle(theta)*radius;
         let (tx,ty)=tex_xy(pos);
         let core=((-(r/9000.0).powi(2)).exp()) as f32;
-        let bright=(rng.unit().powi(6)*0.57+0.12) as f32;
+        let bright=(rng.unit().powi(6)*0.41+0.08) as f32;
         let white=[0.72,0.81,1.0];
         let warm=[1.0,0.79,0.55];
         let tone=[
@@ -204,7 +206,7 @@ fn blight_image(front:Front)->Image {
     let mut rng=Random::new(0xA11CE_313_1000);
     // Sparse red point sources suggest occupied stars; they are visibly
     // stellar speckles on closer inspection, never solid red paint.
-    for _ in 0..5_600 {
+    for _ in 0..1_050 {
         let theta=rng.unit()*TAU;
         let achieved=front.sector_reach_ly(theta);
         let radius=achieved*(rng.unit().sqrt()*0.99);
@@ -214,15 +216,15 @@ fn blight_image(front:Front)->Image {
             status!=SectorStatus::Contested{continue;}
         let (x,y)=tex_xy(point);
         let brightness=rng.unit();
-        let tone=if brightness>0.93{
-            [228,36,28,246]
-        }else if brightness>0.56{
-            [158,16,22,220]
+        let tone=if brightness>0.965{
+            [218,32,26,237]
+        }else if brightness>0.62{
+            [138,15,21,205]
         }else{
-            [84,8,17,175]
+            [70,7,15,165]
         };
         set_overlay(&mut image,x.round() as i32,y.round() as i32,tone);
-        if brightness>0.985 {
+        if brightness>0.992 {
             for (dx,dy) in [(-1,0),(1,0),(0,-1),(0,1)]{
                 set_overlay(&mut image,
                     x.round() as i32+dx,y.round() as i32+dy,
@@ -232,8 +234,8 @@ fn blight_image(front:Front)->Image {
     }
     // Directional Jenkins corridors end BEFORE their local front;
     // the 0.10c causal boundary is a hard spatial invariant.
-    for lane in 0..19 {
-        let theta=lane as f64*TAU/19.0+0.17;
+    for lane in 0..15 {
+        let theta=lane as f64*TAU/15.0+0.17;
         let local=front.sector_reach_ly(theta);
         let mut r=320.0;
         while r+180.0<local {
@@ -244,12 +246,12 @@ fn blight_image(front:Front)->Image {
             if matches!(front.status(point),
                 SectorStatus::Held|SectorStatus::Contested){
                 let (x,y)=tex_xy(point);
-                if rng.unit()>0.28{
+                if rng.unit()>0.75{
                     set_overlay(&mut image,x as i32,y as i32,
-                        [142,12,21,209]);
+                        [114,12,20,189]);
                 }
             }
-            r+=70.0;
+            r+=105.0;
         }
     }
     image
@@ -503,7 +505,7 @@ impl OverworldNav{
             let p=self.world_to_screen(direction*67_000.0);
             if p.x>25.0&&p.x<self.map_width()-25.0&&
                p.y>87.0&&p.y<screen_height()-20.0{
-                shadow_text(&format!("{}°",k*30),p.x-13.0,p.y,
+                shadow_text(&format!("{}",k*30),p.x-13.0,p.y,
                     16.0,Color::new(0.75,0.78,0.84,0.65));
             }
         }
@@ -604,27 +606,27 @@ impl OverworldNav{
             Color::new(0.52,0.85,0.96,0.60));
     }
     fn draw_logo(&self){
-        let x=24.0;let y=44.0;
+        let x=24.0;let y=48.0;
         // Four offset passes evoke early-1990s metallic game typography.
-        shadow_text("BLIGHTED GALAXY",x+3.0,y+4.0,33.0,
+        shadow_text("BLIGHTED GALAXY",x+3.0,y+4.0,42.0,
             Color::new(0.42,0.08,0.10,1.0));
-        shadow_text("BLIGHTED GALAXY",x,y,33.0,
+        shadow_text("BLIGHTED GALAXY",x,y,42.0,
             Color::new(0.83,0.85,0.86,1.0));
-        draw_line(x,y+7.0,x+292.0,y+7.0,2.1,
+        draw_line(x,y+8.0,x+368.0,y+8.0,2.1,
             Color::new(0.77,0.19,0.20,0.67));
         // Scattered crimson points descending from the title are
         // tiny blighted stars. They should read as blood spatter only
         // from a distance. Sparse on purpose.
         let mut rng=Random::new(0xB100D_5EED);
-        for _ in 0..63 {
-            let px=x+rng.unit() as f32*300.0;
+        for _ in 0..49 {
+            let px=x+rng.unit() as f32*365.0;
             let py=y+9.0+rng.unit().powi(3) as f32*52.0;
             let power=0.28+0.55*rng.unit() as f32;
             draw_circle(px,py,0.45+rng.unit() as f32*0.42,
                 Color::new(0.89,0.12,0.13,power));
         }
         shadow_text("THE ORION INFECTION / GALACTIC HISTORIOGRAPHY",
-            x,y+37.0,13.0,
+            x,y+39.0,13.0,
             Color::new(0.75,0.79,0.85,0.64));
     }
     fn panel_line(&self,text:&str,x:f32,y:f32,tone:Color){
@@ -664,7 +666,7 @@ impl OverworldNav{
         let point=self.selected.unwrap_or(self.model.position);
         let sector=overworld::sector_of(point);
         let status=self.model.front().status(point);
-        self.panel_line(&format!("LONGITUDE  {:03}–{:03} deg",
+        self.panel_line(&format!("LONGITUDE  {:03}-{:03} deg",
             sector.galactic_angle_index*30,
             (sector.galactic_angle_index+1)*30),x,y,BONE);
         y+=25.0;
@@ -765,7 +767,7 @@ impl OverworldNav{
         let t=(self.model.year/100_000.0).clamp(0.0,1.0) as f32;
         let px=x+t*length;
         draw_circle(px,y,4.7,Color::new(0.98,0.36,0.32,0.96));
-        shadow_text("EPISODES VIII–XXII / DELAYED HISTORY",
+        shadow_text("EPISODES VIII-XXII / DELAYED HISTORY",
             x,y-30.0,15.0,
             Color::new(0.68,0.79,0.89,0.72));
     }
