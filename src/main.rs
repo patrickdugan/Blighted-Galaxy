@@ -2,7 +2,7 @@
  //! Legacy normalized prototype remains available via --bin arcade_legacy.
 use blighted_galaxy::physics::{AU_M, C_SI, SOLAR_MASS_KG};
 use blighted_galaxy::si_bridge::{
-    CameraMeters, Control, Metres, Seconds, SiJoust, SiTidalEncounter,
+    CameraMeters, Control, Metres, Seconds, SiJoust, SiTidalEncounter,WeaponKind,
 };
 use blighted_galaxy::V2;
 use blighted_galaxy::overworld_nav::OverworldNav;
@@ -57,7 +57,7 @@ impl Game {
     }
     fn for_mission(profile:MissionProfile)->Self {
         let mode=match profile.kind {
-            TacticalKind::Intercept=>Mode::Intercept,
+            TacticalKind::Intercept|TacticalKind::GufDefense=>Mode::Intercept,
             TacticalKind::Tidal=>Mode::Tidal,
         };
         let mut game=Self::new(mode);
@@ -114,6 +114,18 @@ impl Game {
         if is_key_pressed(KeyCode::Q) {self.sim_rate=(self.sim_rate/2.0).max(0.125);}
         if is_key_pressed(KeyCode::E) {self.sim_rate=(self.sim_rate*2.0).min(64.0);}
         if is_key_pressed(KeyCode::M) {self.manual_aim=!self.manual_aim;}
+        if self.mode==Mode::Intercept {
+            let unlocks=self.mission_profile
+                .map(|p|(p.siege_unlocked,p.fan_unlocked))
+                .unwrap_or((true,true));
+            if is_key_pressed(KeyCode::Key4){
+                self.intercept.player_weapon=WeaponKind::Standard;
+            }else if is_key_pressed(KeyCode::Key5)&&unlocks.0{
+                self.intercept.player_weapon=WeaponKind::Siege;
+            }else if is_key_pressed(KeyCode::Key6)&&unlocks.1{
+                self.intercept.player_weapon=WeaponKind::Fan;
+            }
+        }
         if self.mode==Mode::Tidal && self.mission_profile.is_some(){
             if is_key_pressed(KeyCode::A) {
                 MissionProfile::apply_tidal_tug(&mut self.tidal,true,
@@ -297,6 +309,11 @@ impl Game {
             draw_text("PLAYER SHIELD DISABLED",screen_width()*0.32,screen_height()*0.8,
                 39.0,RED);
         }
+        self.labeled("WEAPON",self.intercept.player_weapon.name(),569.0,SKYBLUE);
+        self.labeled("AMMO",
+            &if self.mission_profile.is_some(){
+                format!("{} units",self.intercept.ammo_units)
+            }else{"SANDBOX / UNLIMITED".into()},598.0,GOLD);
         draw_text("SHIELD RADII ARE FICTIONAL DEFENSE ENVELOPES; SHIP MARKERS EXAGGERATED",
             25.0,screen_height()-17.0,17.0,GRAY);
     }
@@ -364,14 +381,17 @@ impl Game {
         draw_rectangle_lines(13.0,12.0,800.0,207.0,1.0,DARKGRAY);
         draw_text("BLIGHTED GALAXY / SI GAMEPLAY BRIDGE",23.0,45.0,27.0,WHITE);
         let title=match self.mode {
-            Mode::Intercept=>"1  RELATIVISTIC RKM INTERCEPT • 2kg PROJECTILES",
+            Mode::Intercept if self.mission_profile.is_some_and(
+                |p|p.kind==TacticalKind::GufDefense)=>
+                "4  GUF RELAY INTERCEPTION / DEFEND A THREATENED WORLD",
+            Mode::Intercept=>"1  RELATIVISTIC FLEET INTERCEPT • WEAPON LOADOUTS",
             Mode::Tidal=>"2  WHITE-DWARF TIDAL INTERDICTION • STELLAR REMNANT",
         };
         draw_text(title,23.0,80.0,22.0,SKYBLUE);
         draw_text("1 / 2 SCENARIOS   3 / TAB GALAXY   Q / E TIME   Z / X / WHEEL ZOOM",
             23.0,113.0,19.0,LIGHTGRAY);
         if self.mode==Mode::Intercept {
-            draw_text("MOUSE aim • M keyboard aim • A/D rotate • W/S thrust • SPACE fire",
+            draw_text("MOUSE aim / M keyboard aim / 4 RKM  5 SIEGE  6 FLAK / SPACE fire",
                 23.0,145.0,18.0,LIGHTGRAY);
         } else if self.mission_profile.is_some() {
             draw_text(&format!("A inward tug / D outward tug  |  burns {}  |  300s objective",
@@ -394,9 +414,14 @@ impl Game {
             draw_text(&format!("CAMPAIGN: {site} / {status}"),23.0,244.0,20.0,GOLD);
             if let Some(profile)=self.mission_profile {
                 let conditions=if self.mode==Mode::Intercept {
-                    format!("IND {:.1}  DEF {:.1}  HALO {}   OPP SHIELD {:.2e} J   FIRE {:.2}s",
-                        profile.industry,profile.defense,profile.kugelblitz,
-                        profile.enemy_shield_j,profile.enemy_fire_interval_s)
+                    if profile.kind==TacticalKind::GufDefense{
+                        format!("GUF THREAT {} beams / {:.1} attack units / repel spotter fleet",
+                            profile.incoming_guf_count,profile.incoming_guf_power)
+                    }else{
+                        format!("IND {:.1}  DEF {:.1}  HALO {}   OPP SHIELD {:.2e} J   FIRE {:.2}s",
+                            profile.industry,profile.defense,profile.kugelblitz,
+                            profile.enemy_shield_j,profile.enemy_fire_interval_s)
+                    }
                 }else{
                     format!("IND {:.1} DEF {:.1}  HOLE {:.1} M_sun  DWARF {:.2} M_sun",
                         profile.industry,profile.defense,
@@ -444,6 +469,15 @@ async fn main() {
         if let Ok(site)=raw_site.parse::<usize>() {
             let kind=if args.iter().any(|arg|arg=="--demo-tidal"){
                 TacticalKind::Tidal
+            }else if args.iter().any(|arg|arg=="--demo-guf-defense"){
+                for i in [2,3,6]{
+                    overworld.strategy.set_owner(i,blighted_galaxy::strategy::Faction::Weena);
+                    overworld.strategy.systems[i].energy=500.0;
+                    overworld.strategy.systems[i].array_node=true;
+                }
+                overworld.strategy.array_charged=100.0;
+                let _=overworld.strategy.fire_guf(site);
+                TacticalKind::GufDefense
             }else{TacticalKind::Intercept};
             if let Some(profile)=MissionProfile::from_strategy(
                 &overworld.strategy,site,kind) {
@@ -460,19 +494,27 @@ async fn main() {
         if is_key_pressed(KeyCode::Escape) {break;}
         let dt=get_frame_time() as f64;
         if galaxy_mode {
-            if is_key_pressed(KeyCode::Key1)||is_key_pressed(KeyCode::Key2){
-                let intercept=is_key_pressed(KeyCode::Key1);
-                let kind=if intercept{TacticalKind::Intercept}else{TacticalKind::Tidal};
+            let intercept=is_key_pressed(KeyCode::Key1);
+            let tidal=is_key_pressed(KeyCode::Key2);
+            let guf=is_key_pressed(KeyCode::Key4);
+            if intercept||tidal||guf{
+                let kind=if guf{TacticalKind::GufDefense}
+                    else if tidal{TacticalKind::Tidal}
+                    else{TacticalKind::Intercept};
                 let profile=overworld.selected_tactical_site().and_then(|site|
                     MissionProfile::from_strategy(&overworld.strategy,site,kind));
                 if let Some(profile)=profile {
                     game=Game::for_mission(profile);
                     active_mission=Some((profile.site,kind));
+                    galaxy_mode=false;
+                }else if guf{
+                    overworld.report_notice(
+                        "NO GUF DEFENSE MISSION: ARRIVE AT A THREATENED DRUMMER SYSTEM");
                 }else{
-                    game=Game::new(if intercept{Mode::Intercept}else{Mode::Tidal});
+                    game=Game::new(if tidal{Mode::Tidal}else{Mode::Intercept});
                     active_mission=None;
+                    galaxy_mode=false;
                 }
-                galaxy_mode=false;
             }else{
                 overworld.update(dt);
             }
