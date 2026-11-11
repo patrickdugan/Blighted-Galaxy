@@ -59,7 +59,7 @@ jobs:
       - name: Render real fleet-and-flagship tactical scene
         run: |
           LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a target/release/blighted-galaxy \
-            --demo-mission 6 --snapshot-overworld bg-mission-fleet.png
+            --demo-mission 9 --snapshot-overworld bg-mission-fleet.png
       - name: Render real stellar-remnant interdiction
         run: |
           LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a target/release/blighted-galaxy \
