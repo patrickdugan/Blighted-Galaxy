@@ -437,3 +437,6 @@ pub mod overworld_nav;
 
 // BG-STR-01: persistent industrial strategy and causal attack network.
 pub mod strategy;
+
+// BG-STR-03: reproducible encounter profiles from industrial star systems.
+pub mod mission;
