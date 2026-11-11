@@ -373,7 +373,23 @@ impl OverworldNav{
         if is_key_pressed(KeyCode::P){
             if let Some(site)=self.selected.and_then(|p|self.strategy.nearest(p,500.0)) {
                 self.encounter_notice=Some(match self.strategy.fire_guf(site){
-                    Ok(arrival)=>format!("GU F STRIKE ETA T+{arrival:.0}"),
+                    Ok(arrival)=>format!("GUF STRIKE ETA T+{arrival:.0}"),
+                    Err(reason)=>reason.into(),
+                });
+            }
+        }
+        if is_key_pressed(KeyCode::V){
+            if let Some(site)=self.selected.and_then(|p|self.strategy.nearest(p,500.0)) {
+                self.encounter_notice=Some(match self.strategy.claim_for_weena(site){
+                    Ok(arrival)=>format!("WEENA INFLUENCE ETA T+{arrival:.0}"),
+                    Err(reason)=>reason.into(),
+                });
+            }
+        }
+        if is_key_pressed(KeyCode::J){
+            if let Some(site)=self.selected.and_then(|p|self.strategy.nearest(p,500.0)) {
+                self.encounter_notice=Some(match self.strategy.schedule_blight_seed(9,site){
+                    Ok(())=>"BLIGHT EXPANSION ORDER IN FLIGHT".into(),
                     Err(reason)=>reason.into(),
                 });
             }
@@ -808,7 +824,7 @@ impl OverworldNav{
             "B DARK OCCLUSION   H HELP",
             "SPACE PAUSE   , / . = 1 KYR",
             "T STRATEGY  I INDUSTRY  K KUGELBLITZ",
-            "U GUF NODE  P FIRE  |  1 2 BATTLE",
+            "U GUF  V WEENA  J BLIGHT  P FIRE",
         ];
         for (i,line) in hints.iter().enumerate(){
             draw_text(line,x,footer+18.0+i as f32*18.5,
