@@ -10,7 +10,16 @@ The galactic map and SI physics encounters now share a deterministic strategic c
 
 **Controls:** click a named system; `I` builds industry, `K` fabricates a kugelblitz, `Y` launches a Halo strike against a hostile system, `V` recruits for Weena, `U` builds a Guf relay, `P` fires the Guf array, `J` issues a Blight attack order, `N` toggles autonomous Blight expansion, and `T` shows/hides strategic rings. Use `Space` to run the historical clock. `1` opens the SI RKM interception and `2` opens the white-dwarf tidal encounter. When your ship has traveled to the selected star system, the encounter is a **campaign mission**, and `3`/`Tab` records victory, defeat, or withdrawal. Distant selections still open sandbox encounters, without changing strategic ownership. A ship travels at 0.76c after clicking a destination and pressing `Enter`.
 
-**System-specific missions:** The destination's industry, defenses, and stored kugelblitz assets now determine RKM enemy shield strength, opponent fire cadence, encounter distance and available friendly shield support. White-dwarf interdiction selects a stellar-remnant mass and dwarf conditions from the same system. During a campaign tidal mission, `A` and `D` spend limited radial tug burns toward/away from the black hole; a 300-second objective deadline gives that mission a defeat state. Each scored campaign encounter triggers a 250-galactic-year rearm period at its system. A map-side briefing displays the target's current battle conditions. `R` restarts the active mission with its original launch configuration.
+**System-specific missions:** The destination's industry, defenses, and stored kugelblitz assets now determine RKM enemy shield strength, opponent fire cadence, engagement range, deployed escort fleet size (0–4), and available friendly shield support. White-dwarf interdiction selects a stellar-remnant mass and dwarf conditions from the same system. During a campaign tidal mission, `A` and `D` spend limited radial tug burns toward/away from the black hole; a 300-second objective deadline gives that mission a defeat state. Each scored campaign encounter triggers a 250-galactic-year rearm period at its system. A map-side briefing displays the target's current battle conditions. `R` restarts the active mission with its original launch configuration.
+
+The real executable supports offline mission visual regression, without allowing a QA preview to award campaign resources:
+
+~~~sh
+cargo run --release -- --demo-mission 9 --snapshot-overworld bg-mission-fleet.png
+cargo run --release -- --demo-mission 6 --demo-tidal --snapshot-overworld bg-mission-tidal.png
+~~~
+
+GitHub Actions captures these mission scenes alongside the normal galaxy and Orion screenshots, and packages a Windows binary in the same workflow. The previews select their scene from the current scenario state and deliberately leave strategic rewards disconnected.
 
 Battles affect local shields, hostile control, and industry. The infrared-black Blight texture responds to ownership changes, with small reclaimed or defended enclaves around industrial sites, while the original 0.10c Orion envelope remains an absolute boundary. Strategic resource units and kugelblitz engineering are speculative game rules. See [strategic campaign design and test contracts](workpapers/strategy/STRATEGIC_CAMPAIGN.md).
 
