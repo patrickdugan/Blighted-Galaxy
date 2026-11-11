@@ -64,6 +64,10 @@ jobs:
         run: |
           LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a target/release/blighted-galaxy \
             --demo-mission 6 --demo-tidal --snapshot-overworld bg-mission-tidal.png
+      - name: Render threatened system Guf fleet-interception scene
+        run: |
+          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a target/release/blighted-galaxy \
+            --demo-mission 5 --demo-guf-defense --snapshot-overworld bg-mission-guf-defense.png
       - name: Upload true gameplay screenshots
         uses: actions/upload-artifact@v4
         with:
@@ -73,6 +77,7 @@ jobs:
             bg-overworld-orion.png
             bg-mission-fleet.png
             bg-mission-tidal.png
+            bg-mission-guf-defense.png
           if-no-files-found: error
           retention-days: 30
   windows-playable:
