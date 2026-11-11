@@ -306,10 +306,19 @@ impl Game {
 async fn main() {
     let mut game=Game::new(Mode::Intercept);
     let mut overworld=OverworldNav::new();
+    let args=std::env::args().collect::<Vec<_>>();
+    // Offline true-game-frame render for CI and art review; the same
+    // procedural GPU scene draws during ordinary gameplay.
+    let snapshot_path=args.windows(2)
+        .find(|pair|pair[0]=="--snapshot-overworld")
+        .map(|pair|pair[1].clone());
+    if args.iter().any(|v|v=="--focus-orion"){
+        overworld.focus_frontier();
+    }
     // The campaign opens on its galactic navigation layer. Existing
     // physics encounters remain directly reachable with keys 1 and 2.
     // --encounter keeps the previous startup for dedicated combat tests.
-    let encounter_start=std::env::args().any(|a|a=="--encounter");
+    let encounter_start=args.iter().any(|a|a=="--encounter");
     let mut galaxy_mode=!encounter_start;
     loop {
         if is_key_pressed(KeyCode::Escape) {break;}
@@ -333,6 +342,12 @@ async fn main() {
         }
         if galaxy_mode {overworld.draw();}
         else {game.draw();}
+        if let Some(path)=snapshot_path.as_ref(){
+            // get_screen_data flushes the current Macroquad frame before
+            // saving an actual PNG of the map. No synthetic mockup.
+            macroquad::prelude::get_screen_data().export_png(path);
+            break;
+        }
         next_frame().await;
     }
 }
