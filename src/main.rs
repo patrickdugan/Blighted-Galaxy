@@ -432,6 +432,11 @@ impl Game {
                     draw_text(&format!("FLEET: 1 flagship + {} escorts  |  total {} ships",
                         profile.escort_count,profile.escort_count+1),
                         825.0,76.0,17.0,ORANGE);
+                    draw_text(&format!(
+                        "ARMORY: 4 RKM / 5 SIEGE {} / 6 FLAK {}",
+                        if profile.siege_unlocked{"READY"}else{"LOCKED"},
+                        if profile.fan_unlocked{"READY"}else{"LOCKED"}),
+                        825.0,104.0,16.0,SKYBLUE);
                 }
             }
             draw_text(if self.demo_preview {
