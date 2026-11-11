@@ -32,6 +32,7 @@ impl MissionProfile {
     /// All caps are game balance limits, independent of Galactic scale.
     pub fn from_strategy(state: &StrategicState, site: usize,
         kind: TacticalKind) -> Option<Self> {
+        if !state.tactical_ready(site){return None;}
         let s=state.systems.get(site)?;
         let industry=s.industry.clamp(0.0, 10.0);
         let defense=s.defense.clamp(0.0, 25.0);
