@@ -305,6 +305,7 @@ pub struct OverworldNav {
     selected_name:Option<&'static str>,
     dragging:Option<Vec2>,
     encounter_notice:Option<String>,
+    convoy_origin:Option<usize>,
 }
 impl Default for OverworldNav{
     fn default()->Self{Self::new()}
@@ -326,7 +327,7 @@ impl OverworldNav{
             grid:true,local_grid:false,show_blight:true,
             show_help:false,selected:Some(SOL),
             selected_name:Some("SOL / ORION SPUR"),
-            dragging:None,encounter_notice:None,
+            dragging:None,encounter_notice:None,convoy_origin:None,
         }
     }
     /// Region detail view: the 10-kly ring spans most of the viewport.
@@ -373,6 +374,9 @@ impl OverworldNav{
         self.selected.and_then(|point|self.strategy.nearest(point,500.0))
             .filter(|&site|(self.model.position-self.strategy.systems[site].pos).len()<=500.0)
     }
+    pub fn report_notice(&mut self,text:&str){
+        self.encounter_notice=Some(text.into());
+    }
     pub fn tactical_result(&mut self,site:usize,kind:TacticalKind,
         result:TacticalOutcome){
         self.encounter_notice=Some(match self.strategy.resolve_tactical(site,kind,result){
@@ -408,6 +412,30 @@ impl OverworldNav{
                     Ok(message)=>message,Err(reason)=>reason.into(),
                 });
             }else{self.encounter_notice=Some("SELECT A NAMED INDUSTRIAL SYSTEM".into());}
+        }
+        if is_key_pressed(KeyCode::M){
+            if let Some(site)=self.selected.and_then(|p|self.strategy.nearest(p,500.0)){
+                match self.convoy_origin.take(){
+                    None=>{
+                        if self.strategy.systems[site].owner==Faction::Drummers{
+                            self.convoy_origin=Some(site);
+                            self.report_notice(&format!(
+                                "CONVOY ORIGIN: {} / SELECT DESTINATION + M",
+                                self.strategy.systems[site].name));
+                        }else{self.report_notice("SELECT DRUMMER CONVOY ORIGIN");}
+                    }
+                    Some(source) if source==site=>{
+                        self.report_notice("CONVOY ROUTE CANCELLED");
+                    }
+                    Some(source)=>{
+                        let message=match self.strategy.send_convoy(source,site){
+                            Ok(id)=>format!("CONVOY #{id} DISPATCHED"),
+                            Err(err)=>err.into(),
+                        };
+                        self.report_notice(&message);
+                    }
+                }
+            }else{self.report_notice("SELECT A NAMED SYSTEM FOR CONVOY");}
         }
         if is_key_pressed(KeyCode::P){
             if let Some(site)=self.selected.and_then(|p|self.strategy.nearest(p,500.0)) {
@@ -551,6 +579,7 @@ impl OverworldNav{
             let autonomy=self.strategy.blight_autonomy;
             self.strategy=StrategicState::new(self.model.year);
             self.strategy.blight_autonomy=autonomy;
+            self.convoy_origin=None;
         }else{self.strategy.advance_to(self.model.year);}
         if let Some(p)=self.model.last_arrival.take(){
             let near=WAYPOINTS.iter()
@@ -680,6 +709,15 @@ impl OverworldNav{
                     draw_circle_lines(p.x,p.y,radius+6.0,1.0,GOLD);
                 }
                 if site.kugelblitz>0 {draw_circle(p.x+radius,p.y-radius,3.0,CYAN);}
+            }
+            for convoy in &self.strategy.convoys {
+                let origin=self.world_to_screen(self.strategy.systems[convoy.source].pos);
+                let destination=self.world_to_screen(self.strategy.systems[convoy.target].pos);
+                draw_line(origin.x,origin.y,destination.x,destination.y,
+                    1.0,translucent(CYAN,0.35));
+                let ship=self.world_to_screen(convoy.position(
+                    self.strategy.year,&self.strategy.systems));
+                draw_rectangle(ship.x-3.0,ship.y-3.0,6.0,6.0,CYAN);
             }
             for signal in &self.strategy.signals {
                 if self.strategy.year<signal.launch_year{continue;}
@@ -866,12 +904,16 @@ impl OverworldNav{
                 let s=&self.strategy.systems[index];
                 self.panel_line(s.owner.label(),x,y,CYAN);y+=23.0;
                 self.panel_line(&format!("IND {:.1}   E {:.0}  M {:.0}",s.industry,s.energy,s.material),x,y,BONE);y+=23.0;
-                self.panel_line(&format!("K-HOLES {}   GUF {}",s.kugelblitz,if s.array_node{"READY"}else{"OFF"}),x,y,GOLD);y+=23.0;
+                self.panel_line(&format!("HOLES {}  GUF {}  WARD {:.1}",
+                    s.kugelblitz,if s.array_node{"ON"}else{"OFF"},s.guf_ward),
+                    x,y,GOLD);y+=23.0;
                 self.panel_line(if (self.model.position-s.pos).len()<=500.0{
                     "1 / 2: CAMPAIGN BATTLE READY"
                 }else{"TRAVEL HERE TO PLAY CAMPAIGN BATTLE"},x,y,CYAN);y+=23.0;
             }
-            self.panel_line(&format!("GUF CHARGE {:.0}%  WAVES {}",self.strategy.array_charged,self.strategy.signals.len()),x,y,BONE);y+=22.0;
+            self.panel_line(&format!("GUF {:.0}%  WAVES {}  CARGO {}",
+                self.strategy.array_charged,self.strategy.signals.len(),
+                self.strategy.convoys.len()),x,y,BONE);y+=22.0;
             self.panel_line(&format!("BLIGHT AUTONOMY {}",if self.strategy.blight_autonomy{"ON"}else{"OFF"}),x,y,REDDIM);
         }
         let footer=screen_height()-160.0;
@@ -881,15 +923,15 @@ impl OverworldNav{
         draw_line(x,footer,right+w-16.0,footer,1.0,
             Color::new(0.6,0.7,0.8,0.31));
         let hints=[
-            "WASD / RIGHT-DRAG    PAN",
-            "WHEEL / Z X        ZOOM",
-            "F ORION   C CORE   O FRONT",
-            "G GALACTIC / L LOCAL STENCIL",
-            "B DARK OCCLUSION   H HELP",
-            "SPACE PAUSE   , / . = 1 KYR",
-            "T STRATEGY  I INDUSTRY  K KUGELBLITZ",
-            "U GUF  V WEENA  J BLIGHT  P FIRE",
-            "Y HALO STRIKE  N SWARM AUTONOMY",
+            "WASD / DRAG PAN  Z X ZOOM",
+            "F ORION  G L GRIDS  B DARK",
+            "SPACE PAUSE   Q/E TIME",
+            "I INDUSTRY   K KUGELBLITZ",
+            "U GUF NODE  P FIRE  V WEENA",
+            "J BLIGHT  Y HALO  N AUTO",
+            "M CONVOY SOURCE -> DEST",
+            "1 RKM  2 TIDAL  4 GUF DEFEND",
+            "T STRATEGY  3/TAB RETURN",
         ];
         for (i,line) in hints.iter().enumerate(){
             draw_text(line,x,footer+18.0+i as f32*15.7,
@@ -910,16 +952,27 @@ impl OverworldNav{
             "ROUTE REQUIRED / SELECT SYSTEM + ENTER"
         }else if !self.strategy.tactical_ready(site){
             "SYSTEM REARMING / ENCOUNTERS ARE SANDBOX ONLY"
+        }else if self.strategy.incoming_guf(site).is_some()
+            && s.owner==Faction::Drummers{
+            "MISSION READY / 1 INTERCEPT  2 TIDAL  4 DEFEND GUF"
         }else{"MISSION READY / 1 INTERCEPT  2 TIDAL"};
         shadow_text(&format!("CAMPAIGN TARGET: {}",s.name),
             x+12.0,y+24.0,20.0,GOLD);
         shadow_text(state,x+12.0,y+45.0,16.0,
             if onboard&&self.strategy.tactical_ready(site){CYAN}else{BONE});
-        if let Some(p)=MissionProfile::from_strategy(
+        if let Some((eta,beams,power))=self.strategy.incoming_guf(site){
+            shadow_text(&format!(
+                "INBOUND GUF {} BEAMS / {:.0} ATTACK / ETA T+{:.0} / WARD {:.1}",
+                beams,power,eta,s.guf_ward),x+12.0,y+65.0,15.0,REDDIM);
+        }else if let Some(origin)=self.convoy_origin{
+            shadow_text(&format!(
+                "CONVOY SOURCE {} / SELECT DRUMMER DESTINATION + M",
+                self.strategy.systems[origin].name),x+12.0,y+65.0,15.0,CYAN);
+        }else if let Some(p)=MissionProfile::from_strategy(
             &self.strategy,site,TacticalKind::Intercept){
             shadow_text(&format!(
-                "ENEMY SHIELD {:.2e} J  /  FIRE {:.2}s  /  REMNANT {:.1} M_sun",
-                p.enemy_shield_j,p.enemy_fire_interval_s,p.hole_mass_solar),
+                "ENEMY SHIELD {:.2e} J / FIRE {:.2}s / AMMO {} / ESCORTS {}",
+                p.enemy_shield_j,p.enemy_fire_interval_s,p.ammo_units,p.escort_count),
                 x+12.0,y+65.0,15.0,BLUE);
         }else{
             let rearm=self.strategy.tactical_rearm_remaining(site).unwrap_or(0.0);
