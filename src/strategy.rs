@@ -37,6 +37,7 @@ pub struct StrategicState {
     pub signals:Vec<Signal>,pub events:Vec<String>,
     pub array_charged:f64,pub pulses:u32,
     pub historical:bool,
+    pub blight_autonomy:bool,
     /// Incremented whenever a world changes its territorial footprint.
     pub territory_revision:u64,
 }
@@ -59,7 +60,7 @@ impl StrategicState {
         Self{year,systems,signals:vec![],events:vec![
             "STRATEGIC SCENARIO: industrial networks online".into()],
             array_charged:0.0,pulses:0,historical:false,
-            territory_revision:0}
+            blight_autonomy:true,territory_revision:0}
     }
     /// Site-scale occupation carved into the procedural historical atlas.
     /// Every resulting Blight pixel remains inside Orion's causal circle.
@@ -169,6 +170,9 @@ impl StrategicState {
         if let Some(s)=self.systems.get_mut(site){s.owner=owner;self.territory_revision+=1;}
     }
     pub fn schedule_blight_seed(&mut self,source:usize,target:usize)->Result<(),&'static str>{
+        if self.signals.iter().any(|s|s.kind==SignalKind::BlightSeed&&s.target==target){
+            return Err("BLIGHT PACKET ALREADY IN FLIGHT");
+        }
         let (a,b)=(self.systems.get(source).ok_or("INVALID SOURCE")?,
                    self.systems.get(target).ok_or("INVALID TARGET")?);
         if a.owner!=Faction::Blight{return Err("SOURCE IS NOT BLIGHT");}
@@ -252,10 +256,38 @@ impl StrategicState {
         self.events.push(format!("CHAMBER OF GUF fired; target arrival T+{arrival:.0} yr"));
         Ok(arrival)
     }
+    /// Slow autonomous swarm campaign. Commands travel on existing 0.10c
+    /// propagation rules and never exceed the Orion light-cone envelope.
+    fn plan_blight_expansion(&mut self){
+        if self.signals.iter().filter(|s|s.kind==SignalKind::BlightSeed).count()>=2{return;}
+        let mut candidates=Vec::new();
+        for (target,site) in self.systems.iter().enumerate(){
+            if site.owner==Faction::Blight ||
+                self.signals.iter().any(|p|p.kind==SignalKind::BlightSeed&&p.target==target){
+                continue;
+            }
+            for (source,src) in self.systems.iter().enumerate(){
+                if src.owner!=Faction::Blight||source==target{continue;}
+                let eta=self.year+(src.pos-site.pos).len()/0.10+1_500.0;
+                if eta>200_000.0 || (site.pos-ORION_OUTBREAK).len()>Front::new(eta).reach_ly(){
+                    continue;
+                }
+                candidates.push(((src.pos-site.pos).len(),source,target));
+            }
+        }
+        candidates.sort_by(|a,b|a.0.total_cmp(&b.0));
+        if let Some((_,source,target))=candidates.first().copied(){
+            if self.schedule_blight_seed(source,target).is_ok(){
+                self.events.push(format!("BLIGHT autonomous growth order: {}",
+                    self.systems[target].name));
+            }
+        }
+    }
     pub fn advance_to(&mut self,year:f64){
         if !year.is_finite()||year<=self.year{return;}
         let end=year.min(200_000.0);
         while self.year<end {
+            let previous_bin=(self.year/2_500.0).floor() as u64;
             let next=(self.year+250.0).min(end);
             let dt=next-self.year;
             for s in &mut self.systems {
@@ -315,6 +347,9 @@ impl StrategicState {
                 }
             }
             self.signals=pending;
+            if self.blight_autonomy && (self.year/2_500.0).floor() as u64>previous_bin {
+                self.plan_blight_expansion();
+            }
         }
         if self.events.len()>14 {
             let extra=self.events.len()-14;
@@ -393,6 +428,18 @@ mod tests {
         assert_eq!(s.systems[1].owner,Faction::Blight);
         s.advance_to(arrival);
         assert_eq!(s.systems[1].owner,Faction::Drummers);
+    }
+    #[test] fn autonomous_blight_schedules_only_causal_packets(){
+        let mut s=StrategicState::default();
+        s.advance_to(102_500.0);
+        assert!(s.signals.iter().any(|p|p.kind==SignalKind::BlightSeed));
+        for packet in &s.signals {
+            if packet.kind!=SignalKind::BlightSeed{continue;}
+            let distance=(s.systems[packet.source].pos-s.systems[packet.target].pos).len();
+            assert!(packet.arrival_year>=packet.launch_year+distance/0.10);
+            assert!((s.systems[packet.target].pos-ORION_OUTBREAK).len()
+                <=Front::new(packet.arrival_year).reach_ly());
+        }
     }
     #[test] fn insufficient_nodes_cannot_fire(){
         let mut s=StrategicState::default();s.array_charged=100.0;
