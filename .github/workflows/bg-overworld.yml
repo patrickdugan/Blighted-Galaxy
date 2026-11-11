@@ -5,6 +5,9 @@ on:
       - "src/overworld.rs"
       - "src/overworld_nav.rs"
       - "src/main.rs"
+      - "src/mission.rs"
+      - "src/strategy.rs"
+      - "src/si_bridge.rs"
       - "src/lib.rs"
       - "workpapers/overworld/**"
       - ".github/workflows/bg-overworld.yml"
@@ -14,6 +17,9 @@ on:
       - "src/overworld.rs"
       - "src/overworld_nav.rs"
       - "src/main.rs"
+      - "src/mission.rs"
+      - "src/strategy.rs"
+      - "src/si_bridge.rs"
       - "src/lib.rs"
       - ".github/workflows/bg-overworld.yml"
   workflow_dispatch:
@@ -50,6 +56,14 @@ jobs:
         run: |
           LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a target/release/blighted-galaxy \
             --focus-orion --snapshot-overworld bg-overworld-orion.png
+      - name: Render real fleet-and-flagship tactical scene
+        run: |
+          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a target/release/blighted-galaxy \
+            --demo-mission 6 --snapshot-overworld bg-mission-fleet.png
+      - name: Render real stellar-remnant interdiction
+        run: |
+          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a target/release/blighted-galaxy \
+            --demo-mission 6 --demo-tidal --snapshot-overworld bg-mission-tidal.png
       - name: Upload true gameplay screenshots
         uses: actions/upload-artifact@v4
         with:
@@ -57,6 +71,8 @@ jobs:
           path: |
             bg-overworld-full.png
             bg-overworld-orion.png
+            bg-mission-fleet.png
+            bg-mission-tidal.png
           if-no-files-found: error
           retention-days: 30
   windows-playable:
