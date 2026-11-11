@@ -39,6 +39,7 @@ struct Game {
     mission_name:Option<&'static str>,
     mission_profile:Option<MissionProfile>,
     tidal_tug_budget:u8,
+    demo_preview:bool,
 }
 const DELTA:f64=1.0/120.0;
 const TIDAL_STEP:f64=0.10;
@@ -52,7 +53,7 @@ impl Game {
             camera:CameraMeters::new(center,scale),
             sim_rate:1.0,accumulator:0.0,manual_aim:false,
             facing_rad:0.0,effects:Vec::new(),displayed_latest_time_s:-1.0,
-            mission_name:None,mission_profile:None,tidal_tug_budget:0}
+            mission_name:None,mission_profile:None,tidal_tug_budget:0,demo_preview:false}
     }
     fn for_mission(profile:MissionProfile)->Self {
         let mode=match profile.kind {
@@ -103,10 +104,12 @@ impl Game {
             if is_key_pressed(KeyCode::Key2) { *self=Self::new(Mode::Tidal); }
         }
         if is_key_pressed(KeyCode::R) {
+            let preview=self.demo_preview;
             *self=match self.mission_profile {
                 Some(profile)=>Self::for_mission(profile),
                 None=>Self::new(self.mode),
             };
+            self.demo_preview=preview;
         }
         if is_key_pressed(KeyCode::Q) {self.sim_rate=(self.sim_rate/2.0).max(0.125);}
         if is_key_pressed(KeyCode::E) {self.sim_rate=(self.sim_rate*2.0).min(64.0);}
@@ -406,8 +409,11 @@ impl Game {
                         825.0,76.0,17.0,ORANGE);
                 }
             }
-            draw_text("3 / TAB: RETURN TO GALAXY AND RECORD MISSION RESULT",
-                23.0,286.0,15.0,LIGHTGRAY);
+            draw_text(if self.demo_preview {
+                "QA PREVIEW ONLY / 3 OR TAB RETURNS TO GALAXY WITHOUT REWARDS"
+            }else{
+                "3 / TAB: RETURN TO GALAXY AND RECORD MISSION RESULT"
+            },23.0,286.0,15.0,LIGHTGRAY);
         }
     }
 }
@@ -431,6 +437,22 @@ async fn main() {
     let encounter_start=args.iter().any(|a|a=="--encounter");
     let mut galaxy_mode=!encounter_start;
     let mut active_mission:Option<(usize,TacticalKind)>=None;
+    // Deterministic real-engine QA snapshots of named industrial missions.
+    // Preview scenes deliberately have no strategic reward linkage.
+    if let Some(raw_site)=args.windows(2)
+        .find(|pair|pair[0]=="--demo-mission").map(|pair|&pair[1]) {
+        if let Ok(site)=raw_site.parse::<usize>() {
+            let kind=if args.iter().any(|arg|arg=="--demo-tidal"){
+                TacticalKind::Tidal
+            }else{TacticalKind::Intercept};
+            if let Some(profile)=MissionProfile::from_strategy(
+                &overworld.strategy,site,kind) {
+                game=Game::for_mission(profile);
+                game.demo_preview=true;
+                galaxy_mode=false;
+            }
+        }
+    }
     // Allow the built-in font atlas and GPU textures to settle before
     // capturing an actual frame in headless CI.
     let mut frame_count=0usize;
