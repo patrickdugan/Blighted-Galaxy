@@ -59,11 +59,12 @@ impl StrategicState {
         systems.push(System{name:"ORION SEED",pos:ORION_OUTBREAK,
             owner:Faction::Blight,industry:4.0,energy:250.0,material:250.0,
             kugelblitz:0,array_node:false,defense:25.0});
+        let count=systems.len();
         Self{year,systems,signals:vec![],events:vec![
             "STRATEGIC SCENARIO: industrial networks online".into()],
             array_charged:0.0,pulses:0,historical:false,
             blight_autonomy:true,territory_revision:0,
-            last_tactical_year:vec![f64::NEG_INFINITY;systems.len()]}
+            last_tactical_year:vec![f64::NEG_INFINITY;count]}
     }
     /// Site-scale occupation carved into the procedural historical atlas.
     /// Every resulting Blight pixel remains inside Orion's causal circle.
