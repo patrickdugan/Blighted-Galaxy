@@ -40,6 +40,8 @@ pub struct StrategicState {
     pub blight_autonomy:bool,
     /// Incremented whenever a world changes its territorial footprint.
     pub territory_revision:u64,
+    /// One settled result per industrial system per 250 galactic years.
+    pub last_tactical_year:Vec<f64>,
 }
 impl Default for StrategicState { fn default()->Self {Self::new(100_000.0)} }
 impl StrategicState {
@@ -60,7 +62,8 @@ impl StrategicState {
         Self{year,systems,signals:vec![],events:vec![
             "STRATEGIC SCENARIO: industrial networks online".into()],
             array_charged:0.0,pulses:0,historical:false,
-            blight_autonomy:true,territory_revision:0}
+            blight_autonomy:true,territory_revision:0,
+            last_tactical_year:vec![f64::NEG_INFINITY;systems.len()]}
     }
     /// Site-scale occupation carved into the procedural historical atlas.
     /// Every resulting Blight pixel remains inside Orion's causal circle.
@@ -85,8 +88,19 @@ impl StrategicState {
         }
         front.status(p)
     }
+    pub fn tactical_ready(&self,site:usize)->bool{
+        site<self.systems.len() && self.year-self.last_tactical_year[site]>=250.0
+    }
+    pub fn tactical_rearm_remaining(&self,site:usize)->Option<f64>{
+        self.systems.get(site)?;
+        Some((250.0-(self.year-self.last_tactical_year[site])).max(0.0))
+    }
     pub fn resolve_tactical(&mut self,site:usize,kind:TacticalKind,
         outcome:TacticalOutcome)->Result<String,&'static str>{
+        if site>=self.systems.len(){return Err("UNKNOWN TACTICAL SYSTEM");}
+        if outcome!=TacticalOutcome::Withdrawn && !self.tactical_ready(site){
+            return Err("SYSTEM REARMING AFTER PREVIOUS BATTLE");
+        }
         let s=self.systems.get_mut(site).ok_or("UNKNOWN TACTICAL SYSTEM")?;
         let name=s.name;
         let descriptor=match kind {
@@ -127,7 +141,10 @@ impl StrategicState {
                 }
             },
         };
-        if outcome!=TacticalOutcome::Withdrawn{self.territory_revision+=1;}
+        if outcome!=TacticalOutcome::Withdrawn{
+            self.territory_revision+=1;
+            self.last_tactical_year[site]=self.year;
+        }
         self.events.push(message.clone());
         Ok(message)
     }
@@ -449,6 +466,20 @@ mod tests {
         let mut s=StrategicState::default();s.array_charged=100.0;
         s.systems[6].array_node=true;
         assert!(s.fire_guf(5).is_err());
+    }
+    #[test] fn tactical_cooldown_prevents_instant_friendly_resource_farming(){
+        let mut s=StrategicState::default();
+        let before=s.systems[5].energy;
+        assert!(s.resolve_tactical(5,TacticalKind::Intercept,
+            TacticalOutcome::Victory).is_ok());
+        let after=s.systems[5].energy;
+        assert!(after>before);
+        assert!(!s.tactical_ready(5));
+        assert!(s.resolve_tactical(5,TacticalKind::Intercept,
+            TacticalOutcome::Victory).is_err());
+        assert_eq!(after,s.systems[5].energy);
+        s.advance_to(100_250.0);
+        assert!(s.tactical_ready(5));
     }
     #[test] fn weena_claims_are_delayed(){
         let mut s=StrategicState::new(100_000.0);
