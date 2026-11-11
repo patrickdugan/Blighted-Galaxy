@@ -7,6 +7,7 @@ use blighted_galaxy::si_bridge::{
 use blighted_galaxy::V2;
 use blighted_galaxy::overworld_nav::OverworldNav;
 use blighted_galaxy::strategy::{TacticalKind,TacticalOutcome};
+use blighted_galaxy::mission::MissionProfile;
 use macroquad::prelude::*;
 
 fn config()->Conf {
@@ -36,6 +37,7 @@ struct Game {
     effects:Vec<Effect>,
     displayed_latest_time_s:f64,
     mission_name:Option<&'static str>,
+    mission_profile:Option<MissionProfile>,
 }
 const DELTA:f64=1.0/120.0;
 const TIDAL_STEP:f64=0.10;
@@ -49,7 +51,21 @@ impl Game {
             camera:CameraMeters::new(center,scale),
             sim_rate:1.0,accumulator:0.0,manual_aim:false,
             facing_rad:0.0,effects:Vec::new(),displayed_latest_time_s:-1.0,
-            mission_name:None}
+            mission_name:None,mission_profile:None}
+    }
+    fn for_mission(profile:MissionProfile)->Self {
+        let mode=match profile.kind {
+            TacticalKind::Intercept=>Mode::Intercept,
+            TacticalKind::Tidal=>Mode::Tidal,
+        };
+        let mut game=Self::new(mode);
+        match mode {
+            Mode::Intercept=>game.intercept=profile.joust(),
+            Mode::Tidal=>game.tidal=profile.tidal(),
+        }
+        game.mission_name=Some(profile.site_name);
+        game.mission_profile=Some(profile);
+        game
     }
     fn screen(&self,pos:V2)->Vec2 {
         let p=self.camera.screen_of(pos,screen_width() as f64,screen_height() as f64);
@@ -80,10 +96,10 @@ impl Game {
             if is_key_pressed(KeyCode::Key2) { *self=Self::new(Mode::Tidal); }
         }
         if is_key_pressed(KeyCode::R) {
-            let mode=self.mode;
-            let mission=self.mission_name;
-            *self=Self::new(mode);
-            self.mission_name=mission;
+            *self=match self.mission_profile {
+                Some(profile)=>Self::for_mission(profile),
+                None=>Self::new(self.mode),
+            };
         }
         if is_key_pressed(KeyCode::Q) {self.sim_rate=(self.sim_rate/2.0).max(0.125);}
         if is_key_pressed(KeyCode::E) {self.sim_rate=(self.sim_rate*2.0).min(64.0);}
@@ -304,7 +320,7 @@ impl Game {
         draw_text("BLIGHTED GALAXY / SI GAMEPLAY BRIDGE",23.0,45.0,27.0,WHITE);
         let title=match self.mode {
             Mode::Intercept=>"1  RELATIVISTIC RKM INTERCEPT • 2kg PROJECTILES",
-            Mode::Tidal=>"2  WHITE-DWARF TIDAL BREAKUP • 10 SOLAR MASS HOLE",
+            Mode::Tidal=>"2  WHITE-DWARF TIDAL INTERDICTION • STELLAR REMNANT",
         };
         draw_text(title,23.0,80.0,22.0,SKYBLUE);
         draw_text("1 / 2 SCENARIOS   3 / TAB GALAXY   Q / E TIME   Z / X / WHEEL ZOOM",
@@ -326,10 +342,22 @@ impl Game {
                 TacticalOutcome::Defeat=>"SHIP LOST",
                 TacticalOutcome::Withdrawn=>"OBJECTIVE INCOMPLETE",
             };
-            draw_rectangle(13.0,221.0,800.0,60.0,Color::new(0.02,0.03,0.06,0.88));
-            draw_text(&format!("CAMPAIGN: {site} / {status}"),23.0,247.0,21.0,GOLD);
+            draw_rectangle(13.0,221.0,800.0,75.0,Color::new(0.02,0.03,0.06,0.88));
+            draw_text(&format!("CAMPAIGN: {site} / {status}"),23.0,244.0,20.0,GOLD);
+            if let Some(profile)=self.mission_profile {
+                let conditions=if self.mode==Mode::Intercept {
+                    format!("IND {:.1}  DEF {:.1}  HALO {}   OPP SHIELD {:.2e} J   FIRE {:.2}s",
+                        profile.industry,profile.defense,profile.kugelblitz,
+                        profile.enemy_shield_j,profile.enemy_fire_interval_s)
+                }else{
+                    format!("IND {:.1} DEF {:.1}  HOLE {:.1} M_sun  DWARF {:.2} M_sun",
+                        profile.industry,profile.defense,
+                        profile.hole_mass_solar,profile.dwarf_mass_solar)
+                };
+                draw_text(&conditions,23.0,267.0,16.0,CYAN);
+            }
             draw_text("3 / TAB: RETURN TO GALAXY AND RECORD MISSION RESULT",
-                23.0,271.0,17.0,LIGHTGRAY);
+                23.0,286.0,15.0,LIGHTGRAY);
         }
     }
 }
@@ -363,11 +391,15 @@ async fn main() {
             if is_key_pressed(KeyCode::Key1)||is_key_pressed(KeyCode::Key2){
                 let intercept=is_key_pressed(KeyCode::Key1);
                 let kind=if intercept{TacticalKind::Intercept}else{TacticalKind::Tidal};
-                game=Game::new(if intercept{Mode::Intercept}else{Mode::Tidal});
-                active_mission=overworld.selected_tactical_site().map(|site|{
-                    game.mission_name=Some(overworld.strategy.systems[site].name);
-                    (site,kind)
-                });
+                let profile=overworld.selected_tactical_site().and_then(|site|
+                    MissionProfile::from_strategy(&overworld.strategy,site,kind));
+                if let Some(profile)=profile {
+                    game=Game::for_mission(profile);
+                    active_mission=Some((profile.site,kind));
+                }else{
+                    game=Game::new(if intercept{Mode::Intercept}else{Mode::Tidal});
+                    active_mission=None;
+                }
                 galaxy_mode=false;
             }else{
                 overworld.update(dt);
