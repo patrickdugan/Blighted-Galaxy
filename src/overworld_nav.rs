@@ -17,7 +17,7 @@ use crate::overworld::{
     SectorStatus,SOL,WAYPOINTS,
 };
 use crate::V2;
-use crate::strategy::{StrategicState,Project,Faction};
+use crate::strategy::{StrategicState,Project,Faction,TacticalKind,TacticalOutcome};
 use macroquad::prelude::*;
 use std::f64::consts::{PI,TAU};
 
@@ -165,7 +165,7 @@ fn set_overlay(image:&mut Image,x:i32,y:i32,color:[u8;4]){
     let off=(y as usize*TEX_SIZE as usize+x as usize)*4;
     image.bytes[off..off+4].copy_from_slice(&color);
 }
-fn blight_image(front:Front)->Image {
+fn blight_image(front:Front,strategy:&StrategicState)->Image {
     let mut image=Image::gen_image_color(
         TEX_SIZE,TEX_SIZE,Color::new(0.0,0.0,0.0,0.0));
     if front.reach_ly()<5.0{return image;}
@@ -191,8 +191,16 @@ fn blight_image(front:Front)->Image {
                 (py as f64*0.17).cos())+
                 0.44*((px as f64*0.71+py as f64*0.47).sin());
             let edge=local-110.0*grit;
-            if r>edge {continue;}
-            let status=front.status(w);
+            let status=strategy.territory_status(w,front);
+            // A captured Blight outpost may push a narrow occupied patch
+            // beyond the historical resistance notch, within causality.
+            let strategic_blight=strategy.systems.iter().any(|s|{
+                s.owner==Faction::Blight &&
+                (w-s.pos).len()<=(500.0+s.industry.max(0.0)*70.0+
+                    s.defense.max(0.0)*50.0).clamp(300.0,1550.0)
+            });
+            if r>edge && !strategic_blight {continue;}
+            if status==SectorStatus::Unaffected {continue;}
             if status==SectorStatus::Reclaimed{
                 set_overlay(&mut image,px,py,[2,23,31,95]);
                 continue;
@@ -215,7 +223,7 @@ fn blight_image(front:Front)->Image {
         let achieved=front.sector_reach_ly(theta);
         let radius=achieved*(rng.unit().sqrt()*0.99);
         let point=ORION_OUTBREAK+V2::from_angle(theta)*radius;
-        let status=front.status(point);
+        let status=strategy.territory_status(point,front);
         if status!=SectorStatus::Held&&
             status!=SectorStatus::Contested{continue;}
         let (x,y)=tex_xy(point);
@@ -287,6 +295,7 @@ pub struct OverworldNav {
     base:Texture2D,
     blight:Texture2D,
     last_front_bucket:i64,
+    last_territory_revision:u64,
     grid:bool,
     local_grid:bool,
     show_blight:bool,
@@ -302,16 +311,17 @@ impl Default for OverworldNav{
 impl OverworldNav{
     pub fn new()->Self{
         let base=Texture2D::from_image(&generate_galaxy());
+        let strategy=StrategicState::default();
         let blight=Texture2D::from_image(
-            &blight_image(Front::new(100_000.0)));
+            &blight_image(Front::new(100_000.0),&strategy));
         base.set_filter(FilterMode::Linear);
         blight.set_filter(FilterMode::Linear);
         Self{
             model:GalacticNavModel::default(),
-            strategy:StrategicState::default(),strategy_visible:true,
+            strategy,strategy_visible:true,
             center:V2::new(-500.0,-8_000.0),
             zoom:1.0,base,blight,
-            last_front_bucket:100,
+            last_front_bucket:100,last_territory_revision:0,
             grid:true,local_grid:false,show_blight:true,
             show_help:false,selected:Some(SOL),
             selected_name:Some("SOL / ORION SPUR"),
@@ -354,6 +364,25 @@ impl OverworldNav{
             let d=(q-mouse).length();
             if d<14.0 {Some((i,d))}else{None}
         }).min_by(|a,b|a.1.total_cmp(&b.1)).map(|x|x.0)
+    }
+    pub fn selected_tactical_site(&self)->Option<usize>{
+        self.selected.and_then(|point|self.strategy.nearest(point,500.0))
+    }
+    pub fn tactical_result(&mut self,site:usize,kind:TacticalKind,
+        result:TacticalOutcome){
+        self.encounter_notice=Some(match self.strategy.resolve_tactical(site,kind,result){
+            Ok(message)=>message,Err(reason)=>reason.into(),
+        });
+        self.refresh_occupation();
+    }
+    fn refresh_occupation(&mut self){
+        let bucket=(self.model.year/1_000.0).round() as i64;
+        if bucket==self.last_front_bucket &&
+            self.last_territory_revision==self.strategy.territory_revision{return;}
+        let image=blight_image(self.model.front(),&self.strategy);
+        self.blight.update(&image);
+        self.last_front_bucket=bucket;
+        self.last_territory_revision=self.strategy.territory_revision;
     }
     pub fn update(&mut self,seconds:f64){
         let dt=seconds.clamp(0.0,0.10);
@@ -512,13 +541,7 @@ impl OverworldNav{
                 None=>"ARRIVED: uncharted sector / survey ready".into(),
             });
         }
-        let bucket=(self.model.year/1_000.0).round() as i64;
-        if bucket!=self.last_front_bucket{
-            let image=blight_image(Front::new(
-                bucket as f64*1_000.0));
-            self.blight.update(&image);
-            self.last_front_bucket=bucket;
-        }
+        self.refresh_occupation();
     }
     fn draw_textures(&self){
         let top=self.world_to_screen(
@@ -639,10 +662,17 @@ impl OverworldNav{
                 if site.kugelblitz>0 {draw_circle(p.x+radius,p.y-radius,3.0,CYAN);}
             }
             for signal in &self.strategy.signals {
-                let a=self.world_to_screen(self.strategy.systems[signal.source].pos);
-                let b=self.world_to_screen(self.strategy.systems[signal.target].pos);
+                if self.strategy.year<signal.launch_year{continue;}
+                let source=self.strategy.systems[signal.source].pos;
+                let target=self.strategy.systems[signal.target].pos;
+                let a=self.world_to_screen(source);
+                let b=self.world_to_screen(target);
                 let color=if signal.kind==crate::strategy::SignalKind::ArrayPulse{GOLD}else{REDDIM};
                 draw_line(a.x,a.y,b.x,b.y,1.1,translucent(color,0.55));
+                let transit=(self.strategy.year-signal.launch_year)/
+                    (signal.arrival_year-signal.launch_year).max(1.0);
+                let p=a+(b-a)*transit.clamp(0.0,1.0) as f32;
+                draw_circle(p.x,p.y,3.0,color);
             }
         }
         let p=self.world_to_screen(ORION_OUTBREAK);
@@ -740,7 +770,7 @@ impl OverworldNav{
         y+=26.0;
         let point=self.selected.unwrap_or(self.model.position);
         let sector=overworld::sector_of(point);
-        let status=self.model.front().status(point);
+        let status=self.strategy.territory_status(point,self.model.front());
         self.panel_line(&format!("LONGITUDE  {:03}-{:03} deg",
             sector.galactic_angle_index*30,
             (sector.galactic_angle_index+1)*30),x,y,BONE);
@@ -875,12 +905,12 @@ impl OverworldNav{
                 210.0,1.0,BLUE);
             let text=[
                 "THE BLIGHT IS AN INFRARED-DARK STELLAR OCCULTATION.",
-                "RED POINTS ARE OCCUPIED STARS, WITH CAUSALLY BOUNDED TENDRILS.",
+                "RED POINTS TRACK ACTIVE ORION-BOUNDED OCCUPATION AND TENDRILS.",
                 "THE GALACTIC GRID IS CENTERED ON THE CORE / 30 DEG, 15 KLY.",
                 "THE LOCAL FRONTIER STENCIL IS CENTERED ON ORION / 15 DEG, 2 KLY.",
                 "WAYPOINT COORDINATES ARE SCHEMATIC; SOURCE EPISODES ARE CANON.",
                 "CRUISE TIME AND PROPER TIME OBEY SPECIAL RELATIVITY.",
-                "SPACE PAUSE • F ORION FOCUS • H CLOSE THIS PANEL",
+                "SELECT STAR AND PRESS 1 / 2 TO START A STRATEGIC ENCOUNTER.",
             ];
             for (i,line) in text.iter().enumerate(){
                 draw_text(line,61.0,154.0+i as f32*24.0,
