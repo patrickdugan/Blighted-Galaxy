@@ -4,9 +4,27 @@ A recovery project for the lost Rust-based Blighted Galaxy game, preserving its 
 
 The earlier local engine was lost in 2026. This code is a clean-room reconstruction. The surviving 94 pages of source material, approximately 34,000 whitespace-delimited words, are archived as text transcriptions in [recovery/](recovery/README.md).
 
+## Playable galactic overworld (procedurally rendered)
+
+The game opens on a **procedural Milky Way navigation atlas**. Its starfield, luminous spiral arms, dust, barred Galactic Center, infrared-darkened Jenkins Swarm, red occupied-star speckles and narrow expansion tendrils are generated from fixed numeric seeds in Macroquad. The image is rendered at runtime from world coordinates, with no baked NASA map, screenshot texture or copyrighted game assets.
+
+The radial navigation stencils match the astronomical chart in the design reference. **Galactic longitude** is measured from the north/up axis clockwise in 30-degree sectors, with 15,000-light-year rings around the Galactic Center. A separate **Orion front** stencil has 15-degree sectors and 2,000-light-year radial bands. The maximal causal front advances at 0.10c and reaches **exactly 10,000 light-years after 100,000 years**; sector-specific Jenkins tendrils stop inside that radius as post-human resistance delays replication by thousands of years. Substantial portions of the galaxy remain visibly unoccupied.
+
+The campaign timeline represents a parameterized *100,000 years since the Orion outbreak* scenario. The recovered [macro-history](workpapers/lore/macro-history.txt) describes a longer and partly undated human/post-human chronology; no historical episode dates are silently asserted. Schematic navigable sites include Amicus, Olympus, the Great Library, the Outer Arm exodus, Bel-Air, the Nebular Wastes, the Perseus front and the Canis Major departure. Each derives its name and narrative role from the source manuscripts. Their approximate map coordinates are gameplay staging, not recovered canon.
+
+~~~sh
+cargo run --release
+# Previous direct-to-intercept startup:
+cargo run --release -- --encounter
+~~~
+
+**Overworld controls:** left-click a site or sector to plot a route; **Enter** commits a 0.76c relativistic leg. The navigation clock tracks galactic-frame and ship proper years separately. **Space** pause, **Q/E** adjust years per second, **,/.** skip ±1,000 years, **Home/End** jump to 0/100,000 years. **WASD/arrows** or right-mouse drag pan; wheel or **Z/X** zoom; **F** focus on the Orion wavefront, **C** Galactic Center, **O** Orion; **G** Galactic Center grid, **L** local radial stencil, **B** occultation overlay, **H** help. **1** enters the existing relativistic intercept, **2** the tidal encounter, and **3/Tab** returns to the overworld. **Esc** quits.
+
+See the [technical and art-direction workpaper](workpapers/overworld/PROCEDURAL_ORION_NAV.md) for deterministic generation, sector math, travel timing and source/canon distinctions.
+
 ## Main game: SI-driven encounter bridge
 
-The default game now launches a physically scaled **relativistic intercept encounter**, with a switch to a **white-dwarf tidal encounter**. The original game remains preserved as an opt-in legacy binary.
+The encounter bridge contains a physically scaled **relativistic intercept** and an opt-in **white-dwarf tidal encounter**. These scenes are accessible from the galactic overworld with keys **1/2**, or can be launched directly with `--encounter`. The original game remains preserved as an opt-in legacy binary.
 
 ~~~sh
 cargo run --release
