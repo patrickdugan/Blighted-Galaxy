@@ -1,0 +1,19 @@
+name: BG-STR-01 strategic campaign checks
+on:
+  pull_request:
+    paths:
+      - 'src/strategy.rs'
+      - 'src/overworld_nav.rs'
+      - 'src/lib.rs'
+      - 'workpapers/strategy/**'
+      - '.github/workflows/bg-strategy.yml'
+  workflow_dispatch:
+jobs:
+  strategy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --all-targets
+      - run: cargo check --bin blighted-galaxy
