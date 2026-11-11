@@ -30,7 +30,7 @@ pub struct Signal {
     pub launch_year:f64, pub arrival_year:f64, pub power:f64,
 }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-pub enum SignalKind { BlightSeed, ArrayPulse, WeenaClaim }
+pub enum SignalKind { BlightSeed, ArrayPulse, WeenaClaim, HaloStrike }
 #[derive(Clone,Debug)]
 pub struct StrategicState {
     pub year:f64, pub systems:Vec<System>,
@@ -183,6 +183,29 @@ impl StrategicState {
             launch_year:self.year,arrival_year:arrival,power:1.0});
         Ok(())
     }
+    /// Use a Drummer-made micro black hole to propel a strike to a
+    /// hostile star system. The signal is a 0.76c sublight mission.
+    pub fn launch_halo_strike(&mut self,target:usize)->Result<f64,&'static str>{
+        let dst=self.systems.get(target).ok_or("INVALID TARGET")?;
+        if !matches!(dst.owner,Faction::Blight|Faction::Weena){
+            return Err("HALO STRIKE REQUIRES HOSTILE TARGET");
+        }
+        let source=self.systems.iter().enumerate()
+            .filter(|(_,s)|s.owner==Faction::Drummers&&s.kugelblitz>0&&s.energy>=20.0)
+            .min_by(|a,b|(a.1.pos-dst.pos).len().total_cmp(&(b.1.pos-dst.pos).len()))
+            .map(|(i,_)|i).ok_or("NO CHARGED DRUMMER KUGELBLITZ")?;
+        let arrival=self.year+
+            (self.systems[source].pos-dst.pos).len()/0.76;
+        if arrival>200_000.0{return Err("STRIKE ARRIVES AFTER CAMPAIGN HORIZON");}
+        self.systems[source].kugelblitz-=1;
+        self.systems[source].energy-=20.0;
+        self.signals.push(Signal{kind:SignalKind::HaloStrike,
+            source,target,launch_year:self.year,
+            arrival_year:arrival,power:5.0});
+        self.events.push(format!("HALO STRIKE dispatched / target {} / T+{arrival:.0}",
+            self.systems[target].name));
+        Ok(arrival)
+    }
     /// Schedule political/industrial takeover, with a light-speed order
     /// from the nearest Weena-held system. Resistance adds 2 kyr.
     pub fn claim_for_weena(&mut self,target:usize)->Result<f64,&'static str>{
@@ -265,6 +288,20 @@ impl StrategicState {
                                 self.events.push(format!("BLIGHT wave reached {}",s.name));
                             }
                         }
+                        SignalKind::HaloStrike=>{
+                            if matches!(s.owner,Faction::Blight|Faction::Weena){
+                                s.defense-=packet.power;
+                                s.material=(s.material-35.0).max(0.0);
+                                if s.defense<=0.0{
+                                    s.owner=Faction::Drummers;
+                                    s.array_node=false;
+                                    s.industry=(s.industry*0.6).max(0.25);
+                                    s.defense=1.0;
+                                }
+                                self.territory_revision+=1;
+                                self.events.push(format!("HALO STRIKE hit {}",s.name));
+                            }
+                        }
                         SignalKind::ArrayPulse=>{
                             s.defense-=packet.power;
                             self.territory_revision+=1;
@@ -342,6 +379,20 @@ mod tests {
                 (s.systems[packet.source].pos-s.systems[5].pos).len()).abs()<1e-8);
             assert!((packet.arrival_year-arrival).abs()<1e-8);
         }
+    }
+    #[test] fn kugelblitz_attack_consumes_stock_and_arrives_at_sub_c(){
+        let mut s=StrategicState::new(100_000.0);
+        s.set_owner(1,Faction::Blight);
+        s.systems[3].kugelblitz=1;
+        let distance=(s.systems[1].pos-s.systems[3].pos).len();
+        let arrival=s.launch_halo_strike(1).unwrap();
+        assert_eq!(s.systems[3].kugelblitz,0);
+        assert!((arrival-s.year-distance/0.76).abs()<1e-8);
+        assert_eq!(s.systems[1].owner,Faction::Blight);
+        s.advance_to(arrival-1.0);
+        assert_eq!(s.systems[1].owner,Faction::Blight);
+        s.advance_to(arrival);
+        assert_eq!(s.systems[1].owner,Faction::Drummers);
     }
     #[test] fn insufficient_nodes_cannot_fire(){
         let mut s=StrategicState::default();s.array_charged=100.0;
