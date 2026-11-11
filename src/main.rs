@@ -6,6 +6,7 @@ use blighted_galaxy::si_bridge::{
 };
 use blighted_galaxy::V2;
 use blighted_galaxy::overworld_nav::OverworldNav;
+use blighted_galaxy::strategy::{TacticalKind,TacticalOutcome};
 use macroquad::prelude::*;
 
 fn config()->Conf {
@@ -34,6 +35,7 @@ struct Game {
     facing_rad:f64,
     effects:Vec<Effect>,
     displayed_latest_time_s:f64,
+    mission_name:Option<&'static str>,
 }
 const DELTA:f64=1.0/120.0;
 const TIDAL_STEP:f64=0.10;
@@ -46,7 +48,8 @@ impl Game {
         Self {mode,intercept:SiJoust::new(),tidal:SiTidalEncounter::new(),
             camera:CameraMeters::new(center,scale),
             sim_rate:1.0,accumulator:0.0,manual_aim:false,
-            facing_rad:0.0,effects:Vec::new(),displayed_latest_time_s:-1.0}
+            facing_rad:0.0,effects:Vec::new(),displayed_latest_time_s:-1.0,
+            mission_name:None}
     }
     fn screen(&self,pos:V2)->Vec2 {
         let p=self.camera.screen_of(pos,screen_width() as f64,screen_height() as f64);
@@ -58,9 +61,24 @@ impl Game {
             Mode::Tidal=>self.tidal.time_s,
         }
     }
+    fn tactical_outcome(&self)->TacticalOutcome {
+        match self.mode {
+            Mode::Intercept=>{
+                if !self.intercept.player.alive(){TacticalOutcome::Defeat}
+                else if !self.intercept.opponent.alive(){TacticalOutcome::Victory}
+                else{TacticalOutcome::Withdrawn}
+            },
+            Mode::Tidal=>{
+                if self.tidal.disruption.is_some(){TacticalOutcome::Victory}
+                else{TacticalOutcome::Withdrawn}
+            },
+        }
+    }
     fn input(&mut self) {
-        if is_key_pressed(KeyCode::Key1) { *self=Self::new(Mode::Intercept); }
-        if is_key_pressed(KeyCode::Key2) { *self=Self::new(Mode::Tidal); }
+        if self.mission_name.is_none(){
+            if is_key_pressed(KeyCode::Key1) { *self=Self::new(Mode::Intercept); }
+            if is_key_pressed(KeyCode::Key2) { *self=Self::new(Mode::Tidal); }
+        }
         if is_key_pressed(KeyCode::R) {
             let mode=self.mode;*self=Self::new(mode);
         }
@@ -299,6 +317,17 @@ impl Game {
             self.sim_rate,self.current_time()),23.0,179.0,18.0,GOLD);
         draw_text("SI kinematics + Newtonian gravity • exotic shields and breakup are game rules",
             23.0,204.0,16.0,GRAY);
+        if let Some(site)=self.mission_name {
+            let status=match self.tactical_outcome(){
+                TacticalOutcome::Victory=>"OBJECTIVE COMPLETE",
+                TacticalOutcome::Defeat=>"SHIP LOST",
+                TacticalOutcome::Withdrawn=>"OBJECTIVE INCOMPLETE",
+            };
+            draw_rectangle(13.0,221.0,800.0,60.0,Color::new(0.02,0.03,0.06,0.88));
+            draw_text(&format!("CAMPAIGN: {site} / {status}"),23.0,247.0,21.0,GOLD);
+            draw_text("3 / TAB: RETURN TO GALAXY AND RECORD MISSION RESULT",
+                23.0,271.0,17.0,LIGHTGRAY);
+        }
     }
 }
 
@@ -320,6 +349,7 @@ async fn main() {
     // --encounter keeps the previous startup for dedicated combat tests.
     let encounter_start=args.iter().any(|a|a=="--encounter");
     let mut galaxy_mode=!encounter_start;
+    let mut active_mission:Option<(usize,TacticalKind)>=None;
     // Allow the built-in font atlas and GPU textures to settle before
     // capturing an actual frame in headless CI.
     let mut frame_count=0usize;
@@ -327,17 +357,23 @@ async fn main() {
         if is_key_pressed(KeyCode::Escape) {break;}
         let dt=get_frame_time() as f64;
         if galaxy_mode {
-            if is_key_pressed(KeyCode::Key1){
-                game=Game::new(Mode::Intercept);
-                galaxy_mode=false;
-            }else if is_key_pressed(KeyCode::Key2){
-                game=Game::new(Mode::Tidal);
+            if is_key_pressed(KeyCode::Key1)||is_key_pressed(KeyCode::Key2){
+                let intercept=is_key_pressed(KeyCode::Key1);
+                let kind=if intercept{TacticalKind::Intercept}else{TacticalKind::Tidal};
+                game=Game::new(if intercept{Mode::Intercept}else{Mode::Tidal});
+                active_mission=overworld.selected_tactical_site().map(|site|{
+                    game.mission_name=Some(overworld.strategy.systems[site].name);
+                    (site,kind)
+                });
                 galaxy_mode=false;
             }else{
                 overworld.update(dt);
             }
         }else if is_key_pressed(KeyCode::Key3)||
                 is_key_pressed(KeyCode::Tab) {
+            if let Some((site,kind))=active_mission.take(){
+                overworld.tactical_result(site,kind,game.tactical_outcome());
+            }
             galaxy_mode=true;
         }else{
             game.input();
