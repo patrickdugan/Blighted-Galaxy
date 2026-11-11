@@ -15,7 +15,7 @@ impl Faction {
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum Project { Industry, Kugelblitz, GufNode }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-pub enum TacticalKind { Intercept, Tidal }
+pub enum TacticalKind { Intercept, Tidal, GufDefense }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum TacticalOutcome { Victory, Defeat, Withdrawn }
 #[derive(Clone,Debug)]
@@ -23,6 +23,8 @@ pub struct System {
     pub name:&'static str, pub pos:V2, pub owner:Faction,
     pub industry:f64, pub energy:f64, pub material:f64,
     pub kugelblitz:u32, pub array_node:bool, pub defense:f64,
+    /// Site-side shield capacity against incoming Guf beams (game units).
+    pub guf_ward:f64,
 }
 #[derive(Clone,Debug)]
 pub struct Signal {
@@ -31,10 +33,27 @@ pub struct Signal {
 }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum SignalKind { BlightSeed, ArrayPulse, WeenaClaim, HaloStrike }
+/// Material and stored power in a finite-speed sublight transport.
+#[derive(Clone,Debug)]
+pub struct CargoConvoy {
+    pub id:u64,pub source:usize,pub target:usize,pub owner:Faction,
+    pub material:f64,pub energy:f64,pub launch_year:f64,
+    pub arrival_year:f64,pub beta:f64,
+}
+impl CargoConvoy {
+    pub fn position(&self,year:f64,systems:&[System])->V2{
+        let p=systems[self.source].pos;
+        let q=systems[self.target].pos;
+        let fraction=((year-self.launch_year)/
+            (self.arrival_year-self.launch_year).max(1e-9)).clamp(0.0,1.0);
+        p+(q-p)*fraction
+    }
+}
 #[derive(Clone,Debug)]
 pub struct StrategicState {
     pub year:f64, pub systems:Vec<System>,
     pub signals:Vec<Signal>,pub events:Vec<String>,
+    pub convoys:Vec<CargoConvoy>,pub next_convoy_id:u64,
     pub array_charged:f64,pub pulses:u32,
     pub historical:bool,
     pub blight_autonomy:bool,
@@ -53,14 +72,15 @@ impl StrategicState {
         let mut systems:Vec<System>=WAYPOINTS.iter().enumerate().map(|(i,w)|System {
             name:w.name,pos:w.pos,owner:owners[i],
             industry:if i==6 {3.0} else if matches!(i,3|4|5){2.0}else{0.5},
-            energy:100.0,material:150.0,kugelblitz:0,
+            energy:100.0,material:150.0,kugelblitz:0,guf_ward:0.0,
             array_node:false, defense:if i==5{4.0}else{2.0},
         }).collect();
         systems.push(System{name:"ORION SEED",pos:ORION_OUTBREAK,
             owner:Faction::Blight,industry:4.0,energy:250.0,material:250.0,
-            kugelblitz:0,array_node:false,defense:25.0});
+            kugelblitz:0,array_node:false,defense:25.0,guf_ward:0.0});
         let count=systems.len();
-        Self{year,systems,signals:vec![],events:vec![
+        Self{year,systems,signals:vec![],convoys:vec![],next_convoy_id:1,
+            events:vec![
             "STRATEGIC SCENARIO: industrial networks online".into()],
             array_charged:0.0,pulses:0,historical:false,
             blight_autonomy:true,territory_revision:0,
@@ -102,16 +122,35 @@ impl StrategicState {
         if outcome!=TacticalOutcome::Withdrawn && !self.tactical_ready(site){
             return Err("SYSTEM REARMING AFTER PREVIOUS BATTLE");
         }
+        let guf_threat=self.signals.iter().any(|packet|
+            packet.kind==SignalKind::ArrayPulse&&packet.target==site&&
+            packet.arrival_year>self.year);
+        if kind==TacticalKind::GufDefense && !guf_threat {
+            return Err("NO ACTIVE GUF THREAT");
+        }
         let s=self.systems.get_mut(site).ok_or("UNKNOWN TACTICAL SYSTEM")?;
         let name=s.name;
         let descriptor=match kind {
             TacticalKind::Intercept=>"RKM INTERCEPT",
             TacticalKind::Tidal=>"WHITE-DWARF INTERDICTION",
+            TacticalKind::GufDefense=>"GUF RELAY INTERCEPTION",
         };
         let message=match outcome {
             TacticalOutcome::Withdrawn=>format!("{name}: {descriptor} disengaged / no strategic change"),
             TacticalOutcome::Victory=>{
-                if matches!(s.owner,Faction::Blight|Faction::Weena){
+                if kind==TacticalKind::GufDefense{
+                    if s.owner!=Faction::Drummers{
+                        return Err("DEFENSIVE INTERCEPTION REQUIRES DRUMMER CONTROL");
+                    }
+                    if s.material<25.0||s.energy<40.0{
+                        return Err("INSUFFICIENT MATERIAL / ENERGY FOR GUF SCREEN");
+                    }
+                    s.material-=25.0;s.energy-=40.0;
+                    let screen=(4.0+s.industry*1.5+s.defense.max(0.0)*0.4)
+                        .clamp(4.0,18.0);
+                    s.guf_ward+=screen;
+                    format!("{name}: relay neutralized / GUF interception screen +{screen:.1}")
+                }else if matches!(s.owner,Faction::Blight|Faction::Weena){
                     let damage=if kind==TacticalKind::Intercept{3.0}else{2.0};
                     s.defense-=damage;
                     s.material=(s.material-25.0).max(0.0);
@@ -148,6 +187,46 @@ impl StrategicState {
         }
         self.events.push(message.clone());
         Ok(message)
+    }
+    /// Orders a sublight transport between two Drummer-held industrial
+    /// systems. Cargo is escrowed at launch, then delivered exactly once.
+    pub fn send_convoy(&mut self,source:usize,target:usize)->Result<u64,&'static str>{
+        if source==target{return Err("CONVOY NEEDS DISTINCT SYSTEMS");}
+        let a=self.systems.get(source).ok_or("INVALID CONVOY SOURCE")?;
+        let b=self.systems.get(target).ok_or("INVALID CONVOY DESTINATION")?;
+        if a.owner!=Faction::Drummers||b.owner!=Faction::Drummers{
+            return Err("BOTH CONVOY SYSTEMS MUST BE DRUMMER HELD");
+        }
+        if a.material<60.0||a.energy<65.0{
+            return Err("CONVOY NEEDS 60 MATERIAL AND 65 ENERGY");
+        }
+        let beta=(0.35+0.04*a.industry).clamp(0.35,0.75);
+        let distance=(a.pos-b.pos).len();
+        if distance<1.0{return Err("INVALID CONVOY DISTANCE");}
+        let arrival=self.year+distance/beta;
+        if arrival>200_000.0{return Err("CONVOY ARRIVES AFTER CAMPAIGN HORIZON");}
+        self.systems[source].material-=60.0;
+        self.systems[source].energy-=65.0; // 40 cargo + 25 propulsion
+        let id=self.next_convoy_id;
+        self.next_convoy_id+=1;
+        self.convoys.push(CargoConvoy{
+            id,source,target,owner:Faction::Drummers,
+            material:60.0,energy:40.0,launch_year:self.year,arrival_year:arrival,beta,
+        });
+        self.events.push(format!("DRUMMER CONVOY #{id}: {} to {} / ETA T+{arrival:.0}",
+            self.systems[source].name,self.systems[target].name));
+        Ok(id)
+    }
+    pub fn incoming_guf(&self,target:usize)->Option<(f64,usize,f64)>{
+        self.systems.get(target)?;
+        let pulses=self.signals.iter().filter(|packet|
+            packet.kind==SignalKind::ArrayPulse &&
+            packet.target==target&&packet.arrival_year>self.year);
+        let mut earliest=f64::INFINITY;let mut count=0;let mut power=0.0;
+        for packet in pulses {
+            earliest=earliest.min(packet.arrival_year);count+=1;power+=packet.power;
+        }
+        if count>0{Some((earliest,count,power))}else{None}
     }
     pub fn nearest(&self,p:V2,max_distance_ly:f64)->Option<usize>{
         self.systems.iter().enumerate()
@@ -357,18 +436,49 @@ impl StrategicState {
                             }
                         }
                         SignalKind::ArrayPulse=>{
-                            s.defense-=packet.power;
-                            self.territory_revision+=1;
-                            if s.defense<=0.0 {
-                                s.industry=(s.industry*0.25).max(0.0);
-                                s.array_node=false;
+                            let absorbed=s.guf_ward.min(packet.power);
+                            s.guf_ward=(s.guf_ward-absorbed).max(0.0);
+                            let damage=packet.power-absorbed;
+                            s.defense-=damage;
+                            if damage>0.0{
+                                self.territory_revision+=1;
+                                if s.defense<=0.0 {
+                                    s.industry=(s.industry*0.25).max(0.0);
+                                    s.array_node=false;
+                                }
                             }
-                            self.events.push(format!("GUF beam struck {} / defense {:.1}",s.name,s.defense));
+                            self.events.push(format!(
+                                "GUF beam reached {} / absorbed {:.1} / damage {:.1}",
+                                s.name,absorbed,damage));
                         }
                     }
                 }
             }
             self.signals=pending;
+            // Sample traffic at each 250-year substep; a star held by the
+            // Blight may destroy a nearby convoy before it can deliver.
+            let mut surviving=Vec::new();
+            for convoy in std::mem::take(&mut self.convoys) {
+                let p=convoy.position(self.year,&self.systems);
+                let enemy_near=self.systems.iter().any(|star|
+                    star.owner==Faction::Blight&&(star.pos-p).len()<850.0);
+                if enemy_near {
+                    self.events.push(format!("DRUMMER CONVOY #{} interdicted",
+                        convoy.id));
+                }else if convoy.arrival_year<=self.year {
+                    let dest=&mut self.systems[convoy.target];
+                    if dest.owner==convoy.owner {
+                        dest.material=(dest.material+convoy.material).min(600.0);
+                        dest.energy=(dest.energy+convoy.energy).min(1000.0);
+                        self.events.push(format!("CONVOY #{} delivered to {}",
+                            convoy.id,dest.name));
+                    }else{
+                        self.events.push(format!("CONVOY #{} lost at hostile destination",
+                            convoy.id));
+                    }
+                }else{surviving.push(convoy);}
+            }
+            self.convoys=surviving;
             if self.blight_autonomy && (self.year/2_500.0).floor() as u64>previous_bin {
                 self.plan_blight_expansion();
             }
@@ -462,6 +572,73 @@ mod tests {
             assert!((s.systems[packet.target].pos-ORION_OUTBREAK).len()
                 <=Front::new(packet.arrival_year).reach_ly());
         }
+    }
+    #[test] fn convoy_escrow_and_arrival_reconcile_resources(){
+        let mut s=StrategicState::default();
+        s.blight_autonomy=false;
+        s.systems[3].energy=300.0;
+        s.systems[3].material=350.0;
+        s.systems[5].energy=100.0;
+        s.systems[5].material=100.0;
+        let id=s.send_convoy(3,5).unwrap();
+        assert_eq!(id,1);
+        assert_eq!(s.systems[3].energy,235.0);
+        assert_eq!(s.systems[3].material,290.0);
+        let convoy=s.convoys[0].clone();
+        assert!((convoy.arrival_year-convoy.launch_year-
+            (s.systems[3].pos-s.systems[5].pos).len()/convoy.beta).abs()<1e-8);
+        assert!(convoy.beta<=0.75);
+        // Advance directly to just before and just after arrival;
+        // production is zeroed to isolate cargo transfer.
+        s.systems.iter_mut().for_each(|sys|sys.industry=0.0);
+        s.advance_to(convoy.arrival_year-1.0);
+        assert_eq!(s.convoys.len(),1);
+        assert_eq!(s.systems[5].material,100.0);
+        s.advance_to(convoy.arrival_year);
+        assert_eq!(s.convoys.len(),0);
+        assert_eq!(s.systems[5].material,160.0);
+        assert_eq!(s.systems[5].energy,140.0);
+        s.advance_to(convoy.arrival_year+500.0);
+        assert_eq!(s.systems[5].material,160.0);
+    }
+    #[test] fn convoy_ownership_risk_keeps_cargo_out_of_enemy_hands(){
+        let mut s=StrategicState::default();
+        s.blight_autonomy=false;
+        s.systems[3].energy=200.0;s.systems[3].material=200.0;
+        s.send_convoy(3,5).unwrap();
+        s.set_owner(5,Faction::Weena);
+        s.systems.iter_mut().for_each(|sys|sys.industry=0.0);
+        let eta=s.convoys[0].arrival_year;
+        let before=s.systems[5].material;
+        s.advance_to(eta);
+        assert!(s.convoys.is_empty());
+        assert_eq!(s.systems[5].material,before);
+    }
+    #[test] fn timely_guf_interception_absorbs_later_beams(){
+        let mut s=StrategicState::default();
+        s.blight_autonomy=false;
+        for i in [2,3,6] {
+            s.set_owner(i,Faction::Weena);
+            s.systems[i].array_node=true;s.systems[i].energy=500.0;
+        }
+        s.array_charged=100.0;
+        s.systems[5].energy=200.0;s.systems[5].material=200.0;
+        let eta=s.fire_guf(5).unwrap();
+        assert_eq!(s.incoming_guf(5).unwrap().1,3);
+        let initial_defense=s.systems[5].defense;
+        s.resolve_tactical(5,TacticalKind::GufDefense,TacticalOutcome::Victory).unwrap();
+        assert!(s.systems[5].guf_ward>0.0);
+        s.systems.iter_mut().for_each(|sys|sys.industry=0.0);
+        s.advance_to(eta);
+        assert!(s.systems[5].defense>initial_defense-12.0);
+        assert!(s.incoming_guf(5).is_none());
+        assert_eq!(s.systems[5].guf_ward,0.0);
+    }
+    #[test] fn guf_intercept_requires_a_real_future_attack(){
+        let mut s=StrategicState::default();
+        assert!(s.resolve_tactical(5,TacticalKind::GufDefense,
+            TacticalOutcome::Victory).is_err());
+        assert_eq!(s.systems[5].guf_ward,0.0);
     }
     #[test] fn insufficient_nodes_cannot_fire(){
         let mut s=StrategicState::default();s.array_charged=100.0;
