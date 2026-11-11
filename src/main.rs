@@ -83,7 +83,10 @@ impl Game {
         match self.mode {
             Mode::Intercept=>{
                 if !self.intercept.player.alive(){TacticalOutcome::Defeat}
-                else if !self.intercept.opponent.alive(){TacticalOutcome::Victory}
+                else if !self.intercept.opponent.alive()&&
+                    self.intercept.escorts.iter().all(|e|!e.craft.alive()){
+                    TacticalOutcome::Victory
+                }
                 else{TacticalOutcome::Withdrawn}
             },
             Mode::Tidal=>{
@@ -220,6 +223,19 @@ impl Game {
         draw_circle_lines(b.x,b.y,shield_foe.max(9.0),1.4,ORANGE);
         self.actor(player.pos_m,player.facing_rad,SKYBLUE,16.0);
         self.actor(foe.pos_m,foe.facing_rad,ORANGE,19.0);
+        for escort in &self.intercept.escorts {
+            let craft=&escort.craft;
+            let pos=self.screen(craft.pos_m);
+            if craft.alive(){
+                draw_circle_lines(pos.x,pos.y,
+                    (craft.cross_section_radius_m/
+                        self.camera.metres_per_pixel.0) as f32,
+                    1.2,ORANGE);
+                self.actor(craft.pos_m,craft.facing_rad,ORANGE,13.0);
+            }else{
+                draw_circle_lines(pos.x,pos.y,8.0,1.0,DARKGRAY);
+            }
+        }
         if let Some((apparent,delay))=self.intercept.apparent_opponent() {
             let ghost=self.screen(apparent);
             draw_circle_lines(ghost.x,ghost.y,12.0,1.8,GOLD);
@@ -263,7 +279,14 @@ impl Game {
         }
         self.labeled("SCALE", &format!("{:.3} km/px",px/1000.0),
             506.0,LIGHTGRAY);
-        if !foe.alive() {
+        if !self.intercept.escorts.is_empty(){
+            let active=self.intercept.escorts.iter().filter(|e|e.craft.alive()).count()
+                +usize::from(foe.alive());
+            self.labeled("HOSTILE FLEET",
+                &format!("{} of {} operational",
+                    active,1+self.intercept.escorts.len()),535.0,ORANGE);
+        }
+        if !foe.alive()&&self.intercept.escorts.iter().all(|e|!e.craft.alive()){
             draw_text("TARGET SHIELD DISABLED",screen_width()*0.32,screen_height()*0.8,
                 39.0,SKYBLUE);
         }
@@ -377,6 +400,11 @@ impl Game {
                         profile.hole_mass_solar,profile.dwarf_mass_solar)
                 };
                 draw_text(&conditions,23.0,267.0,16.0,SKYBLUE);
+                if self.mode==Mode::Intercept {
+                    draw_text(&format!("FLEET: 1 flagship + {} escorts  |  total {} ships",
+                        profile.escort_count,profile.escort_count+1),
+                        825.0,76.0,17.0,ORANGE);
+                }
             }
             draw_text("3 / TAB: RETURN TO GALAXY AND RECORD MISSION RESULT",
                 23.0,286.0,15.0,LIGHTGRAY);
