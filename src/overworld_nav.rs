@@ -17,6 +17,7 @@ use crate::overworld::{
     SectorStatus,SOL,WAYPOINTS,
 };
 use crate::V2;
+use crate::strategy::{StrategicState,Project,Faction};
 use macroquad::prelude::*;
 use std::f64::consts::{PI,TAU};
 
@@ -279,6 +280,8 @@ fn shadow_text(label:&str,x:f32,y:f32,size:f32,c:Color){
 }
 pub struct OverworldNav {
     pub model:GalacticNavModel,
+    pub strategy:StrategicState,
+    strategy_visible:bool,
     center:V2,
     zoom:f32,
     base:Texture2D,
@@ -305,6 +308,7 @@ impl OverworldNav{
         blight.set_filter(FilterMode::Linear);
         Self{
             model:GalacticNavModel::default(),
+            strategy:StrategicState::default(),strategy_visible:true,
             center:V2::new(-500.0,-8_000.0),
             zoom:1.0,base,blight,
             last_front_bucket:100,
@@ -353,6 +357,27 @@ impl OverworldNav{
     }
     pub fn update(&mut self,seconds:f64){
         let dt=seconds.clamp(0.0,0.10);
+        if is_key_pressed(KeyCode::T){self.strategy_visible=!self.strategy_visible;}
+        // Site-level industrial actions use the selected navigable waypoint.
+        // I: capacity, K: kugelblitz, U: Guf node, P: fire at selected site.
+        let action=if is_key_pressed(KeyCode::I){Some(Project::Industry)}
+            else if is_key_pressed(KeyCode::K){Some(Project::Kugelblitz)}
+            else if is_key_pressed(KeyCode::U){Some(Project::GufNode)}else{None};
+        if let Some(project)=action {
+            if let Some(site)=self.selected.and_then(|p|self.strategy.nearest(p,500.0)) {
+                self.encounter_notice=Some(match self.strategy.project(site,project){
+                    Ok(message)=>message,Err(reason)=>reason.into(),
+                });
+            }else{self.encounter_notice=Some("SELECT A NAMED INDUSTRIAL SYSTEM".into());}
+        }
+        if is_key_pressed(KeyCode::P){
+            if let Some(site)=self.selected.and_then(|p|self.strategy.nearest(p,500.0)) {
+                self.encounter_notice=Some(match self.strategy.fire_guf(site){
+                    Ok(arrival)=>format!("GU F STRIKE ETA T+{arrival:.0}"),
+                    Err(reason)=>reason.into(),
+                });
+            }
+        }
         if is_key_pressed(KeyCode::Space){
             self.model.paused=!self.model.paused;
         }
@@ -453,6 +478,10 @@ impl OverworldNav{
             self.selected_name=None;
         }
         self.model.tick(dt);
+        if self.model.year<self.strategy.year {
+            // Timeline seek is a historical replay, rebuilt from the same seed.
+            self.strategy=StrategicState::new(self.model.year);
+        }else{self.strategy.advance_to(self.model.year);}
         if let Some(p)=self.model.last_arrival.take(){
             let near=WAYPOINTS.iter()
                 .find(|site|(site.pos-p).len()<500.0);
@@ -571,6 +600,28 @@ impl OverworldNav{
                 };
                 shadow_text(short,p.x+9.0,p.y-7.0,14.0,
                     translucent(tone,0.83));
+            }
+        }
+        if self.strategy_visible {
+            for site in &self.strategy.systems {
+                let p=self.world_to_screen(site.pos);
+                if p.x<3.0||p.x>self.map_width()-3.0||p.y<85.0||p.y>screen_height()-45.0{continue;}
+                let tone=match site.owner {
+                    Faction::Blight=>REDDIM,Faction::Drummers=>CYAN,
+                    Faction::Weena=>GOLD,Faction::Independent=>BLUE,
+                };
+                let radius=7.5+site.industry.min(6.0) as f32*1.1;
+                draw_circle_lines(p.x,p.y,radius,1.4,tone);
+                if site.array_node {
+                    draw_circle_lines(p.x,p.y,radius+6.0,1.0,GOLD);
+                }
+                if site.kugelblitz>0 {draw_circle(p.x+radius,p.y-radius,3.0,CYAN);}
+            }
+            for signal in &self.strategy.signals {
+                let a=self.world_to_screen(self.strategy.systems[signal.source].pos);
+                let b=self.world_to_screen(self.strategy.systems[signal.target].pos);
+                let color=if signal.kind==crate::strategy::SignalKind::ArrayPulse{GOLD}else{REDDIM};
+                draw_line(a.x,a.y,b.x,b.y,1.1,translucent(color,0.55));
             }
         }
         let p=self.world_to_screen(ORION_OUTBREAK);
@@ -732,6 +783,17 @@ impl OverworldNav{
                 self.panel_line(s.source,x,y,BONE);y+=21.0;
             }
         }
+        if self.strategy_visible {
+            y+=16.0;
+            shadow_text("STRATEGIC SYSTEM",x,y,19.0,GOLD);y+=25.0;
+            if let Some(index)=self.strategy.nearest(point,500.0){
+                let s=&self.strategy.systems[index];
+                self.panel_line(s.owner.label(),x,y,CYAN);y+=23.0;
+                self.panel_line(&format!("IND {:.1}   E {:.0}  M {:.0}",s.industry,s.energy,s.material),x,y,BONE);y+=23.0;
+                self.panel_line(&format!("K-HOLES {}   GUF {}",s.kugelblitz,if s.array_node{"READY"}else{"OFF"}),x,y,GOLD);y+=23.0;
+            }
+            self.panel_line(&format!("GUF CHARGE {:.0}%  WAVES {}",self.strategy.array_charged,self.strategy.signals.len()),x,y,BONE);
+        }
         let footer=screen_height()-160.0;
         if let Some(msg)=&self.encounter_notice{
             draw_text(msg,x,footer-21.0,15.0,CYAN);
@@ -745,7 +807,8 @@ impl OverworldNav{
             "G GALACTIC / L LOCAL STENCIL",
             "B DARK OCCLUSION   H HELP",
             "SPACE PAUSE   , / . = 1 KYR",
-            "Q E CLOCK  |  1 2 ENCOUNTERS",
+            "T STRATEGY  I INDUSTRY  K KUGELBLITZ",
+            "U GUF NODE  P FIRE  |  1 2 BATTLE",
         ];
         for (i,line) in hints.iter().enumerate(){
             draw_text(line,x,footer+18.0+i as f32*18.5,
