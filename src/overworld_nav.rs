@@ -388,7 +388,12 @@ impl OverworldNav{
         }
         if is_key_pressed(KeyCode::J){
             if let Some(site)=self.selected.and_then(|p|self.strategy.nearest(p,500.0)) {
-                self.encounter_notice=Some(match self.strategy.schedule_blight_seed(\n                        self.strategy.systems.iter().enumerate()\n                            .filter(|(i,x)|*i!=site&&x.owner==Faction::Blight)\n                            .min_by(|a,b|(a.1.pos-self.strategy.systems[site].pos).len()\n                                .total_cmp(&(b.1.pos-self.strategy.systems[site].pos).len()))\n                            .map(|(i,_)|i).unwrap_or(9),site){
+                self.encounter_notice=Some(match self.strategy.schedule_blight_seed(
+                        self.strategy.systems.iter().enumerate()
+                            .filter(|(i,x)|*i!=site&&x.owner==Faction::Blight)
+                            .min_by(|a,b|(a.1.pos-self.strategy.systems[site].pos).len()
+                                .total_cmp(&(b.1.pos-self.strategy.systems[site].pos).len()))
+                            .map(|(i,_)|i).unwrap_or(9),site){
                     Ok(())=>"BLIGHT EXPANSION ORDER IN FLIGHT".into(),
                     Err(reason)=>reason.into(),
                 });
