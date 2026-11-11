@@ -176,10 +176,12 @@ impl StrategicState {
         let (a,b)=(self.systems.get(source).ok_or("INVALID SOURCE")?,
                    self.systems.get(target).ok_or("INVALID TARGET")?);
         if a.owner!=Faction::Blight{return Err("SOURCE IS NOT BLIGHT");}
+        if source==target||b.owner==Faction::Blight{return Err("TARGET ALREADY BLIGHT-HELD");}
         // Blight tendrils have effective expansion 0.10c; extra delay
         // encodes resistance. This also enforces the causal front geometry.
         let delay=(b.pos-a.pos).len()/0.10+1_500.0;
         let arrival=self.year+delay;
+        if arrival>200_000.0{return Err("BLIGHT ARRIVAL AFTER CAMPAIGN HORIZON");}
         if (b.pos-ORION_OUTBREAK).len()>Front::new(arrival).reach_ly(){
             return Err("OUTSIDE ORION CAUSAL ENVELOPE");
         }
@@ -222,6 +224,7 @@ impl StrategicState {
             .min_by(|a,b|(a.1.pos-dst.pos).len().total_cmp(&(b.1.pos-dst.pos).len()))
             .map(|(i,_)|i).ok_or("NO WEENA RELAY POWER")?;
         let arrival=self.year+(self.systems[source].pos-dst.pos).len()+2_000.0;
+        if arrival>200_000.0{return Err("RECRUITMENT ARRIVES AFTER CAMPAIGN HORIZON");}
         self.systems[source].energy-=80.0;
         self.signals.push(Signal{kind:SignalKind::WeenaClaim,source,target,
             launch_year:self.year,arrival_year:arrival,power:1.0});
@@ -243,6 +246,7 @@ impl StrategicState {
         let arrival=emitters.iter().map(|&i|
             self.year+(self.systems[i].pos-target_pos).len())
             .fold(self.year,f64::max);
+        if arrival>200_000.0{return Err("GUF BEAMS ARRIVE AFTER CAMPAIGN HORIZON");}
         for &i in &emitters {self.systems[i].energy-=50.0;}
         self.array_charged=0.0;self.pulses+=1;
         // Delayed launches align all beam arrivals at the same target time.
