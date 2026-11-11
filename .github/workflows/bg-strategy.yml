@@ -1,4 +1,4 @@
-name: BG-STR-03 strategic campaign and mission checks
+name: BG-STR-04 convoys, weapons and Guf interception checks
 on:
   pull_request:
     paths:
