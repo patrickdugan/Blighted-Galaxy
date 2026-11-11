@@ -88,9 +88,10 @@ fn generate_galaxy()->Image {
                 MAP_EXTENT_LY;
             let r=(world_x*world_x+world_y*world_y).sqrt();
             let theta=world_y.atan2(world_x);
-            let disk=(-r/24_000.0).exp()*
+            let disk=(-r/45_000.0).exp()*
                 (1.0/(1.0+((r-52_000.0)/2600.0).exp()));
-            let phase=theta-((r+1400.0)/6500.0).ln()/0.235_f64.tan();
+            let phase=theta-((r+1400.0)/6500.0).ln()/0.29_f64.tan()
+                +0.11*(r/4200.0+0.4*theta).sin();
             // Broad, overlapping stellar clouds avoid the thin
             // vector-drawn spiral ribbons of the first prototype.
             let arm=(0.5+0.5*(4.0*phase).cos()).powi(2);
@@ -103,14 +104,14 @@ fn generate_galaxy()->Image {
                 (bary/2900.0).powi(2)).exp();
             let core=(-(r/5000.0).powi(2)).exp();
             let dust_dark=1.0-0.46*dust*arm;
-            let brightness=(disk*(0.46+0.84*arm)*dust_dark)
+            let brightness=(disk*(0.70+1.18*arm)*dust_dark)
                 .clamp(0.0,1.0) as f32;
             let warm=(0.45*core+0.23*bar).clamp(0.0,1.0) as f32;
             let idx=(y*size+x)*4;
             let channels=[
-                0.008+0.15*brightness+0.56*warm,
-                0.012+0.20*brightness+0.40*warm,
-                0.026+0.28*brightness+0.23*warm,
+                0.009+0.18*brightness+0.56*warm,
+                0.014+0.25*brightness+0.40*warm,
+                0.027+0.34*brightness+0.23*warm,
             ];
             for k in 0..3{
                 image.bytes[idx+k]=(255.0_f32*channels[k]
@@ -120,20 +121,22 @@ fn generate_galaxy()->Image {
     }
     let mut rng=Random::new(0xB11_9A1A_600D_1993);
     // Four logarithmic stellar arms and an independent diffuse population.
-    for i in 0..56_000usize {
+    for i in 0..70_000usize {
         let u=rng.unit().max(1e-9);
         let v=rng.unit().max(1e-9);
         let spiral=i%3!=0;
         let r=if i%13==0 {
             (-u.ln()).sqrt()*6100.0
         }else{
-            ((-u.ln()-v.ln())*10_300.0).clamp(1000.0,52_000.0)
+            ((-u.ln()-v.ln())*12_400.0).clamp(1000.0,52_000.0)
         };
         if r>DISK_VISUAL_RADIUS {continue;}
         let arm=(rng.next()%4) as f64;
         let theta=if spiral{
-            ((r+1400.0)/6500.0).ln()/0.235_f64.tan()
-                +arm*PI/2.0+gaussian(&mut rng)*(0.15+440.0/r)
+            ((r+1400.0)/6500.0).ln()/0.29_f64.tan()
+                +arm*PI/2.0
+                -0.11*(r/4200.0+arm*0.58).sin()
+                +gaussian(&mut rng)*(0.18+460.0/r)
         }else{rng.unit()*TAU};
         let jitter=gaussian(&mut rng)*(150.0+0.006*r);
         let radius=(r+jitter).max(0.0);
