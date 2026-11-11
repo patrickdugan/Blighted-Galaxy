@@ -320,6 +320,9 @@ async fn main() {
     // --encounter keeps the previous startup for dedicated combat tests.
     let encounter_start=args.iter().any(|a|a=="--encounter");
     let mut galaxy_mode=!encounter_start;
+    // Allow the built-in font atlas and GPU textures to settle before
+    // capturing an actual frame in headless CI.
+    let mut frame_count=0usize;
     loop {
         if is_key_pressed(KeyCode::Escape) {break;}
         let dt=get_frame_time() as f64;
@@ -342,11 +345,13 @@ async fn main() {
         }
         if galaxy_mode {overworld.draw();}
         else {game.draw();}
+        frame_count+=1;
         if let Some(path)=snapshot_path.as_ref(){
-            // get_screen_data flushes the current Macroquad frame before
-            // saving an actual PNG of the map. No synthetic mockup.
-            macroquad::prelude::get_screen_data().export_png(path);
-            break;
+            if frame_count>=4{
+                // Real GPU screenshot after font glyphs were loaded.
+                macroquad::prelude::get_screen_data().export_png(path);
+                break;
+            }
         }
         next_frame().await;
     }
