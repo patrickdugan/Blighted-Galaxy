@@ -197,7 +197,7 @@ impl StrategicState {
         let arrival=self.year+(self.systems[source].pos-dst.pos).len()+2_000.0;
         self.systems[source].energy-=80.0;
         self.signals.push(Signal{kind:SignalKind::WeenaClaim,source,target,
-            arrival_year:arrival,power:1.0});
+            launch_year:self.year,arrival_year:arrival,power:1.0});
         self.events.push(format!("WEENA influence relay sent to {}",self.systems[target].name));
         Ok(arrival)
     }
