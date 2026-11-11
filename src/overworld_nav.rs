@@ -309,6 +309,13 @@ impl OverworldNav{
             dragging:None,encounter_notice:None,
         }
     }
+    /// Region detail view: the 10-kly ring spans most of the viewport.
+    /// Also used by the actual-frame screenshot regression.
+    pub fn focus_frontier(&mut self){
+        self.center=ORION_OUTBREAK;
+        self.zoom=3.7;
+        self.local_grid=true;
+    }
     fn map_width(&self)->f32{
         (screen_width()-PANEL_WIDTH).max(500.0)
     }
@@ -380,9 +387,7 @@ impl OverworldNav{
             self.zoom=2.5;
         }
         if is_key_pressed(KeyCode::F){
-            self.center=ORION_OUTBREAK;
-            self.zoom=3.7;
-            self.local_grid=true;
+            self.focus_frontier();
         }
         if is_key_pressed(KeyCode::Z){
             self.zoom=(self.zoom*0.85).max(0.50);
@@ -527,7 +532,7 @@ impl OverworldNav{
                     Color::new(0.78,0.46,0.38,0.21));
             }
         }
-        let reach=self.model.front().reach_ly().min(10_000.0);
+        let reach=self.model.front().reach_ly();
         if reach>100.0{
             draw_dashed_circle(origin,reach as f32*scale,
                 Color::new(0.92,0.79,0.68,0.69),144);
