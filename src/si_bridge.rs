@@ -166,6 +166,7 @@ pub struct SiJoust {
     pub time_s:f64,
     pub next_player_shot_s:f64,
     pub next_enemy_shot_s:f64,
+    pub enemy_fire_interval_s:f64,
     pub shots_fired:u64,
     pub player_history:WorldlineHistory,
     pub opponent_history:WorldlineHistory,
@@ -189,7 +190,8 @@ impl SiJoust {
             sun:SiBody::new(SOLAR_MASS_KG,6.957e8,V2::default(),V2::default()),
             player,opponent,player_history,opponent_history,
             rounds:vec![],events:vec![],time_s:0.0,
-            next_player_shot_s:0.0,next_enemy_shot_s:1.2,shots_fired:0,
+            next_player_shot_s:0.0,next_enemy_shot_s:1.2,
+            enemy_fire_interval_s:2.5,shots_fired:0,
         }
     }
     /// Optical position from a strictly recorded, bounded worldline.
@@ -223,7 +225,7 @@ impl SiJoust {
                 let aim=(e.pos_m-self.opponent.pos_m).normalized();
                 self.opponent.facing_rad=aim.y.atan2(aim.x);
                 self.rounds.push(KineticRound::from_craft(&self.opponent,false));
-                self.next_enemy_shot_s=self.time_s+2.5;
+                self.next_enemy_shot_s=self.time_s+self.enemy_fire_interval_s;
             }
         }
         let mut impacts=Vec::new();
