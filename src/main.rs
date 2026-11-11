@@ -38,6 +38,7 @@ struct Game {
     displayed_latest_time_s:f64,
     mission_name:Option<&'static str>,
     mission_profile:Option<MissionProfile>,
+    tidal_tug_budget:u8,
 }
 const DELTA:f64=1.0/120.0;
 const TIDAL_STEP:f64=0.10;
@@ -51,7 +52,7 @@ impl Game {
             camera:CameraMeters::new(center,scale),
             sim_rate:1.0,accumulator:0.0,manual_aim:false,
             facing_rad:0.0,effects:Vec::new(),displayed_latest_time_s:-1.0,
-            mission_name:None,mission_profile:None}
+            mission_name:None,mission_profile:None,tidal_tug_budget:0}
     }
     fn for_mission(profile:MissionProfile)->Self {
         let mode=match profile.kind {
@@ -64,6 +65,7 @@ impl Game {
             Mode::Tidal=>game.tidal=profile.tidal(),
         }
         game.mission_name=Some(profile.site_name);
+        game.tidal_tug_budget=profile.available_tugs();
         game.mission_profile=Some(profile);
         game
     }
@@ -86,7 +88,9 @@ impl Game {
             },
             Mode::Tidal=>{
                 if self.tidal.disruption.is_some(){TacticalOutcome::Victory}
-                else{TacticalOutcome::Withdrawn}
+                else if self.mission_profile.is_some()&&self.tidal.time_s>=300.0 {
+                    TacticalOutcome::Defeat
+                }else{TacticalOutcome::Withdrawn}
             },
         }
     }
@@ -104,6 +108,15 @@ impl Game {
         if is_key_pressed(KeyCode::Q) {self.sim_rate=(self.sim_rate/2.0).max(0.125);}
         if is_key_pressed(KeyCode::E) {self.sim_rate=(self.sim_rate*2.0).min(64.0);}
         if is_key_pressed(KeyCode::M) {self.manual_aim=!self.manual_aim;}
+        if self.mode==Mode::Tidal && self.mission_profile.is_some(){
+            if is_key_pressed(KeyCode::A) {
+                MissionProfile::apply_tidal_tug(&mut self.tidal,true,
+                    &mut self.tidal_tug_budget);
+            }else if is_key_pressed(KeyCode::D) {
+                MissionProfile::apply_tidal_tug(&mut self.tidal,false,
+                    &mut self.tidal_tug_budget);
+            }
+        }
         let (_,scroll)=mouse_wheel();
         if scroll!=0.0 {self.camera.zoom((1.0+scroll as f64*0.1).clamp(0.2,3.0));}
         if is_key_down(KeyCode::X) {self.camera.zoom(1.03);}
@@ -136,7 +149,13 @@ impl Game {
                         fire_player:is_key_down(KeyCode::Space),
                     });
                 }
-                Mode::Tidal=>self.tidal.step(Seconds(step)),
+                Mode::Tidal=>{
+                    // Campaign interdiction has a finite escape deadline.
+                    if self.mission_profile.is_none() ||
+                        self.tidal.time_s<300.0 || self.tidal.disruption.is_some(){
+                        self.tidal.step(Seconds(step));
+                    }
+                },
             }
             self.accumulator-=step;
             cycles+=1;
@@ -328,7 +347,10 @@ impl Game {
         if self.mode==Mode::Intercept {
             draw_text("MOUSE aim • M keyboard aim • A/D rotate • W/S thrust • SPACE fire",
                 23.0,145.0,18.0,LIGHTGRAY);
-        } else {
+        } else if self.mission_profile.is_some() {
+            draw_text(&format!("A inward tug / D outward tug  |  burns {}  |  300s objective",
+                self.tidal_tug_budget),23.0,145.0,18.0,LIGHTGRAY);
+        }else{
             draw_text("Observe calibrated freefall and physically scaled tidal ratio",
                 23.0,145.0,18.0,LIGHTGRAY);
         }
