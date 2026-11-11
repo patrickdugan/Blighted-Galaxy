@@ -1,4 +1,4 @@
-# BG-STR-03 | Strategic industry and physical encounter missions
+# BG-STR-04 | Stellar industrial convoys and Guf fleet defense
 
 This layer extends PR #32's galactic navigation and its SI encounter modes. It uses the same `GalacticNavModel.year`, schematic waypoints, Orion origin, and 0.10c geometric limit.
 
@@ -15,6 +15,9 @@ Start the game, select a labeled star system, and use:
 | U | Prepare a Guf relay node at a Weena-controlled industrial system |
 | P | Fire the Guf array at the selected system, requiring three powered relays and a full charge |
 | Y | Launch a Drummer Halo strike at a hostile system, consuming one stored kugelblitz and traveling at 0.76c |
+| M (overworld) | Select a Drummer source, then a Drummer destination; each press starts or completes a finite-speed 60-material / 40-energy convoy |
+| 4 (overworld) | Launch a GUF-defense escort mission if a Drummer system faces scheduled incoming energy beams and the ship is already there |
+| 4 / 5 / 6 (RKM mission) | Select 2 kg standard, 6 kg siege, or three-round 0.7 kg flak weapon, subject to Drummer industry unlocks and ammunition limits |
 | N | Enable or disable autonomous Blight expansion |
 | J | Send Blight replication toward the selected system from the nearest captured source |
 | Space, Q/E | Run/pause strategic calendar and adjust speed |
@@ -23,7 +26,7 @@ Start the game, select a labeled star system, and use:
 | R (encounter) | Restart the current mission with exactly the original system snapshot |
 | 3/Tab (encounter) | Debrief and apply a single victory/defeat result to the strategic site |
 
-The strategic screen uses the existing waypoint geometry. An additional Orion seed is the initial Blight industrial source. A cyan auxiliary dot denotes stored kugelblitz holes; gold rings denote Guf relays. Lines indicate packets currently moving at finite speeds. The right-hand system dossier reports industry, energy, materials, stored holes, array status and packet count.
+The strategic screen uses the existing waypoint geometry. An additional Orion seed is the initial Blight industrial source. A cyan auxiliary dot denotes stored kugelblitz holes; gold rings denote Guf relays. Lines indicate packets currently moving at finite speeds. Cyan squares track cargo convoys between industrial worlds. The right-hand system dossier reports industry, energy, materials, stored holes, array status and packet count.
 
 ## Simulation contract
 
@@ -50,6 +53,24 @@ At launch, `src/mission.rs` snapshots the selected system's owner, defenses, ind
 
 New tests verify deterministic changes to shield strength, escort fleet size, enemy cadence and stellar remnant masses across distinct systems; matching initial SI worldline samples and multi-ship first-hit collisions; finite, causal projectile speeds; fixed mission profiles after industrial changes; limited radial tug budgets; and 250-year tactical cooldown. Existing SI physics tests remain in `src/si_bridge.rs`.
 
+## BG-STR-04: interstellar resources and anti-Guf combat
+
+### Transport economics and timing
+
+`StrategicState::send_convoy(source,target)` requires Drummer control at both ends and funds 60 material and 65 energy at launch, of which 40 energy is cargo and 25 powers the voyage. Speed is `beta = clamp(0.35 + 0.04 * industry, 0.35, 0.75)`. The galactic travel time is distance in light-years divided by `beta`, expressed in years. Cargo sits inside a `CargoConvoy` rather than at either star until delivery. The simulation checks convoy paths at each 250-year economic substep for occupation within 850 light-years of a Blight-controlled system. Interdiction destroys cargo; a hostile destination likewise denies delivery. The map draws a cyan square at the current convoy position. Unloaded cargo is added once to the destination's bounded stores, preserving source debits and keeping propulsion expenditure distinct.
+
+### Guf interception
+
+A site with incoming `ArrayPulse` packets may open `TacticalKind::GufDefense`. The mission is a finite-duration RKM encounter against enemy beam-designator escort ships, using the existing causal target observations, projectile motion and moving collision detection. An arriving player must defend a Drummer-controlled site. The battle freezes the galactic clock; this is a local tactical timescale in seconds. Winning consumes 25 material and 40 energy at the defended system and charges its `guf_ward` by `clamp(4 + 1.5*industry + 0.4*defense,4,18)` strategic shield-energy units. Success is explicitly conditioned on local stores. Each later light-speed Guf packet first subtracts available ward capacity, then applies residual damage to the system's strategic defense. Withdrawal preserves resources and wards. Losing yields the existing defensive penalty.
+
+The game currently exposes future packets through the strategic planner as an intelligence/anticipation scenario premise. An actual incoming photon front would only be detected locally upon arrival, so future campaign modes should introduce observation intelligence and warning constraints. The defensive screen remains a fictional technology, while its packet timing and SI tactical ship trajectories are modeled separately.
+
+### SI weapon loadouts
+
+`WeaponKind` adds standard RKM (2.0 kg, 0.72c muzzle speed, 0.25 second cooldown, one ammunition unit), siege (6 kg, 0.63c, 0.90 seconds, four units), and fan (three 0.7 kg projectiles at ±0.072 rad, 0.78c, 0.55 seconds, three units per volley). `KineticRound::weapon_from_craft` uses the existing relativistic velocity composition and impact-energy calculation. Player magazines derive from the nearest friendly Drummer industrial supplier; siege and fan unlock at support industry 2.0 and 1.25 respectively. Tactical ammunition is bounded and scoped to the mission's launch snapshot. Munitions are gameplay resources, with the local system's industrial growth determining their availability.
+
+Tests verify escrow debits, one-time convoy arrival, Blight interdiction, hostile destination loss, finite propagation speeds, GUF damage absorption, failed defensive interception, and weapon velocity, cadence and budget behavior.
+
 ## History mapping
 
 Episode XVII's hidden planetary accelerator establishes the Remnant's stored kugelblitz drives. Episode XVIII's O-star Dyson construction establishes the industrial background for hostile black-hole weapons. Episode XIX grounds Weena's supergiant/12-solar-mass remnant and multi-system Chamber of Guf. Episode XX grounds long light-time delays, counterfire from individual swarms, and the need for anticipation or evasive motion.
@@ -58,10 +79,10 @@ Site alignments, project prices, system ownership and action rates are balance a
 
 ## Next implementation milestones
 
-1. Add actual defending squadrons, supply convoys, and orbital infrastructure to the single-opponent SI encounter instead of proxying local fleet strength through one defender's shields and cadence.
-2. Build mission-triggered tactical setups for the Chamber of Guf and inter-system Halo battles, with packet interception and finite beam steering.
-3. Introduce persistent campaign saves, deterministic replay, and scripted Episodes XVII through XXII scenarios.
-4. Evolve the visual occupation mask from independent industrial bubbles into a connected front driven by autonomous sector captures.
+1. Add persistent campaign saves and deterministic replay for convoy routes, weapon magazines, Guf screens, and historical events.
+2. Replace schematic Guf shield units with line-of-fire geometry, beam steering, targeted interception and industrial coordination costs.
+3. Introduce escort/bandit missions against actual convoys and specialized Halo-strike engagements.
+4. Build Episode XVII through XXII mission scripts, and an industrial planner for Great Aunt Weena.
 
 ## Verification
 
@@ -69,4 +90,4 @@ Unit tests cover scarce resource production, array node requirements, emitter-to
 
 ### Actual executable visual checks
 
-The existing BG-OVR workflow now captures additional genuine GPU frames of the four-escort Orion fleet and the Weena 12-solar-mass tidal scenario, using the fixed command-line QA fixtures `--demo-mission 9` and `--demo-mission 6 --demo-tidal`. These scenes are read-only previews, so they cannot change campaign ownership without the ship's travel and mission debrief. The screenshot artifacts share the existing 30-day GitHub retention policy.
+The existing BG-OVR workflow now captures genuine GPU frames of the four-escort Orion fleet, the Weena 12-solar-mass tidal scenario, and the Guf-defense encounter, using the fixed command-line QA fixtures `--demo-mission 9`, `--demo-mission 6 --demo-tidal`, and `--demo-mission 5 --demo-guf-defense`. These scenes are read-only previews, so they cannot change campaign ownership without the ship's travel and mission debrief. The screenshot artifacts share the existing 30-day GitHub retention policy.
