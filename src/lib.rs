@@ -434,3 +434,6 @@ pub mod stellar_balance;
 // BG-OVR-01: causal galactic campaign and self-rendered Macroquad navigation.
 pub mod overworld;
 pub mod overworld_nav;
+
+// BG-STR-01: persistent industrial strategy and causal attack network.
+pub mod strategy;
