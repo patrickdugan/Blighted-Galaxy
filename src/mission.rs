@@ -42,7 +42,8 @@ impl MissionProfile {
         let s=state.systems.get(site)?;
         let incoming=state.incoming_guf(site);
         if kind==TacticalKind::GufDefense &&
-            (s.owner!=Faction::Drummers||incoming.is_none()) {return None;}
+            (s.owner!=Faction::Drummers||incoming.is_none()
+                ||s.material<25.0||s.energy<40.0) {return None;}
         let (guf_count,guf_power)=incoming
             .map(|(_,n,p)|(n,p)).unwrap_or((0,0.0));
         // Shipboard magazines and weapon unlocks come from the nearest
@@ -220,6 +221,21 @@ mod tests {
         assert_eq!(p.incoming_guf_power,12.0);
         assert!(p.escort_count>=3);
         assert!(p.joust().opponent.shield_energy_j>0.0);
+    }
+    #[test]
+    fn guf_mission_requires_enough_local_material_to_activate_screen(){
+        let mut state=StrategicState::default();
+        for i in [2,3,6] {
+            state.set_owner(i,Faction::Weena);
+            state.systems[i].array_node=true;state.systems[i].energy=500.0;
+        }
+        state.array_charged=100.0;state.fire_guf(5).unwrap();
+        state.systems[5].energy=39.0;
+        assert!(MissionProfile::from_strategy(
+            &state,5,TacticalKind::GufDefense).is_none());
+        state.systems[5].energy=50.0;state.systems[5].material=24.0;
+        assert!(MissionProfile::from_strategy(
+            &state,5,TacticalKind::GufDefense).is_none());
     }
     #[test]
     fn industrial_defender_field_is_a_real_multi_ship_scene(){
