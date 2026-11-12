@@ -282,7 +282,7 @@ mod tests{
         assert_eq!(original,restored);
         assert_eq!(t.convoys.len(),1);
         assert_eq!(t.incoming_guf(5).unwrap().1,3);
-        assert_eq!(t.last_tactical_year[5],Some(s.year).unwrap());
+        assert_eq!(t.last_tactical_year[5],s.last_tactical_year[5]);
         assert!(n.travel.is_some());
     }
     #[test]
