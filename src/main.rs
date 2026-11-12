@@ -5,11 +5,12 @@ use blighted_galaxy::si_bridge::{
     CameraMeters, Control, Metres, Seconds, SiJoust, SiTidalEncounter,
 };
 use blighted_galaxy::V2;
+use blighted_galaxy::overworld_nav::OverworldNav;
 use macroquad::prelude::*;
 
 fn config()->Conf {
     Conf {
-        window_title:"Blighted Galaxy • SI-Driven Intercept".into(),
+        window_title:"Blighted Galaxy • Galactic Overworld".into(),
         window_width:1600,window_height:950,high_dpi:true,
         ..Default::default()
     }
@@ -285,7 +286,7 @@ impl Game {
             Mode::Tidal=>"2  WHITE-DWARF TIDAL BREAKUP • 10 SOLAR MASS HOLE",
         };
         draw_text(title,23.0,80.0,22.0,SKYBLUE);
-        draw_text("1 / 2  SCENARIOS      Q / E  TIME RATE       Z / X / WHEEL  ZOOM",
+        draw_text("1 / 2 SCENARIOS   3 / TAB GALAXY   Q / E TIME   Z / X / WHEEL ZOOM",
             23.0,113.0,19.0,LIGHTGRAY);
         if self.mode==Mode::Intercept {
             draw_text("MOUSE aim • M keyboard aim • A/D rotate • W/S thrust • SPACE fire",
@@ -304,11 +305,54 @@ impl Game {
 #[macroquad::main(config)]
 async fn main() {
     let mut game=Game::new(Mode::Intercept);
+    let mut overworld=OverworldNav::new();
+    let args=std::env::args().collect::<Vec<_>>();
+    // Offline true-game-frame render for CI and art review; the same
+    // procedural GPU scene draws during ordinary gameplay.
+    let snapshot_path=args.windows(2)
+        .find(|pair|pair[0]=="--snapshot-overworld")
+        .map(|pair|pair[1].clone());
+    if args.iter().any(|v|v=="--focus-orion"){
+        overworld.focus_frontier();
+    }
+    // The campaign opens on its galactic navigation layer. Existing
+    // physics encounters remain directly reachable with keys 1 and 2.
+    // --encounter keeps the previous startup for dedicated combat tests.
+    let encounter_start=args.iter().any(|a|a=="--encounter");
+    let mut galaxy_mode=!encounter_start;
+    // Allow the built-in font atlas and GPU textures to settle before
+    // capturing an actual frame in headless CI.
+    let mut frame_count=0usize;
     loop {
         if is_key_pressed(KeyCode::Escape) {break;}
-        game.input();
-        game.advance(get_frame_time() as f64);
-        game.draw();
+        let dt=get_frame_time() as f64;
+        if galaxy_mode {
+            if is_key_pressed(KeyCode::Key1){
+                game=Game::new(Mode::Intercept);
+                galaxy_mode=false;
+            }else if is_key_pressed(KeyCode::Key2){
+                game=Game::new(Mode::Tidal);
+                galaxy_mode=false;
+            }else{
+                overworld.update(dt);
+            }
+        }else if is_key_pressed(KeyCode::Key3)||
+                is_key_pressed(KeyCode::Tab) {
+            galaxy_mode=true;
+        }else{
+            game.input();
+            game.advance(dt);
+        }
+        if galaxy_mode {overworld.draw();}
+        else {game.draw();}
+        frame_count+=1;
+        if let Some(path)=snapshot_path.as_ref(){
+            if frame_count>=4{
+                // Real GPU screenshot after font glyphs were loaded.
+                macroquad::prelude::get_screen_data().export_png(path);
+                break;
+            }
+        }
         next_frame().await;
     }
 }

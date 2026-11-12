@@ -1,0 +1,77 @@
+name: BG-OVR-01 playable procedural galactic navigation
+on:
+  pull_request:
+    paths:
+      - "src/overworld.rs"
+      - "src/overworld_nav.rs"
+      - "src/main.rs"
+      - "src/lib.rs"
+      - "workpapers/overworld/**"
+      - ".github/workflows/bg-overworld.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/overworld.rs"
+      - "src/overworld_nav.rs"
+      - "src/main.rs"
+      - "src/lib.rs"
+      - ".github/workflows/bg-overworld.yml"
+  workflow_dispatch:
+jobs:
+  causal-model-and-compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Test front cap, delayed tendrils, sector math and proper time
+        run: cargo test --lib overworld -- --nocapture
+      - name: Compile playable galactic navigation and SI encounters
+        run: cargo check --bin blighted-galaxy
+  actual-game-frames:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install headless X display if missing
+        run: |
+          if ! command -v xvfb-run >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y xvfb
+          fi
+      - name: Render the actual Macroquad full-galaxy frame
+        run: |
+          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a cargo run --release --bin blighted-galaxy -- \
+            --snapshot-overworld bg-overworld-full.png
+      - name: Render the actual procedural Orion frontier in detail
+        run: |
+          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a target/release/blighted-galaxy \
+            --focus-orion --snapshot-overworld bg-overworld-orion.png
+      - name: Upload true gameplay screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-overworld-actual-frames
+          path: |
+            bg-overworld-full.png
+            bg-overworld-orion.png
+          if-no-files-found: error
+          retention-days: 30
+  windows-playable:
+    runs-on: windows-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build integrated galaxy nav and encounters
+        run: cargo build --release --bin blighted-galaxy
+      - name: Upload playable Windows overworld
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-overworld-windows-x64
+          path: target/release/blighted-galaxy.exe
+          if-no-files-found: error
+          retention-days: 30

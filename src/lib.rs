@@ -430,3 +430,7 @@ pub mod sph_massprofile;
 
 // BG-PHY-12: hydrostatic radial force budgets and local virial diagnostics.
 pub mod stellar_balance;
+
+// BG-OVR-01: causal galactic campaign and self-rendered Macroquad navigation.
+pub mod overworld;
+pub mod overworld_nav;
