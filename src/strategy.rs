@@ -3,6 +3,7 @@
 //! All messages and attacks propagate no faster than light in galactic coordinates.
 use crate::overworld::{Front,ORION_OUTBREAK,WAYPOINTS,SectorStatus};
 use crate::V2;
+use crate::guf_geometry::{self,SlewMount};
 use serde::{Serialize,Deserialize};
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq,Serialize,Deserialize)]
@@ -31,6 +32,7 @@ pub struct System {
 pub struct Signal {
     pub kind:SignalKind, pub source:usize, pub target:usize,
     pub launch_year:f64, pub arrival_year:f64, pub power:f64,
+    pub beam_azimuth_rad:Option<f64>,
 }
 #[derive(Clone,Copy,Debug,PartialEq,Eq,Serialize,Deserialize)]
 pub enum SignalKind { BlightSeed, ArrayPulse, WeenaClaim, HaloStrike }
@@ -56,6 +58,7 @@ pub struct StrategicState {
     pub signals:Vec<Signal>,pub events:Vec<String>,
     pub convoys:Vec<CargoConvoy>,pub next_convoy_id:u64,
     pub array_charged:f64,pub pulses:u32,
+    pub guf_mounts:Vec<SlewMount>,
     pub historical:bool,
     pub blight_autonomy:bool,
     /// Incremented whenever a world changes its territorial footprint.
@@ -83,7 +86,8 @@ impl StrategicState {
         Self{year,systems,signals:vec![],convoys:vec![],next_convoy_id:1,
             events:vec![
             "STRATEGIC SCENARIO: industrial networks online".into()],
-            array_charged:0.0,pulses:0,historical:false,
+            array_charged:0.0,pulses:0,
+            guf_mounts:vec![SlewMount::default();count],historical:false,
             blight_autonomy:true,territory_revision:0,
             last_tactical_year:vec![f64::NEG_INFINITY;count]}
     }
@@ -284,7 +288,8 @@ impl StrategicState {
             return Err("OUTSIDE ORION CAUSAL ENVELOPE");
         }
         self.signals.push(Signal{kind:SignalKind::BlightSeed,source,target,
-            launch_year:self.year,arrival_year:arrival,power:1.0});
+            launch_year:self.year,arrival_year:arrival,power:1.0,
+            beam_azimuth_rad:None});
         Ok(())
     }
     /// Use a Drummer-made micro black hole to propel a strike to a
@@ -305,7 +310,7 @@ impl StrategicState {
         self.systems[source].energy-=20.0;
         self.signals.push(Signal{kind:SignalKind::HaloStrike,
             source,target,launch_year:self.year,
-            arrival_year:arrival,power:5.0});
+            arrival_year:arrival,power:5.0,beam_azimuth_rad:None});
         self.events.push(format!("HALO STRIKE dispatched / target {} / T+{arrival:.0}",
             self.systems[target].name));
         Ok(arrival)
@@ -329,16 +334,51 @@ impl StrategicState {
         self.events.push(format!("WEENA influence relay sent to {}",self.systems[target].name));
         Ok(arrival)
     }
-    /// Requires three independent industrial array nodes; power travels at c.
-    /// The remaining beam is game-scale and may be intercepted on arrival.
-    pub fn fire_guf(&mut self,target:usize)->Result<f64,&'static str>{
-        let destination=self.systems.get(target).ok_or("INVALID TARGET")?;
+    /// Point independent Guf relays toward a star. The order first
+    /// propagates from Weena's controller at c, then each mount slews
+    /// through the shortest angular path at a finite rotation rate.
+    pub fn aim_guf(&mut self,target:usize)->Result<f64,&'static str>{
+        let dest=self.systems.get(target).ok_or("INVALID GUF TARGET")?.pos;
         let emitters:Vec<usize>=self.systems.iter().enumerate()
             .filter(|(_,s)|s.owner==Faction::Weena&&s.array_node&&s.energy>=50.0)
             .map(|(i,_)|i).collect();
-        if emitters.len()<3{return Err("THREE ACTIVE GUF NODES REQUIRED");}
-        if self.array_charged<100.0{return Err("ARRAY CHARGING");}
+        if emitters.len()<3{return Err("THREE POWERED GUF NODES REQUIRED");}
+        let controller=if self.systems.get(6).is_some_and(|s|s.owner==Faction::Weena) {
+            6
+        }else{emitters[0]};
+        let origin=self.systems[controller].pos;
+        let mut updates=Vec::new();
+        let mut ready=self.year;
+        for source in emitters {
+            if source==target{return Err("TARGET OVERLAPS GUF EMITTER");}
+            let desired=guf_geometry::bearing(self.systems[source].pos,dest);
+            if self.guf_mounts[source].aligned(self.year,target,desired) {continue;}
+            let receive=self.year+(self.systems[source].pos-origin).len();
+            let next=self.guf_mounts[source]
+                .schedule(self.year,receive,desired,target)
+                .ok_or("GUF MOUNT BUSY WITH EXISTING SLEW")?;
+            if next.slew_end_year>200_000.0{return Err("GUF ALIGNMENT BEYOND CAMPAIGN");}
+            ready=ready.max(next.slew_end_year);
+            updates.push((source,next));
+        }
+        for (source,mount) in updates{self.guf_mounts[source]=mount;}
+        self.events.push(format!("GUF ALIGNMENT {} / READY T+{ready:.0}",
+            self.systems[target].name));
+        Ok(ready)
+    }
+    /// Requires three independently aligned industrial nodes, each with
+    /// a narrow footprint and finite light-travel-time beam packet.
+    /// The remaining beam is game-scale and may be intercepted on arrival.
+    pub fn fire_guf(&mut self,target:usize)->Result<f64,&'static str>{
+        let destination=self.systems.get(target).ok_or("INVALID TARGET")?;
         let target_pos=destination.pos;
+        let emitters:Vec<usize>=self.systems.iter().enumerate()
+            .filter(|(i,s)|s.owner==Faction::Weena&&s.array_node&&s.energy>=50.0&&
+                self.guf_mounts[*i].aligned(self.year,target,
+                    guf_geometry::bearing(s.pos,target_pos)))
+            .map(|(i,_)|i).collect();
+        if emitters.len()<3{return Err("THREE ALIGNED GUF NODES REQUIRED / SHIFT+P");}
+        if self.array_charged<100.0{return Err("ARRAY CHARGING");}
         // Each emitter's light cone is independent. A distributed strike
         // reaches the destination at the latest packet arrival.
         let arrival=emitters.iter().map(|&i|
@@ -353,7 +393,8 @@ impl StrategicState {
             let light_time=(self.systems[source].pos-target_pos).len();
             self.signals.push(Signal{kind:SignalKind::ArrayPulse,
                 source,target,launch_year:arrival-light_time,
-                arrival_year:arrival,power:4.0});
+                arrival_year:arrival,power:4.0,
+                beam_azimuth_rad:Some(self.guf_mounts[source].bearing_at(self.year))});
         }
         self.events.push(format!("CHAMBER OF GUF fired; target arrival T+{arrival:.0} yr"));
         Ok(arrival)
@@ -405,6 +446,10 @@ impl StrategicState {
             let mut pending=vec![];
             for packet in self.signals.drain(..){
                 if packet.arrival_year>self.year {pending.push(packet);continue;}
+                let intersects=packet.beam_azimuth_rad.is_some_and(|az|
+                    guf_geometry::beam_intersects(
+                        self.systems[packet.source].pos,
+                        self.systems[packet.target].pos,az));
                 if let Some(s)=self.systems.get_mut(packet.target){
                     match packet.kind {
                         SignalKind::WeenaClaim=>{
@@ -437,6 +482,11 @@ impl StrategicState {
                             }
                         }
                         SignalKind::ArrayPulse=>{
+                            if !intersects{
+                                self.events.push(format!(
+                                    "GUF beam missed {} / off-axis trajectory",s.name));
+                                continue;
+                            }
                             let absorbed=s.guf_ward.min(packet.power);
                             s.guf_ward=(s.guf_ward-absorbed).max(0.0);
                             let damage=packet.power-absorbed;
