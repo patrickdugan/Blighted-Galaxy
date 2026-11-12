@@ -1006,6 +1006,11 @@ impl OverworldNav{
             shadow_text(&format!(
                 "CONVOY SOURCE {} / SELECT DRUMMER DESTINATION + M",
                 self.strategy.systems[origin].name),x+12.0,y+65.0,15.0,CYAN);
+        }else if let Some((assigned,aligned,ready))=self.strategy
+            .guf_alignment_status(site).filter(|status|status.0>0){
+            shadow_text(&format!(
+                "GUF AIM {} MOUNTS / {} ALIGNED / READY T+{:.0}",
+                assigned,aligned,ready),x+12.0,y+65.0,15.0,GOLD);
         }else if let Some(p)=MissionProfile::from_strategy(
             &self.strategy,site,TacticalKind::Intercept){
             shadow_text(&format!(
