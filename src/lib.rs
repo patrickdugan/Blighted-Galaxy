@@ -5,13 +5,14 @@
 //! for a physically calibrated general-relativistic simulation.
 
 use std::f64::consts::TAU;
+use serde::{Serialize,Deserialize};
 use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 
 pub const G: f64 = 1.0;
 pub const SOFTENING: f64 = 12.0;
 pub const LIGHT_SPEED: f64 = 1_800.0;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct V2 {
     pub x: f64,
     pub y: f64,
@@ -440,3 +441,6 @@ pub mod strategy;
 
 // BG-STR-03: reproducible encounter profiles from industrial star systems.
 pub mod mission;
+
+// BG-STR-05: versioned, validated, atomic campaign persistence.
+pub mod campaign_save;
