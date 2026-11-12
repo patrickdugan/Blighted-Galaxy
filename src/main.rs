@@ -486,8 +486,12 @@ async fn main() {
                     overworld.strategy.systems[i].energy=500.0;
                     overworld.strategy.systems[i].array_node=true;
                 }
-                overworld.strategy.array_charged=100.0;
-                let _=overworld.strategy.fire_guf(site);
+                overworld.strategy.blight_autonomy=false;
+                if let Ok(ready)=overworld.strategy.aim_guf(site){
+                    overworld.strategy.advance_to(ready);
+                    overworld.strategy.array_charged=100.0;
+                    let _=overworld.strategy.fire_guf(site);
+                }
                 TacticalKind::GufDefense
             }else{TacticalKind::Intercept};
             if let Some(profile)=MissionProfile::from_strategy(
