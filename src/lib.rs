@@ -444,3 +444,6 @@ pub mod mission;
 
 // BG-STR-05: versioned, validated, atomic campaign persistence.
 pub mod campaign_save;
+
+// BG-STR-05: finite-angle, finite-slew Guf relay geometry.
+pub mod guf_geometry;
