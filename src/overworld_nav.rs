@@ -374,6 +374,18 @@ impl OverworldNav{
         self.selected.and_then(|point|self.strategy.nearest(point,500.0))
             .filter(|&site|(self.model.position-self.strategy.systems[site].pos).len()<=500.0)
     }
+    pub fn import_campaign(&mut self,nav:GalacticNavModel,strategy:StrategicState){
+        self.model=nav;
+        self.strategy=strategy;
+        self.convoy_origin=None;
+        self.encounter_notice=None;
+        self.selected=self.model.destination;
+        self.selected_name=self.selected.and_then(|p|
+            WAYPOINTS.iter().find(|w|(w.pos-p).len()<500.0).map(|w|w.name));
+        self.last_front_bucket=-1;
+        self.last_territory_revision=u64::MAX;
+        self.refresh_occupation();
+    }
     pub fn report_notice(&mut self,text:&str){
         self.encounter_notice=Some(text.into());
     }
@@ -931,7 +943,7 @@ impl OverworldNav{
             "J BLIGHT  Y HALO  N AUTO",
             "M CONVOY SOURCE -> DEST",
             "1 RKM  2 TIDAL  4 GUF DEFEND",
-            "T STRATEGY  3/TAB RETURN",
+            "T STRATEGY  F5 SAVE / F9 LOAD",
         ];
         for (i,line) in hints.iter().enumerate(){
             draw_text(line,x,footer+18.0+i as f32*15.7,
