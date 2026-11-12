@@ -1,8 +1,12 @@
-name: BG-STR-04 convoys, weapons and Guf interception checks
+name: BG-STR-05 persistence and finite-beam targeting checks
 on:
   pull_request:
     paths:
+      - 'Cargo.toml'
       - 'src/strategy.rs'
+      - 'src/guf_geometry.rs'
+      - 'src/campaign_save.rs'
+      - 'src/overworld.rs'
       - 'src/mission.rs'
       - 'src/si_bridge.rs'
       - 'src/main.rs'
