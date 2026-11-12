@@ -8,6 +8,8 @@ use blighted_galaxy::V2;
 use blighted_galaxy::overworld_nav::OverworldNav;
 use blighted_galaxy::strategy::{TacticalKind,TacticalOutcome};
 use blighted_galaxy::mission::MissionProfile;
+use blighted_galaxy::campaign_save;
+use std::path::PathBuf;
 use macroquad::prelude::*;
 
 fn config()->Conf {
@@ -453,6 +455,10 @@ async fn main() {
     let mut game=Game::new(Mode::Intercept);
     let mut overworld=OverworldNav::new();
     let args=std::env::args().collect::<Vec<_>>();
+    let save_path=args.windows(2)
+        .find(|pair|pair[0]=="--save-file")
+        .map(|pair|PathBuf::from(&pair[1]))
+        .unwrap_or_else(||PathBuf::from("blighted-galaxy-save.json"));
     // Offline true-game-frame render for CI and art review; the same
     // procedural GPU scene draws during ordinary gameplay.
     let snapshot_path=args.windows(2)
@@ -499,6 +505,26 @@ async fn main() {
         if is_key_pressed(KeyCode::Escape) {break;}
         let dt=get_frame_time() as f64;
         if galaxy_mode {
+            if is_key_pressed(KeyCode::F5){
+                let message=match campaign_save::save_file(
+                    &save_path,&overworld.model,&overworld.strategy){
+                    Ok(())=>format!("CAMPAIGN SAVED / {}",
+                        save_path.display()),
+                    Err(e)=>format!("SAVE FAILED: {e}"),
+                };
+                overworld.report_notice(&message);
+            }
+            if is_key_pressed(KeyCode::F9){
+                let message=match campaign_save::load_file(&save_path){
+                    Ok((nav,strategy))=>{
+                        overworld.import_campaign(nav,strategy);
+                        format!("CAMPAIGN RESTORED / {}",save_path.display())
+                    },
+                    Err(e)=>format!("LOAD FAILED: {e}"),
+                };
+                overworld.report_notice(&message);
+                active_mission=None;
+            }
             let intercept=is_key_pressed(KeyCode::Key1);
             let tidal=is_key_pressed(KeyCode::Key2);
             let guf=is_key_pressed(KeyCode::Key4);
