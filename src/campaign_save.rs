@@ -307,7 +307,7 @@ mod tests{
         let nav=GalacticNavModel::default();
         let s=StrategicState::default();
         let data=encode(&nav,&s).unwrap();
-        assert!(decode(&data.replace("\"version\": 1","\"version\": 9")).is_err());
+        assert!(decode(&data.replace("\"version\": 2","\"version\": 9")).is_err());
         assert!(decode(&data.replace("\"energy\": 100.0","\"energy\": -100.0")).is_err());
     }
     #[test]
