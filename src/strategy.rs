@@ -266,10 +266,22 @@ impl StrategicState {
                 s.material-=65.0;s.energy-=75.0;s.array_node=true;
                 Ok(format!("{name}: synchronized Guf relay prepared"))
             },
-        }.map(|msg|{self.territory_revision+=1;self.events.push(msg.clone());msg})
+        }.map(|msg|{
+            if project==Project::GufNode{
+                self.guf_mounts[site]=SlewMount::default();
+            }
+            self.territory_revision+=1;self.events.push(msg.clone());msg
+        })
     }
     pub fn set_owner(&mut self,site:usize,owner:Faction){
-        if let Some(s)=self.systems.get_mut(site){s.owner=owner;self.territory_revision+=1;}
+        if let Some(s)=self.systems.get_mut(site){
+            s.owner=owner;
+            if owner!=Faction::Weena{
+                s.array_node=false;
+                self.guf_mounts[site]=SlewMount::default();
+            }
+            self.territory_revision+=1;
+        }
     }
     pub fn schedule_blight_seed(&mut self,source:usize,target:usize)->Result<(),&'static str>{
         if self.signals.iter().any(|s|s.kind==SignalKind::BlightSeed&&s.target==target){
@@ -448,7 +460,21 @@ impl StrategicState {
         let end=year.min(200_000.0);
         while self.year<end {
             let previous_bin=(self.year/2_500.0).floor() as u64;
-            let next=(self.year+250.0).min(end);
+            let mut next=(self.year+250.0).min(end);
+            // Resolve arrivals at their exact galactic coordinate time.
+            // Economic integration uses shorter substeps at arrival events.
+            for p in &self.signals{
+                if p.arrival_year>self.year && p.arrival_year<next{
+                    next=p.arrival_year;
+                }
+            }
+            for c in &self.convoys{
+                if c.arrival_year>self.year && c.arrival_year<next{
+                    next=c.arrival_year;
+                }
+            }
+            let next_plan=((previous_bin+1) as f64)*2500.0;
+            if next_plan>self.year && next_plan<next{next=next_plan;}
             let dt=next-self.year;
             for s in &mut self.systems {
                 let occupation=if s.owner==Faction::Blight{1.30}else{1.0};
@@ -472,6 +498,7 @@ impl StrategicState {
                         SignalKind::WeenaClaim=>{
                             if s.owner!=Faction::Blight {
                                 s.owner=Faction::Weena;s.array_node=false;
+                                self.guf_mounts[packet.target]=SlewMount::default();
                                 self.territory_revision+=1;
                                 self.events.push(format!("WEENA recruited {}",s.name));
                             }
@@ -479,7 +506,10 @@ impl StrategicState {
                         SignalKind::BlightSeed=>{
                             if (s.pos-ORION_OUTBREAK).len()<=Front::new(self.year).reach_ly(){
                                 s.defense-=packet.power*2.0;
-                                if s.defense<=0.0{s.owner=Faction::Blight;s.array_node=false;}
+                                if s.defense<=0.0{
+                                    s.owner=Faction::Blight;s.array_node=false;
+                                    self.guf_mounts[packet.target]=SlewMount::default();
+                                }
                                 self.territory_revision+=1;
                                 self.events.push(format!("BLIGHT wave reached {}",s.name));
                             }
@@ -491,6 +521,7 @@ impl StrategicState {
                                 if s.defense<=0.0{
                                     s.owner=Faction::Drummers;
                                     s.array_node=false;
+                                    self.guf_mounts[packet.target]=SlewMount::default();
                                     s.industry=(s.industry*0.6).max(0.25);
                                     s.defense=1.0;
                                 }
@@ -513,6 +544,7 @@ impl StrategicState {
                                 if s.defense<=0.0 {
                                     s.industry=(s.industry*0.25).max(0.0);
                                     s.array_node=false;
+                                    self.guf_mounts[packet.target]=SlewMount::default();
                                 }
                             }
                             self.events.push(format!(
