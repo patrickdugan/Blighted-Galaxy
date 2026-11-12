@@ -214,6 +214,9 @@ mod tests {
             state.systems[i].energy=500.0;
             state.systems[i].array_node=true;
         }
+        state.blight_autonomy=false;
+        let ready=state.aim_guf(5).unwrap();
+        state.advance_to(ready);
         state.array_charged=100.0;
         state.fire_guf(5).unwrap();
         let p=MissionProfile::from_strategy(&state,5,TacticalKind::GufDefense).unwrap();
@@ -229,6 +232,9 @@ mod tests {
             state.set_owner(i,Faction::Weena);
             state.systems[i].array_node=true;state.systems[i].energy=500.0;
         }
+        state.blight_autonomy=false;
+        let ready=state.aim_guf(5).unwrap();
+        state.advance_to(ready);
         state.array_charged=100.0;state.fire_guf(5).unwrap();
         state.systems[5].energy=39.0;
         assert!(MissionProfile::from_strategy(
