@@ -3,8 +3,9 @@
 //! All messages and attacks propagate no faster than light in galactic coordinates.
 use crate::overworld::{Front,ORION_OUTBREAK,WAYPOINTS,SectorStatus};
 use crate::V2;
+use serde::{Serialize,Deserialize};
 
-#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+#[derive(Clone,Copy,Debug,PartialEq,Eq,Serialize,Deserialize)]
 pub enum Faction { Blight, Drummers, Weena, Independent }
 impl Faction {
     pub fn label(self)->&'static str {
@@ -26,15 +27,15 @@ pub struct System {
     /// Site-side shield capacity against incoming Guf beams (game units).
     pub guf_ward:f64,
 }
-#[derive(Clone,Debug)]
+#[derive(Clone,Debug,Serialize,Deserialize)]
 pub struct Signal {
     pub kind:SignalKind, pub source:usize, pub target:usize,
     pub launch_year:f64, pub arrival_year:f64, pub power:f64,
 }
-#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+#[derive(Clone,Copy,Debug,PartialEq,Eq,Serialize,Deserialize)]
 pub enum SignalKind { BlightSeed, ArrayPulse, WeenaClaim, HaloStrike }
 /// Material and stored power in a finite-speed sublight transport.
-#[derive(Clone,Debug)]
+#[derive(Clone,Debug,Serialize,Deserialize)]
 pub struct CargoConvoy {
     pub id:u64,pub source:usize,pub target:usize,pub owner:Faction,
     pub material:f64,pub energy:f64,pub launch_year:f64,
