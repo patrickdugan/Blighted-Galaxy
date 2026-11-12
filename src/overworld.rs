@@ -14,6 +14,7 @@
 //! Exact system coordinates and dates are not in the manuscripts:
 //! these waypoints are explicitly schematic gameplay placements.
 use crate::V2;
+use serde::{Serialize,Deserialize};
 use std::f64::consts::{PI,TAU};
 
 pub const DISK_RADIUS_LY:f64=52_000.0;
@@ -201,7 +202,7 @@ pub const WAYPOINTS:[Waypoint;9]=[
         description:"Extragalactic journey: schematic projected exit",
         pos:V2::new(18_000.0,-49_000.0),source:"Episode X"},
 ];
-#[derive(Clone,Copy,Debug)]
+#[derive(Clone,Copy,Debug,Serialize,Deserialize)]
 pub struct TravelLeg{
     pub start:V2,
     pub destination:V2,
@@ -249,7 +250,7 @@ impl TravelLeg {
         self.distance_travelled_ly>=self.total_distance_ly-1e-8
     }
 }
-#[derive(Clone,Debug)]
+#[derive(Clone,Debug,Serialize,Deserialize)]
 pub struct GalacticNavModel {
     pub year:f64,
     pub rate_yr_per_second:f64,
