@@ -330,7 +330,8 @@ impl StrategicState {
         if arrival>200_000.0{return Err("RECRUITMENT ARRIVES AFTER CAMPAIGN HORIZON");}
         self.systems[source].energy-=80.0;
         self.signals.push(Signal{kind:SignalKind::WeenaClaim,source,target,
-            launch_year:self.year,arrival_year:arrival,power:1.0});
+            launch_year:self.year,arrival_year:arrival,power:1.0,
+            beam_azimuth_rad:None});
         self.events.push(format!("WEENA influence relay sent to {}",self.systems[target].name));
         Ok(arrival)
     }
@@ -543,6 +544,12 @@ impl StrategicState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn ready_array(s:&mut StrategicState,target:usize){
+        s.blight_autonomy=false;
+        let ready=s.aim_guf(target).unwrap();
+        s.advance_to(ready);
+        s.array_charged=100.0;
+    }
     #[test] fn production_is_resource_limited(){
         let mut s=StrategicState::new(100_000.0);
         assert!(s.project(5,Project::Kugelblitz).is_err());
@@ -554,11 +561,12 @@ mod tests {
         let mut s=StrategicState::new(100_000.0);
         for i in [2,3,6] {s.set_owner(i,Faction::Weena);
             s.systems[i].array_node=true;s.systems[i].energy=400.0;}
-        s.array_charged=100.0;
+        ready_array(&mut s,5);
+        let launch=s.year;
         let latest=[2,3,6].iter().map(|&i|(s.systems[i].pos-s.systems[5].pos).len())
             .fold(0.0_f64,f64::max);
         let arrival=s.fire_guf(5).unwrap();
-        assert!((arrival-100_000.0-latest).abs()<1e-6);
+        assert!((arrival-launch-latest).abs()<1e-6);
         assert_eq!(s.systems[5].owner,Faction::Drummers);
         s.advance_to(arrival);
         assert!(s.systems[5].defense<4.0);
@@ -588,7 +596,7 @@ mod tests {
             s.set_owner(i,Faction::Weena);
             s.systems[i].array_node=true;s.systems[i].energy=500.0;
         }
-        s.array_charged=100.0;
+        ready_array(&mut s,5);
         let arrival=s.fire_guf(5).unwrap();
         assert_eq!(s.signals.len(),3);
         for packet in &s.signals {
@@ -685,7 +693,7 @@ mod tests {
             s.set_owner(i,Faction::Weena);
             s.systems[i].array_node=true;s.systems[i].energy=500.0;
         }
-        s.array_charged=100.0;
+        ready_array(&mut s,5);
         s.fire_guf(5).unwrap();
         assert_eq!(s.incoming_guf(5).unwrap().2,12.0);
         s.resolve_tactical(5,TacticalKind::GufDefense,
@@ -700,7 +708,7 @@ mod tests {
             s.set_owner(i,Faction::Weena);
             s.systems[i].array_node=true;s.systems[i].energy=500.0;
         }
-        s.array_charged=100.0;
+        ready_array(&mut s,5);
         s.systems[5].energy=200.0;s.systems[5].material=200.0;
         let eta=s.fire_guf(5).unwrap();
         assert_eq!(s.incoming_guf(5).unwrap().1,3);
@@ -718,6 +726,38 @@ mod tests {
         assert!(s.resolve_tactical(5,TacticalKind::GufDefense,
             TacticalOutcome::Victory).is_err());
         assert_eq!(s.systems[5].guf_ward,0.0);
+    }
+    #[test] fn beam_aim_must_finish_before_guf_can_fire(){
+        let mut s=StrategicState::default();s.blight_autonomy=false;
+        for i in [2,3,6] {
+            s.set_owner(i,Faction::Weena);
+            s.systems[i].array_node=true;s.systems[i].energy=500.0;
+        }
+        s.array_charged=100.0;
+        assert!(s.fire_guf(5).is_err());
+        let ready=s.aim_guf(5).unwrap();
+        assert!(ready>s.year);
+        assert!(s.fire_guf(5).is_err());
+        s.advance_to(ready-1.0);
+        assert!(s.fire_guf(5).is_err());
+        s.advance_to(ready);
+        s.array_charged=100.0;
+        assert!(s.fire_guf(5).is_ok());
+    }
+    #[test] fn displaced_target_escapes_locked_guf_beam(){
+        let mut s=StrategicState::default();
+        for i in [2,3,6]{
+            s.set_owner(i,Faction::Weena);
+            s.systems[i].array_node=true;s.systems[i].energy=500.0;
+        }
+        ready_array(&mut s,5);
+        let eta=s.fire_guf(5).unwrap();
+        let defense=s.systems[5].defense;
+        // Move the star after launch, beyond narrow beam aperture.
+        s.systems[5].pos.y+=300.0;
+        s.advance_to(eta);
+        assert_eq!(s.systems[5].defense,defense);
+        assert!(s.events.iter().any(|e|e.contains("off-axis")));
     }
     #[test] fn insufficient_nodes_cannot_fire(){
         let mut s=StrategicState::default();s.array_charged=100.0;
