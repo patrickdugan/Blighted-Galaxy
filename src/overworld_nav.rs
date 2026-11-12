@@ -19,6 +19,7 @@ use crate::overworld::{
 use crate::V2;
 use crate::strategy::{StrategicState,Project,Faction,TacticalKind,TacticalOutcome};
 use crate::mission::MissionProfile;
+use crate::guf_geometry;
 use macroquad::prelude::*;
 use std::f64::consts::{PI,TAU};
 
@@ -450,10 +451,19 @@ impl OverworldNav{
             }else{self.report_notice("SELECT A NAMED SYSTEM FOR CONVOY");}
         }
         if is_key_pressed(KeyCode::P){
-            if let Some(site)=self.selected.and_then(|p|self.strategy.nearest(p,500.0)) {
-                self.encounter_notice=Some(match self.strategy.fire_guf(site){
-                    Ok(arrival)=>format!("GUF STRIKE ETA T+{arrival:.0}"),
-                    Err(reason)=>reason.into(),
+            if let Some(site)=self.selected.and_then(|p|self.strategy.nearest(p,500.0)){
+                let aim=is_key_down(KeyCode::LeftShift)||
+                    is_key_down(KeyCode::RightShift);
+                self.encounter_notice=Some(if aim{
+                    match self.strategy.aim_guf(site){
+                        Ok(ready)=>format!("GUF RELAYS SLEWING / READY T+{ready:.0}"),
+                        Err(reason)=>reason.into(),
+                    }
+                }else{
+                    match self.strategy.fire_guf(site){
+                        Ok(arrival)=>format!("GUF STRIKE ETA T+{arrival:.0}"),
+                        Err(reason)=>reason.into(),
+                    }
                 });
             }
         }
@@ -731,12 +741,28 @@ impl OverworldNav{
                     self.strategy.year,&self.strategy.systems));
                 draw_rectangle(ship.x-3.0,ship.y-3.0,6.0,6.0,CYAN);
             }
+            for (idx,site) in self.strategy.systems.iter().enumerate(){
+                if site.owner!=Faction::Weena||!site.array_node{continue;}
+                let mount=&self.strategy.guf_mounts[idx];
+                if mount.assigned_target.is_none(){continue;}
+                let from=self.world_to_screen(site.pos);
+                let pointing=guf_geometry::bearing(site.pos,
+                    site.pos+V2::from_angle(mount.bearing_at(self.strategy.year))*5000.0);
+                let endpoint=site.pos+V2::from_angle(pointing)*3500.0;
+                let to=self.world_to_screen(endpoint);
+                draw_line(from.x,from.y,to.x,to.y,1.0,
+                    translucent(GOLD,0.64));
+            }
             for signal in &self.strategy.signals {
                 if self.strategy.year<signal.launch_year{continue;}
                 let source=self.strategy.systems[signal.source].pos;
                 let target=self.strategy.systems[signal.target].pos;
+                let physical_target=if signal.kind==crate::strategy::SignalKind::ArrayPulse{
+                    source+V2::from_angle(signal.beam_azimuth_rad.unwrap_or(
+                        guf_geometry::bearing(source,target)))*(target-source).len()
+                }else{target};
                 let a=self.world_to_screen(source);
-                let b=self.world_to_screen(target);
+                let b=self.world_to_screen(physical_target);
                 let color=match signal.kind{
                     crate::strategy::SignalKind::ArrayPulse=>GOLD,
                     crate::strategy::SignalKind::HaloStrike=>CYAN,
@@ -939,9 +965,9 @@ impl OverworldNav{
             "F ORION  G L GRIDS  B DARK",
             "SPACE PAUSE   Q/E TIME",
             "I INDUSTRY   K KUGELBLITZ",
-            "U GUF NODE  P FIRE  V WEENA",
-            "J BLIGHT  Y HALO  N AUTO",
-            "M CONVOY SOURCE -> DEST",
+            "U GUF  SHIFT+P AIM  P FIRE",
+            "V WEENA  J BLIGHT Y HALO",
+            "M CONVOY  N AUTO  F5/F9 SAVE",
             "1 RKM  2 TIDAL  4 GUF DEFEND",
             "T STRATEGY  F5 SAVE / F9 LOAD",
         ];
