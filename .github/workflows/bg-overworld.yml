@@ -2,6 +2,9 @@ name: BG-OVR-01 playable procedural galactic navigation
 on:
   pull_request:
     paths:
+      - "Cargo.toml"
+      - "src/guf_geometry.rs"
+      - "src/campaign_save.rs"
       - "src/overworld.rs"
       - "src/overworld_nav.rs"
       - "src/main.rs"
@@ -14,6 +17,9 @@ on:
   push:
     branches: [main]
     paths:
+      - "Cargo.toml"
+      - "src/guf_geometry.rs"
+      - "src/campaign_save.rs"
       - "src/overworld.rs"
       - "src/overworld_nav.rs"
       - "src/main.rs"
