@@ -335,6 +335,22 @@ impl StrategicState {
         self.events.push(format!("WEENA influence relay sent to {}",self.systems[target].name));
         Ok(arrival)
     }
+    /// (assigned, ready, latest finish) for the selected target.
+    pub fn guf_alignment_status(&self,target:usize)->Option<(usize,usize,f64)>{
+        let destination=self.systems.get(target)?.pos;
+        let mut assigned=0;let mut aligned=0;let mut latest=self.year;
+        for (idx,site) in self.systems.iter().enumerate(){
+            if site.owner!=Faction::Weena||!site.array_node{continue;}
+            let mount=&self.guf_mounts[idx];
+            if mount.assigned_target==Some(target){
+                assigned+=1;
+                latest=latest.max(mount.slew_end_year);
+                if mount.aligned(self.year,target,
+                    guf_geometry::bearing(site.pos,destination)){aligned+=1;}
+            }
+        }
+        Some((assigned,aligned,latest))
+    }
     /// Point independent Guf relays toward a star. The order first
     /// propagates from Weena's controller at c, then each mount slews
     /// through the shortest angular path at a finite rotation rate.
