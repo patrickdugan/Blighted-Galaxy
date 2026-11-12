@@ -1,0 +1,26 @@
+name: BG-STR-05 persistence and finite-beam targeting checks
+on:
+  pull_request:
+    paths:
+      - 'Cargo.toml'
+      - 'src/strategy.rs'
+      - 'src/guf_geometry.rs'
+      - 'src/campaign_save.rs'
+      - 'src/overworld.rs'
+      - 'src/mission.rs'
+      - 'src/si_bridge.rs'
+      - 'src/main.rs'
+      - 'src/overworld_nav.rs'
+      - 'src/lib.rs'
+      - 'workpapers/strategy/**'
+      - '.github/workflows/bg-strategy.yml'
+  workflow_dispatch:
+jobs:
+  strategy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --all-targets
+      - run: cargo check --bin blighted-galaxy

@@ -121,6 +121,32 @@ impl Craft {
             lorentz_gamma(mid.len()).expect("subluminal midpoint");
     }
 }
+/// All variants retain SI masses, subluminal muzzle velocities, and
+/// relativistic shot/target impact energies. Magazine and cooldown are
+/// fictional game logistics, separate from real propulsion engineering.
+#[derive(Debug,Clone,Copy,PartialEq,Eq)]
+pub enum WeaponKind { Standard, Siege, Fan }
+impl WeaponKind {
+    pub fn name(self)->&'static str {
+        match self{
+            Self::Standard=>"RKM / 2 KG",
+            Self::Siege=>"SIEGE / 6 KG",
+            Self::Fan=>"FLAK / 3x0.7 KG",
+        }
+    }
+    pub fn ammo_cost(self)->u32 {
+        match self {Self::Standard=>1,Self::Siege=>4,Self::Fan=>3}
+    }
+    pub fn cooldown_s(self)->f64 {
+        match self {Self::Standard=>0.25,Self::Siege=>0.90,Self::Fan=>0.55}
+    }
+    pub fn muzzle_beta(self)->f64 {
+        match self {Self::Standard=>0.72,Self::Siege=>0.63,Self::Fan=>0.78}
+    }
+    pub fn mass_kg(self)->f64 {
+        match self {Self::Standard=>2.0,Self::Siege=>6.0,Self::Fan=>0.7}
+    }
+}
 #[derive(Debug, Clone, Copy)]
 pub struct KineticRound {
     pub pos_m:V2,
@@ -132,10 +158,17 @@ pub struct KineticRound {
 }
 impl KineticRound {
     pub fn from_craft(craft:&Craft,is_player:bool)->Self {
-        let muzzle=craft.heading()*(0.72*C_SI);
-        Self{pos_m:craft.pos_m+craft.heading()*120.0,
+        Self::weapon_from_craft(craft,is_player,WeaponKind::Standard,0.0)
+    }
+    pub fn weapon_from_craft(craft:&Craft,is_player:bool,
+        weapon:WeaponKind,barrel_offset_rad:f64)->Self {
+        let heading=V2::from_angle(craft.facing_rad+barrel_offset_rad);
+        let muzzle=heading*(weapon.muzzle_beta()*C_SI);
+        Self{pos_m:craft.pos_m+heading*120.0,
             vel_m_s:boost_velocity_m_s(craft.vel_m_s,muzzle).unwrap(),
-            mass_kg:2.0,radius_m:0.2,is_player,lifetime_s:12.0}
+            mass_kg:weapon.mass_kg(),
+            radius_m:if weapon==WeaponKind::Siege{0.4}else{0.2},
+            is_player,lifetime_s:12.0}
     }
 }
 pub fn relative_impact_energy_j(round:&KineticRound,target:&Craft)->Joules {
@@ -157,15 +190,26 @@ pub struct Control {
     pub player_facing_rad:f64,
     pub fire_player:bool,
 }
+/// A fleet escort has an independent shield and a locally observed fire clock.
+/// Enemy target acquisition is bounded by the player's causal worldline.
+pub struct FleetEscort {
+    pub craft:Craft,
+    pub next_shot_s:f64,
+}
 pub struct SiJoust {
     pub sun:SiBody,
     pub player:Craft,
     pub opponent:Craft,
+    pub escorts:Vec<FleetEscort>,
     pub rounds:Vec<KineticRound>,
     pub events:Vec<ImpactEvent>,
     pub time_s:f64,
     pub next_player_shot_s:f64,
     pub next_enemy_shot_s:f64,
+    pub enemy_fire_interval_s:f64,
+    pub player_weapon:WeaponKind,
+    /// Remaining strategic ammo units. Sandbox ships use u32::MAX.
+    pub ammo_units:u32,
     pub shots_fired:u64,
     pub player_history:WorldlineHistory,
     pub opponent_history:WorldlineHistory,
@@ -188,8 +232,10 @@ impl SiJoust {
         Self{
             sun:SiBody::new(SOLAR_MASS_KG,6.957e8,V2::default(),V2::default()),
             player,opponent,player_history,opponent_history,
-            rounds:vec![],events:vec![],time_s:0.0,
-            next_player_shot_s:0.0,next_enemy_shot_s:1.2,shots_fired:0,
+            escorts:vec![],rounds:vec![],events:vec![],time_s:0.0,
+            next_player_shot_s:0.0,next_enemy_shot_s:1.2,
+            enemy_fire_interval_s:2.5,player_weapon:WeaponKind::Standard,
+            ammo_units:u32::MAX,shots_fired:0,
         }
     }
     /// Optical position from a strictly recorded, bounded worldline.
@@ -206,14 +252,38 @@ impl SiJoust {
         self.player.facing_rad=input.player_facing_rad;
         let player_before=self.player.pos_m;
         let opponent_before=self.opponent.pos_m;
+        let escort_before=self.escorts.iter().map(|e|e.craft.pos_m)
+            .collect::<Vec<_>>();
         self.player.tick(dt,input.player_thrust_m_s2,&[self.sun]);
         let facing=(self.player.pos_m-self.opponent.pos_m).normalized();
         self.opponent.facing_rad=facing.y.atan2(facing.x);
         self.opponent.tick(dt,0.0,&[self.sun]);
-        if input.fire_player && self.time_s>=self.next_player_shot_s && self.player.alive() {
-            self.rounds.push(KineticRound::from_craft(&self.player,true));
-            self.next_player_shot_s=self.time_s+0.25;
-            self.shots_fired+=1;
+        if input.fire_player && self.time_s>=self.next_player_shot_s &&
+            self.player.alive()&&self.ammo_units>=self.player_weapon.ammo_cost(){
+            let offsets:&[f64]=if self.player_weapon==WeaponKind::Fan {
+                &[-0.072,0.0,0.072]
+            }else{&[0.0]};
+            for &offset in offsets {
+                self.rounds.push(KineticRound::weapon_from_craft(
+                    &self.player,true,self.player_weapon,offset));
+                self.shots_fired+=1;
+            }
+            self.ammo_units-=self.player_weapon.ammo_cost();
+            self.next_player_shot_s=self.time_s+self.player_weapon.cooldown_s();
+        }
+        for (index,escort) in self.escorts.iter_mut().enumerate() {
+            if !escort.craft.alive(){continue;}
+            escort.craft.tick(dt,0.0,&[self.sun]);
+            if self.time_s>=escort.next_shot_s {
+                if let Some(e)=self.player_history.observe(
+                    escort.craft.pos_m,self.time_s){
+                    let aim=(e.pos_m-escort.craft.pos_m).normalized();
+                    escort.craft.facing_rad=aim.y.atan2(aim.x);
+                    self.rounds.push(KineticRound::from_craft(&escort.craft,false));
+                    escort.next_shot_s=self.time_s+
+                        self.enemy_fire_interval_s*(1.2+index as f64*0.12);
+                }
+            }
         }
         if self.time_s>=self.next_enemy_shot_s && self.opponent.alive() {
             // Enemy fire control is limited to signals contained in its
@@ -223,27 +293,57 @@ impl SiJoust {
                 let aim=(e.pos_m-self.opponent.pos_m).normalized();
                 self.opponent.facing_rad=aim.y.atan2(aim.x);
                 self.rounds.push(KineticRound::from_craft(&self.opponent,false));
-                self.next_enemy_shot_s=self.time_s+2.5;
+                self.next_enemy_shot_s=self.time_s+self.enemy_fire_interval_s;
             }
         }
-        let mut impacts=Vec::new();
+        // An RKM can strike either the flagship or an individual escort.
+        // Pick the earliest swept-circle collision over the entire segment.
+        // Each shot impacts at most one ship; no instant raycast targeting.
+        let mut impacts:Vec<(V2,KineticRound,Option<usize>)>=Vec::new();
         for shot in &mut self.rounds {
             let before=shot.pos_m;
             shot.pos_m+=shot.vel_m_s*dt.0;
             shot.lifetime_s-=dt.0;
-            let (b0,b1,r)=if shot.is_player {
-                (opponent_before,self.opponent.pos_m,self.opponent.cross_section_radius_m)
-            } else {(player_before,self.player.pos_m,self.player.cross_section_radius_m)};
-            if let Some(f)=swept_circle_hit(before,shot.pos_m,shot.radius_m,b0,b1,r) {
-                impacts.push((before+(shot.pos_m-before)*f,*shot));
+            let mut earliest:Option<(f64,Option<usize>)>=None;
+            if shot.is_player {
+                if self.opponent.alive(){
+                    if let Some(f)=swept_circle_hit(before,shot.pos_m,shot.radius_m,
+                        opponent_before,self.opponent.pos_m,
+                        self.opponent.cross_section_radius_m){
+                        earliest=Some((f,None));
+                    }
+                }
+                for (i,escort) in self.escorts.iter().enumerate(){
+                    if !escort.craft.alive(){continue;}
+                    if let Some(f)=swept_circle_hit(before,shot.pos_m,shot.radius_m,
+                        escort_before[i],escort.craft.pos_m,
+                        escort.craft.cross_section_radius_m){
+                        if earliest.map_or(true,|(earlier,_)|f<earlier){
+                            earliest=Some((f,Some(i)));
+                        }
+                    }
+                }
+            } else if self.player.alive() {
+                if let Some(f)=swept_circle_hit(before,shot.pos_m,shot.radius_m,
+                    player_before,self.player.pos_m,self.player.cross_section_radius_m){
+                    earliest=Some((f,None));
+                }
+            }
+            if let Some((f,escort_index))=earliest {
+                impacts.push((before+(shot.pos_m-before)*f,*shot,escort_index));
                 shot.lifetime_s=0.0;
             }
         }
         self.rounds.retain(|shot|shot.lifetime_s>0.0);
-        for (pos,shot) in impacts {
-            let target=if shot.is_player {&mut self.opponent} else {&mut self.player};
+        for (pos,shot,escort_index) in impacts {
+            let target=if shot.is_player {
+                match escort_index {
+                    Some(i)=>&mut self.escorts[i].craft,
+                    None=>&mut self.opponent,
+                }
+            }else{&mut self.player};
             let energy=relative_impact_energy_j(&shot,target);
-            // 90% energy-to-shield coupling is a fictional game tuning value.
+            // 90% energy-to-shield coupling is a fictional game value.
             target.shield_energy_j=(target.shield_energy_j-energy.0*0.9).max(0.0);
             self.events.push(ImpactEvent{pos_m:pos,energy_j:energy,
                 target_is_player:!shot.is_player,time_s:self.time_s+dt.0*0.5});
@@ -448,6 +548,55 @@ mod tests {
         }
         assert!(game.opponent.shield_energy_j<shield);
         assert!(game.last_impact().unwrap().energy_j.0>0.0);
+    }
+    #[test]
+    fn player_weapon_loadouts_consume_finite_ammunition(){
+        let mut g=SiJoust::new();
+        g.ammo_units=5;
+        g.player_weapon=WeaponKind::Siege;
+        g.step(Seconds(1.0/120.0),Control{
+            fire_player:true,player_facing_rad:0.0,..Default::default()
+        });
+        assert_eq!(g.ammo_units,1);
+        assert_eq!(g.shots_fired,1);
+        assert!((g.rounds[0].mass_kg-6.0).abs()<1e-12);
+        for _ in 0..150{g.step(Seconds(1.0/120.0),Control{
+            fire_player:true,player_facing_rad:0.0,..Default::default()
+        });}
+        assert_eq!(g.ammo_units,1);
+        assert_eq!(g.shots_fired,1);
+    }
+    #[test]
+    fn fan_weapon_emits_three_causal_distinct_trajectories(){
+        let mut g=SiJoust::new();
+        g.player_weapon=WeaponKind::Fan;
+        g.ammo_units=3;
+        g.step(Seconds(1.0/120.0),Control{
+            fire_player:true,player_facing_rad:0.0,..Default::default()
+        });
+        assert_eq!(g.ammo_units,0);
+        assert_eq!(g.shots_fired,3);
+        assert_eq!(g.rounds.len(),3);
+        assert!(g.rounds[0].vel_m_s.y<g.rounds[1].vel_m_s.y);
+        assert!(g.rounds[1].vel_m_s.y<g.rounds[2].vel_m_s.y);
+        assert!(g.rounds.iter().all(|r|r.vel_m_s.len()<C_SI));
+    }
+    #[test]
+    fn multi_ship_rkm_hits_escort_and_preserves_sublight_speeds(){
+        let mut g=SiJoust::new();
+        let escort=Craft::new(g.player.pos_m+V2::new(6.0e6,0.0),
+            V2::default(),std::f64::consts::PI);
+        g.escorts.push(FleetEscort{craft:escort,next_shot_s:500.0});
+        let initial=g.escorts[0].craft.shield_energy_j;
+        for _ in 0..25 {
+            g.step(Seconds(1.0/120.0),Control {
+                player_thrust_m_s2:0.0,player_facing_rad:0.0,fire_player:true,
+            });
+            if g.escorts[0].craft.shield_energy_j<initial{break;}
+        }
+        assert!(g.escorts[0].craft.shield_energy_j<initial);
+        assert_eq!(g.opponent.shield_energy_j,g.opponent.shield_capacity_j);
+        assert!(g.rounds.iter().all(|shot|shot.vel_m_s.len()<C_SI));
     }
     #[test]
     fn tracer_split_preserves_initial_mass_com_and_momentum() {

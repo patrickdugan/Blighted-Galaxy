@@ -4,6 +4,31 @@ A recovery project for the lost Rust-based Blighted Galaxy game, preserving its 
 
 The earlier local engine was lost in 2026. This code is a clean-room reconstruction. The surviving 94 pages of source material, approximately 34,000 whitespace-delimited words, are archived as text transcriptions in [recovery/](recovery/README.md).
 
+## Strategic campaign (BG-STR-05)
+
+The galactic map and SI physics encounters now share a deterministic strategic campaign. The Jenkins Swarm autonomously sends 0.10c invasion packets to reachable industrial systems. The Drummers build industry and fabricate contained kugelblitz black holes, then spend them on **0.76c Halo strikes**. Weena can recruit distant systems, prepare industrial Guf relays, and fire a synchronized three-node energy array. Every strike and capture occurs after finite travel time.
+
+**Controls:** click a named system; `I` builds industry, `K` fabricates a kugelblitz, `Y` launches a Halo strike against a hostile system, `V` recruits for Weena, `U` builds a Guf relay, `Shift+P` aims the Guf relays at the selected system (with finite light-speed command and slew delays), `P` fires the aligned Guf array, `J` issues a Blight attack order, `N` toggles autonomous Blight expansion, `M` sets a two-step resource convoy route between Drummer systems, `T` shows/hides strategic rings, `F5` saves the campaign and `F9` restores it. Use `Space` to run the historical clock. `1` opens the SI RKM interception, `2` opens the white-dwarf tidal encounter, and `4` opens a threatened Drummer system's Guf-defense relay interception. When your ship has traveled to the selected star system, the encounter is a **campaign mission**, and `3`/`Tab` records victory, defeat, or withdrawal. Distant selections still open sandbox encounters, without changing strategic ownership. A ship travels at 0.76c after clicking a destination and pressing `Enter`.
+
+**System-specific missions:** The destination's industry, defenses, and stored kugelblitz assets now determine RKM enemy shield strength, opponent fire cadence, engagement range, deployed escort fleet size (0–4), and available friendly shield support. White-dwarf interdiction selects a stellar-remnant mass and dwarf conditions from the same system. During a campaign tidal mission, `A` and `D` spend limited radial tug burns toward/away from the black hole; a 300-second objective deadline gives that mission a defeat state. Each scored campaign encounter triggers a 250-galactic-year rearm period at its system. A map-side briefing displays the target's current battle conditions. `R` restarts the active mission with its original launch configuration. In fleet combat, `4` selects standard 2 kg RKM rounds, `5` selects the 6 kg siege driver, and `6` selects a three-round fan pattern; magazine units and weapon unlocks come from friendly Drummer industry.
+
+**Convoys and Guf counterfire:** two Drummer-controlled worlds can transfer 60 material and 40 energy using a sublight convoy, with an additional 25 energy spent on propulsion at launch. Resources travel in escrow until arrival, and Blight-controlled systems can interdict passing convoys. Weena's Guf array launches light-speed packets from each charged relay. A player already stationed at a targeted Drummer system can choose mission `4` to fight the enemy's beam-designator squadron; a victory consumes local industrial stores to establish a finite-energy interception screen. The screen absorbs incoming Guf damage in the strategic simulation. No mission or weapon reproduces speculative kugelblitz engineering as physical hardware.
+
+**Persistent campaigns and finite Guf beams:** Save files include the ship's proper-time navigation, the historical clock, industrial resources and ownership, in-flight convoys, queued attacks, firing azimuths and relay slew commands. Use F5/F9 on the overworld to write or restore the default blighted-galaxy-save.json, or start the executable with --save-file campaign.json. The previous valid slot is kept at .json.bak. The versioned JSON parser checks the star-map fingerprint and causal/resource bounds before loading. Guf mounts require explicit aiming with Shift+P; individual beam directions remain locked during the subsequent light-speed flight, and a target can evade a misdirected ray. Target radii, steering rates and beam widths are adjustable game rules. See [BG-STR-05 engineering and save protocol](workpapers/strategy/CAMPAIGN_PERSISTENCE_AND_GUF_GEOMETRY.md).
+
+The real executable supports offline mission visual regression, without allowing a QA preview to award campaign resources:
+
+~~~sh
+cargo run --release -- --save-file campaign.json
+cargo run --release -- --demo-mission 9 --snapshot-overworld bg-mission-fleet.png
+cargo run --release -- --demo-mission 6 --demo-tidal --snapshot-overworld bg-mission-tidal.png
+cargo run --release -- --demo-mission 5 --demo-guf-defense --snapshot-overworld bg-mission-guf-defense.png
+~~~
+
+GitHub Actions captures these mission scenes alongside the normal galaxy and Orion screenshots, and packages a Windows binary in the same workflow. The previews select their scene from the current scenario state and deliberately leave strategic rewards disconnected.
+
+Battles affect local shields, hostile control, and industry. The infrared-black Blight texture responds to ownership changes, with small reclaimed or defended enclaves around industrial sites, while the original 0.10c Orion envelope remains an absolute boundary. Strategic resource units and kugelblitz engineering are speculative game rules. See [strategic campaign design and test contracts](workpapers/strategy/STRATEGIC_CAMPAIGN.md).
+
 ## Playable galactic overworld (procedurally rendered)
 
 The game opens on a **procedural Milky Way navigation atlas**. Its starfield, luminous spiral arms, dust, barred Galactic Center, infrared-darkened Jenkins Swarm, red occupied-star speckles and narrow expansion tendrils are generated from fixed numeric seeds in Macroquad. The image is rendered at runtime from world coordinates, with no baked NASA map, screenshot texture or copyrighted game assets.
