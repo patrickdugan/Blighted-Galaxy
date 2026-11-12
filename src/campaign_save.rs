@@ -320,6 +320,48 @@ mod tests{
         assert_eq!(r.last_tactical_year[0],f64::NEG_INFINITY);
     }
     #[test]
+    fn in_progress_guf_slew_replays_after_loading(){
+        let mut nav=GalacticNavModel::default();
+        let mut s=StrategicState::default();
+        s.blight_autonomy=false;
+        for i in [2,3,6] {
+            s.set_owner(i,Faction::Weena);
+            s.systems[i].array_node=true;s.systems[i].energy=500.0;
+        }
+        let target=5;
+        let ready=s.aim_guf(target).unwrap();
+        s.advance_to(100_250.0);nav.seek(100_250.0);
+        let (mut n,mut restored)=decode(&encode(&nav,&s).unwrap()).unwrap();
+        assert!(restored.guf_mounts.iter().any(|m|
+            m.assigned_target==Some(target)&&m.slew_end_year>restored.year));
+        s.advance_to(ready);restored.advance_to(ready);
+        nav.seek(ready);n.seek(ready);
+        s.array_charged=100.0;restored.array_charged=100.0;
+        assert_eq!(s.fire_guf(target).unwrap(),restored.fire_guf(target).unwrap());
+        assert_eq!(encode(&nav,&s).unwrap(),encode(&n,&restored).unwrap());
+    }
+    #[test]
+    fn file_save_keeps_previous_version_in_backup(){
+        let path=std::env::temp_dir().join(format!(
+            "bg-str-05-{}-{}.json",std::process::id(),SAVE_VERSION));
+        let backup=path.with_extension("json.bak");
+        let temp=path.with_extension("json.tmp");
+        for p in [&path,&backup,&temp]{let _=fs::remove_file(p);}
+        let mut nav=GalacticNavModel::default();
+        let mut s=StrategicState::default();
+        s.blight_autonomy=false;
+        save_file(&path,&nav,&s).unwrap();
+        nav.seek(100_500.0);
+        s.advance_to(nav.year);
+        save_file(&path,&nav,&s).unwrap();
+        let (current,_)=load_file(&path).unwrap();
+        let (previous,_)=load_file(&backup).unwrap();
+        assert_eq!(current.year,100_500.0);
+        assert_eq!(previous.year,100_000.0);
+        assert!(!temp.exists());
+        for p in [&path,&backup,&temp]{let _=fs::remove_file(p);}
+    }
+    #[test]
     fn convoy_id_cannot_be_replayed_by_file_edit(){
         let nav=GalacticNavModel::default();let mut s=StrategicState::default();
         s.systems[3].material=400.0;s.systems[3].energy=400.0;
