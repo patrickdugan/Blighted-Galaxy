@@ -4,11 +4,12 @@
 use crate::overworld::{GalacticNavModel,TravelLeg,TIMELINE_MAX_YR};
 use crate::strategy::{CargoConvoy,Faction,Signal,SignalKind,StrategicState,System};
 use crate::V2;
+use crate::guf_geometry::SlewMount;
 use serde::{Deserialize,Serialize};
 use std::{error::Error,fmt,fs,path::Path};
 
 pub const SAVE_FORMAT:&str="BLIGHTED-GALAXY-CAMPAIGN";
-pub const SAVE_VERSION:u32=1;
+pub const SAVE_VERSION:u32=2;
 const MAX_PACKETS:usize=4096;
 const MAX_EVENTS:usize=256;
 
@@ -72,7 +73,7 @@ struct StrategySave{
     year:f64,systems:Vec<SystemSave>,signals:Vec<Signal>,
     convoys:Vec<CargoConvoy>,next_convoy_id:u64,
     events:Vec<String>,array_charged:f64,pulses:u32,
-    historical:bool,blight_autonomy:bool,
+    historical:bool,blight_autonomy:bool,guf_mounts:Vec<SlewMount>,
     territory_revision:u64,last_tactical_year:Vec<Option<f64>>,
 }
 #[derive(Serialize,Deserialize)]
@@ -107,6 +108,7 @@ fn capture(nav:&GalacticNavModel,strategy:&StrategicState)->CampaignFile{
             events:strategy.events.clone(),array_charged:strategy.array_charged,
             pulses:strategy.pulses,historical:strategy.historical,
             blight_autonomy:strategy.blight_autonomy,
+            guf_mounts:strategy.guf_mounts.clone(),
             territory_revision:strategy.territory_revision,
             last_tactical_year:strategy.last_tactical_year.iter().map(|&t|
                 if t==f64::NEG_INFINITY{None}else{Some(t)}).collect(),
@@ -149,7 +151,12 @@ fn validate_packet(p:&Signal,systems:&[System],year:f64)->bool{
         SignalKind::BlightSeed=>length/0.10,
         SignalKind::HaloStrike=>length/0.76,
     };
-    duration+1e-6>=limit
+    let aim_valid=match p.kind{
+        SignalKind::ArrayPulse=>p.beam_azimuth_rad.is_some_and(|az|
+            finite(az)&&az.abs()<100.0),
+        _=>p.beam_azimuth_rad.is_none(),
+    };
+    aim_valid&&duration+1e-6>=limit
 }
 fn validate_convoy(c:&CargoConvoy,systems:&[System],year:f64)->bool{
     if c.source>=systems.len()||c.target>=systems.len()
@@ -191,7 +198,8 @@ pub fn decode(raw:&str)->Result<(GalacticNavModel,StrategicState),SaveError>{
         return Err(bad("incompatible canonical star map"));
     }
     if data.systems.len()!=state.systems.len()
-        ||data.last_tactical_year.len()!=state.systems.len(){
+        ||data.last_tactical_year.len()!=state.systems.len()
+        ||data.guf_mounts.len()!=state.systems.len(){
         return Err(bad("incorrect number of industrial systems"));
     }
     if data.signals.len()>MAX_PACKETS||data.convoys.len()>MAX_PACKETS
@@ -215,6 +223,10 @@ pub fn decode(raw:&str)->Result<(GalacticNavModel,StrategicState),SaveError>{
     if data.next_convoy_id<=newest{
         return Err(bad("convoy sequence may duplicate existing cargo"));
     }
+    if !data.guf_mounts.iter().all(|m|
+        m.valid(state.year,state.systems.len())){
+        return Err(bad("Guf mount targeting or slew clock invalid"));
+    }
     if !data.last_tactical_year.iter().all(|t|
         t.is_none_or(|v|interval(v,0.0,state.year))){
         return Err(bad("tactical cooldown timestamp is invalid"));
@@ -228,6 +240,7 @@ pub fn decode(raw:&str)->Result<(GalacticNavModel,StrategicState),SaveError>{
     state.historical=data.historical;
     state.blight_autonomy=data.blight_autonomy;
     state.territory_revision=data.territory_revision;
+    state.guf_mounts=data.guf_mounts;
     state.last_tactical_year=data.last_tactical_year.into_iter()
         .map(|x|x.unwrap_or(f64::NEG_INFINITY)).collect();
     Ok((file.nav,state))
@@ -257,7 +270,7 @@ pub fn load_file(path:&Path)->Result<(GalacticNavModel,StrategicState),SaveError
 #[cfg(test)]
 mod tests{
     use super::*;
-    use crate::strategy::{Project,TacticalKind,TacticalOutcome};
+    use crate::strategy::{TacticalKind,TacticalOutcome};
     #[test]
     fn round_trip_preserves_resources_in_flight_convoys_guf_and_cooldowns(){
         let mut nav=GalacticNavModel::default();
@@ -269,9 +282,13 @@ mod tests{
             s.set_owner(i,Faction::Weena);
             s.systems[i].array_node=true;s.systems[i].energy=500.0;
         }
+        s.blight_autonomy=false;
+        let ready=s.aim_guf(5).unwrap();
+        s.advance_to(ready);
         s.array_charged=100.0;s.fire_guf(5).unwrap();
         s.systems[5].energy=500.0;
         s.resolve_tactical(5,TacticalKind::GufDefense,TacticalOutcome::Victory).unwrap();
+        nav.seek(s.year);
         nav.choose(crate::overworld::ORION_OUTBREAK);
         assert!(nav.depart(0.76));
         nav.tick(0.05);
