@@ -355,6 +355,18 @@ cargo run --release --bin phy25_bench -- --n 256 --seeds 0,17 --layout glass --s
 
 See the [boundary-enthalpy derivation and acceptance gate](workpapers/physics/FREE_BOUNDARY_ENTHALPY_GHOST.md), [N64/128/256 screening matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy25.yml) and [Issue #29](https://github.com/patrickdugan/Blighted-Galaxy/issues/29). The original [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) stellar physical acceptance conditions remain unchanged.
 
+## BG-PHY-26: Three-moment free-surface depth and volume-bias identification
+
+BG-PHY-25 showed that spatially varying SPH volume errors break the uniform-bias invariance of `|Q|/S` and place the inferred vacuum boundary near interior particles. BG-PHY-26 jointly solves the zeroth, first, and second normal kernel moments `(M0, M1, M2)` under a local linear normal volume-bias model `V_est(z) = c(1 + beta z) V_true(z)` using exact piecewise Gauss-Legendre 1D quadratures of `I0..I3(a)` and exact Leibniz derivatives for both Cubic M4 and Wendland C4. Safeguarded root bracketing enforces `c > 0`, nonnegative reconstructed volume `1 + beta z > 0` across the occupied half-space, uniqueness, and Jacobian slope conditioning `|dF/da|`, falling back strictly to the original scalar density whenever the three-moment plane is unidentifiable.
+
+On synthetic planar half-spaces, the three-moment inverse recovers known depths `a` across `0..2`, volume scales `c` across `0.5..1.5`, and normal slopes `beta` across `-0.4..0.4` to machine precision while reproducing the `|Q|/S` bias. On the 0.65-solar-mass white dwarf, it identifies 93.8% of N256 outermost-shell particles and increases inferred boundary depth by 1.8x-4.2x over `|Q|/S` (`0.222h` vs `0.120h` M4; `0.147h` vs `0.035h` C4), cutting last-shell static density log-RMS error in half relative to the BG-PHY-25 moment-ratio ghost. However, spherical cap curvature and steep degenerate radial density curvature keep the inferred planar depth ~59-62% below the continuum reference (`0.540h` M4, `0.385h` C4), failing the Stage-A geometry gate, and conservative Stage-B shell-energy perturbations show that an inter-shell-dependent `a_i` induces an inward variational ghost-spring coupling on the outermost shell. No candidate is promoted to Stage-C dynamics; the validated BG-PHY-23 Hamiltonian and playable solver remain unchanged.
+
+~~~sh
+cargo run --release --bin phy26_bench -- --n 256 --seeds 0,17 --layout glass --stage initial --kernel both --synthetic-csv bg-phy26-synthetic.csv --summary bg-phy26-summary.csv --shells-csv bg-phy26-shells.csv
+~~~
+
+See the [three-moment derivation, failure decomposition, and Stage-B tables](workpapers/physics/THREE_MOMENT_SURFACE_DEPTH.md), [BG-PHY-26 screening matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy26.yml), [Issue #31](https://github.com/patrickdugan/Blighted-Galaxy/issues/31), and [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8).
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.

@@ -475,3 +475,6 @@ pub mod sph_homology;
 // BG-PHY-25: boundary-normal enthalpy ghosts and independent cold-EOS scalar screening.
 pub mod sph_free_boundary;
 pub mod sph_boundary_potential;
+
+// BG-PHY-26: joint three-moment free-surface depth and volume-bias identification.
+pub mod sph_three_moment;
