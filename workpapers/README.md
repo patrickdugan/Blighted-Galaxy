@@ -26,4 +26,6 @@ The historical game-design and setting documents remain in [design/](design/) an
 
 - [BG-PHY-13: eta sweep and hydrostatic field convergence](physics/ETA_HYDROSTATIC_SWEEP.md), comparing smoothing length, physical neighbor counts, force-balance bias and three-dynamical-time stability at N=256–1,024.
 
+- [BG-PHY-14: Growing neighbor counts, implicit h–rho roots and independent shell orientations](physics/NEIGHBOR_GROWTH_HROOT.md), with root closure mathematics, the eta(N) consistency law, multi-layout numerical experiment and strict undamped stability gates.
+
 See the consolidated [GDD](../design/GDD.md). New interpretations should cite source manuscripts or a specific physical approximation. Preserve the two originals without silent revision.

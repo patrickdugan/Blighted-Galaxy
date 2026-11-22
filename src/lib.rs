@@ -454,3 +454,54 @@ pub mod episodes;
 
 // M3: transhuman close-contact boxing, morphogenesis and uniform-grid swept collisions.
 pub mod morph_boxing;
+
+// BG-PHY-14: safeguarded implicit h/rho root solver with cap diagnostics.
+pub mod sph_hroot;
+
+// BG-PHY-15: frozen 1D-hydrostatic pressure/gravity vector error audit.
+pub mod sph_force_audit;
+
+// BG-PHY-16: Wendland C4 density and matched Poisson gravity kernels.
+pub mod sph_kernel;
+
+// BG-PHY-16: deterministic antipodal angular-glass seed optimizer.
+pub mod sph_glass;
+
+// BG-PHY-17: realized-neighbour eta calibration and discrete E0/E1 consistency.
+pub mod sph_neighbor_calibration;
+pub mod sph_consistency;
+
+// BG-PHY-18: diagnostic-only linear-consistent gradient and pressure-field audit.
+pub mod sph_gradient_audit;
+
+// BG-PHY-19: frozen quadratic pressure and barotropic enthalpy gradient fits.
+pub mod sph_quadratic_audit;
+
+// BG-PHY-20: frozen density reconstruction and free-surface bias audits.
+pub mod sph_density_audit;
+
+// BG-PHY-21: opt-in reproducing-kernel geometry and compatible pressure work.
+pub mod sph_rk;
+pub mod sph_rk_compatible;
+
+// BG-PHY-21B: finite-difference total cold-barotropic energy-gradient oracle.
+pub mod sph_rk_variational;
+
+// BG-PHY-22: analytic cold-barotropic surface-density variation and Hamiltonian pilot.
+pub mod sph_surface_variation;
+
+// BG-PHY-23: opt-in complete cold EOS plus Poisson-matched gravity Hamiltonian.
+pub mod sph_surface_gravity;
+
+// BG-PHY-24: radial homology energy minima and eight-shell virial diagnostics.
+pub mod sph_homology;
+
+// BG-PHY-25: boundary-normal enthalpy ghosts and independent cold-EOS scalar screening.
+pub mod sph_free_boundary;
+pub mod sph_boundary_potential;
+
+// BG-PHY-26: joint three-moment free-surface depth and volume-bias identification.
+pub mod sph_three_moment;
+
+// BG-PHY-27: radially graded unequal-mass antipodal shells and angular glass.
+pub mod sph_graded_seed;

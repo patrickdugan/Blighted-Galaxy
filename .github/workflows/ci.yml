@@ -25,6 +25,157 @@ jobs:
       - run: cargo run --release --bin phy11_bench -- --n 64 --relax-steps 20 --hold-steps 30 --csv bg-phy11-smoke.csv
       - run: cargo run --release --bin phy12_bench -- --n 64 --relax-steps 20 --hold-steps 30 --csv bg-phy12-smoke.csv --shell-csv bg-phy12-smoke-shells.csv
       - run: cargo run --release --bin phy13_bench -- --n 64 --etas 0.85,1.20 --relax-steps 20 --hold-steps 30 --csv bg-phy13-smoke.csv --shell-csv bg-phy13-smoke-shells.csv
+      - run: cargo run --release --bin phy14_bench -- --n 64 --seeds 0 --relax-steps 10 --hold-steps 20 --csv bg-phy14-smoke.csv
+      - run: cargo run --release --bin phy14_bench -- --n 32 --seeds 0 --relax-steps 4 --hold-steps 8 --root-dynamics --csv bg-phy14-newton-smoke.csv
+      - run: cargo run --release --bin phy15_bench -- --n 64 --seeds 0 --relax-steps 6 --shells 8 --csv bg-phy15-smoke.csv --shell-csv bg-phy15-smoke-shells.csv
+      - run: cargo run --release --bin phy16_bench -- --n 64 --seeds 0 --glass-sweeps 6 --relax-steps 8 --root-compare --shells 8 --csv bg-phy16-smoke.csv --shell-csv bg-phy16-smoke-shells.csv
+      - run: cargo run --release --bin phy17_bench -- --n 64 --seeds 0 --targets 20,32 --calibration-steps 6 --glass-sweeps 4 --shells 4 --csv bg-phy17-smoke.csv --shell-csv bg-phy17-smoke-shells.csv
+      - run: cargo run --release --bin phy17_hold -- --n 64 --seed 0 --layout shell --kernel c4 --target-neighbors 0 --fixed-eta 1.2 --relax-steps 4 --hold-steps 8 --dt 0.01 --csv bg-phy17-hold-smoke.csv --trace-csv bg-phy17-hold-smoke-trace.csv
+      - name: Upload BG-PHY-17 short physical-hold smoke
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy17-hold-smoke
+          path: |
+            bg-phy17-hold-smoke.csv
+            bg-phy17-hold-smoke-trace.csv
+          if-no-files-found: error
+          retention-days: 30
+      - run: cargo run --release --bin phy18_bench -- --n 64 --seeds 0 --targets 20,32 --glass-sweeps 4 --calibration-steps 6 --csv bg-phy18-smoke.csv
+      - run: cargo run --release --bin phy19_bench -- --n 64 --seeds 0 --targets 20,32 --glass-sweeps 4 --calibration-steps 6 --csv bg-phy19-smoke.csv
+      - run: cargo run --release --bin phy20_bench -- --n 64 --seeds 0 --targets 20,32 --glass-sweeps 4 --calibration-steps 6 --csv bg-phy20-smoke.csv
+      - run: cargo run --release --bin phy21_bench -- --n 32 --seed 17 --layout shell --eta 1.7 --steps 4 --dt 0.001 --csv bg-phy21-smoke.csv
+      - run: cargo run --release --bin phy21_variational_bench -- --n 16 --seed 17 --layout shell --eta 1.7 --steps 1 --dt 0.002 --fd-fraction 0.0001 --csv bg-phy21b-smoke.csv
+      - run: cargo run --release --bin phy22_bench -- --n 16 --seed 17 --layout shell --eta 1.7 --steps 1 --dt 0.002 --fd-fraction 0.0001 --csv bg-phy22-smoke.csv
+      - run: cargo run --release --bin phy23_bench -- --n 16 --seed 17 --layout shell --eta 1.7 --steps 2 --dt 0.002 --fd-fraction 0.0001 --csv bg-phy23-smoke.csv
+      - run: cargo run --release --bin phy23_hold -- --n 32 --seed 17 --layout shell --kernel c4 --density blend --eta 1.7 --relax-steps 3 --hold-steps 6 --dt 0.01 --csv bg-phy23-hold-smoke.csv --trace-csv bg-phy23-hold-smoke-trace.csv
+      - run: cargo run --release --bin phy24_bench -- --n 64 --seeds 0 --layout shell --stage initial --kernel m4 --density original --s-lower 0.8 --s-upper 1.2 --s-step 0.1 --fd-eps 0.0001 --csv bg-phy24-smoke-summary.csv --profile-csv bg-phy24-smoke-profile.csv --shell-csv bg-phy24-smoke-shells.csv
+      - run: cargo run --release --bin phy25_bench -- --n 32 --seeds 0 --layout shell --stage initial --kernel m4 --intervals 4 --lower 0.8 --upper 1.2 --eps 0.0001 --summary bg-phy25-smoke-summary.csv --shells-csv bg-phy25-smoke-shells.csv
+      - run: cargo run --release --bin phy26_bench -- --n 32 --seeds 0 --layout shell --stage initial --kernel m4 --intervals 4 --lower 0.8 --upper 1.2 --eps 0.0001 --synthetic-csv bg-phy26-smoke-synthetic.csv --summary bg-phy26-smoke-summary.csv --shells-csv bg-phy26-smoke-shells.csv
+      - run: cargo run --release --bin phy27_bench -- --n 64 --seeds 0 --alphas 0.0,0.5 --kernel m4 --relax-steps 10 --hold-steps 20 --dt 0.01 --glass-sweeps 6 --csv bg-phy27-smoke.csv
+      - name: Upload BG-PHY-27 graded-mass equilibrium smoke
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy27-smoke
+          path: bg-phy27-smoke.csv
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload BG-PHY-26 three-moment surface smoke
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy26-smoke
+          path: |
+            bg-phy26-smoke-synthetic.csv
+            bg-phy26-smoke-summary.csv
+            bg-phy26-smoke-shells.csv
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload BG-PHY-25 boundary enthalpy frozen-energy smoke
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy25-smoke
+          path: |
+            bg-phy25-smoke-summary.csv
+            bg-phy25-smoke-shells.csv
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload BG-PHY-24 radial homology smoke
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy24-smoke
+          path: |
+            bg-phy24-smoke-summary.csv
+            bg-phy24-smoke-profile.csv
+            bg-phy24-smoke-shells.csv
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload BG-PHY-23 combined Hamiltonian smokes
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy23-smokes
+          path: |
+            bg-phy23-smoke.csv
+            bg-phy23-hold-smoke.csv
+            bg-phy23-hold-smoke-trace.csv
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload BG-PHY-22 analytic total-variation smoke
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy22-smoke
+          path: bg-phy22-smoke.csv
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload BG-PHY-21B complete derivative oracle smoke
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy21b-smoke
+          path: bg-phy21b-smoke.csv
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload BG-PHY-21 isolated conservative-work smoke
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy21-smoke
+          path: bg-phy21-smoke.csv
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload BG-PHY-20 frozen-density smoke
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy20-smoke
+          path: bg-phy20-smoke.csv
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload BG-PHY-19 quadratic gradient smoke
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy19-smoke
+          path: bg-phy19-smoke.csv
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload BG-PHY-18 gradient consistency smoke
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy18-smoke
+          path: bg-phy18-smoke.csv
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload BG-PHY-17 calibrated-neighbour smoke
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy17-smoke
+          path: |
+            bg-phy17-smoke.csv
+            bg-phy17-smoke-shells.csv
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload BG-PHY-16 kernel/glass numerical smoke
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy16-smoke
+          path: |
+            bg-phy16-smoke.csv
+            bg-phy16-smoke-shells.csv
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload BG-PHY-15 frozen-force smoke
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy15-smoke
+          path: |
+            bg-phy15-smoke.csv
+            bg-phy15-smoke-shells.csv
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload BG-PHY-14 numerical root/neighbor smoke
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy14-smoke
+          path: |
+            bg-phy14-smoke.csv
+            bg-phy14-newton-smoke.csv
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload BG-PHY-13 smoothing-length smoke
         uses: actions/upload-artifact@v4
         with:
@@ -127,6 +278,23 @@ jobs:
             target/release/phy11_bench.exe
             target/release/phy12_bench.exe
             target/release/phy13_bench.exe
+            target/release/phy14_bench.exe
+            target/release/phy15_bench.exe
+            target/release/phy16_bench.exe
+            target/release/phy17_bench.exe
+            target/release/phy17_hold.exe
+            target/release/phy18_bench.exe
+            target/release/phy19_bench.exe
+            target/release/phy20_bench.exe
+            target/release/phy21_bench.exe
+            target/release/phy21_variational_bench.exe
+            target/release/phy22_bench.exe
+            target/release/phy23_bench.exe
+            target/release/phy23_hold.exe
+            target/release/phy24_bench.exe
+            target/release/phy25_bench.exe
+            target/release/phy26_bench.exe
+            target/release/phy27_bench.exe
             target/release/kerr_moving_lab.exe
             target/release/white_dwarf_bench.exe
           if-no-files-found: error

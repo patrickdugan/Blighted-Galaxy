@@ -1,0 +1,82 @@
+name: BG-PHY-23 white-dwarf Hamiltonian physical pilot
+on:
+  pull_request:
+    paths:
+      - "src/sph_surface_gravity.rs"
+      - "src/bin/phy23_hold.rs"
+      - ".github/workflows/bg-phy23-hold.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/bin/phy23_hold.rs"
+      - ".github/workflows/bg-phy23-hold.yml"
+  workflow_dispatch:
+jobs:
+  stellar-hold:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - n: 128
+            seed: 0
+            kernel: "m4"
+            density: "original"
+            eta: "1.2"
+            label: "n128-m4-control"
+          - n: 128
+            seed: 0
+            kernel: "c4"
+            density: "blend"
+            eta: "1.7"
+            label: "n128-c4-blend"
+          - n: 256
+            seed: 0
+            kernel: "m4"
+            density: "original"
+            eta: "1.2"
+            label: "n256-m4-control"
+          - n: 256
+            seed: 0
+            kernel: "m4"
+            density: "blend"
+            eta: "1.2"
+            label: "n256-m4-blend"
+          - n: 256
+            seed: 0
+            kernel: "c4"
+            density: "original"
+            eta: "1.7"
+            label: "n256-c4-original"
+          - n: 256
+            seed: 0
+            kernel: "c4"
+            density: "blend"
+            eta: "1.7"
+            label: "n256-c4-blend"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Preserve original 3s damped / 3 dynamical-time undamped gates
+        run: |
+          cargo run --release --bin phy23_hold -- \
+            --n ${{ matrix.n }} --seed ${{ matrix.seed }} \
+            --layout glass --glass-sweeps 20 \
+            --kernel ${{ matrix.kernel }} --density ${{ matrix.density }} \
+            --eta ${{ matrix.eta }} \
+            --relax-steps 300 --hold-steps 788 --dt 0.01 \
+            --damping-tau 0.7 \
+            --csv bg-phy23-${{ matrix.label }}.csv \
+            --trace-csv bg-phy23-${{ matrix.label }}-trace.csv
+      - name: Upload numerical and physical acceptance diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy23-${{ matrix.label }}
+          path: |
+            bg-phy23-${{ matrix.label }}.csv
+            bg-phy23-${{ matrix.label }}-trace.csv
+          if-no-files-found: warn
+          retention-days: 30

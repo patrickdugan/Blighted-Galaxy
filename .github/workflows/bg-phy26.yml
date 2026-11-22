@@ -1,0 +1,78 @@
+name: BG-PHY-26 three-moment surface depth and volume-bias screening
+on:
+  pull_request:
+    paths:
+      - "src/sph_three_moment.rs"
+      - "src/sph_boundary_potential.rs"
+      - "src/bin/phy26_bench.rs"
+      - ".github/workflows/bg-phy26.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/sph_three_moment.rs"
+      - "src/sph_boundary_potential.rs"
+      - "src/bin/phy26_bench.rs"
+      - ".github/workflows/bg-phy26.yml"
+  workflow_dispatch:
+jobs:
+  frozen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - n: 64
+            seed: "0"
+            layout: "glass"
+            stage: "initial"
+            tag: "n64-seed0"
+          - n: 128
+            seed: "17"
+            layout: "glass"
+            stage: "initial"
+            tag: "n128-seed17"
+          - n: 256
+            seed: "0"
+            layout: "glass"
+            stage: "initial"
+            tag: "n256-seed0"
+          - n: 256
+            seed: "17"
+            layout: "glass"
+            stage: "initial"
+            tag: "n256-seed17"
+          - n: 128
+            seed: "0"
+            layout: "glass"
+            stage: "post"
+            tag: "n128-seed0-post"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Three-moment quadratures, identifiability and scalar potential tests
+        run: |
+          cargo test --lib sph_three_moment -- --nocapture
+          cargo test --lib sph_boundary_potential -- --nocapture
+      - name: Three-moment depth scoring and conservative Stage-B screening
+        run: |
+          cargo run --release --bin phy26_bench -- \
+            --n ${{ matrix.n }} --seeds ${{ matrix.seed }} \
+            --layout ${{ matrix.layout }} --stage ${{ matrix.stage }} \
+            --kernel both --intervals 8 --lower 0.75 --upper 1.30 \
+            --eps 0.0001 \
+            --synthetic-csv bg-phy26-${{ matrix.tag }}-synthetic.csv \
+            --summary bg-phy26-${{ matrix.tag }}-summary.csv \
+            --shells-csv bg-phy26-${{ matrix.tag }}-shells.csv
+      - name: Upload three-moment geometry and scalar shell-force diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy26-${{ matrix.tag }}
+          path: |
+            bg-phy26-${{ matrix.tag }}-synthetic.csv
+            bg-phy26-${{ matrix.tag }}-summary.csv
+            bg-phy26-${{ matrix.tag }}-shells.csv
+          if-no-files-found: warn
+          retention-days: 30

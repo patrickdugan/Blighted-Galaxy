@@ -252,6 +252,179 @@ The [BG-PHY-13 GitHub Actions workflow](https://github.com/patrickdugan/Blighted
 
 **Measured outcome:** N=256–1024 all completed their three-dynamical-time holds and all tested eta settings failed at least one stellar equilibrium gate. At N1024, eta=0.85 gives a post-damping radius 8.78% below hydrostatic and a 5.77% maximum outer-radius excursion, despite 4.07% RMS error against the independent gravity field. The playable stellar modes therefore retain the previous constant-damping baseline. Complete methodology, data tables and source references are in the [BG-PHY-13 workpaper](workpapers/physics/ETA_HYDROSTATIC_SWEEP.md), with [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) tracking unresolved stellar equilibrium.
 
+## BG-PHY-14: Growing SPH neighbor counts and exact density-closure audits
+
+The latest white-dwarf experiment compares **fixed** smoothing eta with the consistency-motivated scale eta(N) proportional to N^(1/6), growing the physical kernel-neighbor count roughly as N^(1/2). Each resolution retains the independent zero-temperature electron EOS, M4 Poisson-matched self-gravity and 3-dynamical-time undamped stability gates.
+
+The new safeguarded Newton–bisection solver checks the implicit density/smoothing equation `rho(h) h^3 = eta^3 m`. The original underrelaxed solver remains the default. An opt-in Newton-dynamics mode allows numerical comparisons, while the high-resolution runs audit the exact roots on frozen particle configurations to separate closure errors from stellar equilibrium errors.
+
+~~~sh
+cargo run --release --bin phy14_bench -- --n 512 --seeds 0,17 --relax-steps 300 --hold-steps 788 --csv bg-phy14-n512.csv
+cargo run --release --bin phy14_bench -- --n 32 --seeds 0 --root-dynamics --relax-steps 4 --hold-steps 8
+~~~
+
+The [BG-PHY-14 convergence workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy14.yml) covers N=256, 512 and 1,024, with two independent shell-wise angular layouts at the smaller resolutions. It records physical neighbor counts, implicit h/rho residuals, effect on force vectors, radial mass profiles and undamped motion.
+
+Read the [BG-PHY-14 technical workpaper](workpapers/physics/NEIGHBOR_GROWTH_HROOT.md). [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) remains the source of truth for physical white-dwarf equilibrium acceptance.
+
+## BG-PHY-15: Frozen hydrostatic force decomposition
+
+A separate snapshot audit compares numerical SPH pressure and gravity vectors with the independent 1D hydrostatic field, before and after damping. It measures radial support bias, tangential disorder forces, and mass-quantile shell errors without advancing particles during measurement.
+
+The sampler's last particle starts at enclosed-mass fraction `1-1/N`, producing a predictable initial radius shortfall against the continuum surface. BG-PHY-15 reports that finite-sampling offset separately from the **dynamical contraction relative to the initial particle configuration**.
+
+~~~sh
+cargo run --release --bin phy15_bench -- --n 256 --seeds 0,17 --relax-steps 300 --csv bg-phy15-n256.csv --shell-csv bg-phy15-n256-shells.csv
+~~~
+
+The [BG-PHY-15 matrix workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy15.yml) covers N256, N512, and N1024. See the [BG-PHY-15 workpaper](workpapers/physics/FROZEN_FORCE_AUDIT.md). This diagnostic leaves the existing white-dwarf stability and radius acceptance gates unchanged.
+
+## BG-PHY-16: Poisson-matched Wendland C4 and angular-glass seed experiment
+
+The new research runner compares original antipodal cubic-shell seeds with a deterministic tangential angular-glass relaxation, and the original M4 kernel with **normalized Wendland C4**. Its spherical Poisson potential and grad-h correction are derived from the same density kernel, leaving the cold-electron EOS and original playable defaults unchanged.
+
+The glass initializer preserves each particle's radial mass quantile, antipodal partner, mass, bulk momentum and velocity. The factorial benchmark records pressure and gravity errors against the independent 1D hydrostatic star, eight mass-shell force budgets, realized support-neighbor counts and the initial sampling-radius offset. An opt-in N256 damping pilot measures whether the lower initial force errors change the subsequent collapse.
+
+~~~sh
+cargo run --release --bin phy16_bench -- --n 256 --seeds 0,17 --glass-sweeps 20 --csv bg-phy16-n256.csv --shell-csv bg-phy16-n256-shells.csv
+cargo run --release --bin phy16_bench -- --n 256 --seeds 0 --relax-steps 300 --csv bg-phy16-dynamics.csv
+~~~
+
+The [BG-PHY-16 workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy16.yml) covers N256, N512, N1024 frozen comparisons and a matched N256 3-second dynamics pilot. See the [technical workpaper](workpapers/physics/WENDLAND_GLASS_SEEDS.md). [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) remains open until the independent stellar radius and undamped stability gates pass.
+
+## BG-PHY-17: Realized-neighbor Wendland C4 consistency sweep
+
+The follow-up to BG-PHY-16 calibrates the smoothing parameter `eta` against **measured 100, 150 and 200 neighbors** in the actual three-dimensional white-dwarf particle layout. The code uses exact h/rho roots while tuning eta, then compares exact-root and original underrelaxed pressure/gravity accelerations on the same frozen particle positions. Each kernel's discrete zeroth-order (`E0`) gradient error and first-moment (`E1`) trace are measured to separate angular particle disorder from surface pressure-gradient bias.
+
+The matrix pairs N1024 seeds 0/17 and N2048 seed 0 with the original antipodal shell initializer and fixed-geometry angular glass. Both matched M4 and Wendland C4 are evaluated at realized neighbor counts, with a common cold-electron EOS, hydrostatic reference and Poisson-consistent gravity.
+
+~~~sh
+cargo run --release --bin phy17_bench -- --n 1024 --seeds 0,17 --targets 100,150,200 --calibration-steps 12 --glass-sweeps 20 --csv bg-phy17-n1024.csv --shell-csv bg-phy17-n1024-shells.csv
+~~~
+
+The calibrated N1024/N2048 frozen-force matrix passed and found that Wendland C4 glass improves markedly at 150–200 realized neighbors, while outer pressure-gradient support becomes weaker as the smoothing volume grows. A [separate full-duration BG-PHY-17 workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy17-hold.yml) tests 150- and 200-neighbor C4 against the M4 control using 3s damping followed by a 7.88s undamped hold.
+
+See the [high-neighbor workpaper](workpapers/physics/HIGH_NEIGHBOR_C4_SWEEP.md), [frozen-sweep matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy17.yml), and [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) for unchanged physical acceptance criteria.
+
+## BG-PHY-18: Hydrostatic pressure-gradient consistency at the free surface
+
+The latest frozen-state experiment tests **linear-consistent SPH pressure gradients** against the independent one-dimensional white-dwarf hydrostatic field. It computes a three-dimensional Bonet–Lok first-moment matrix for each particle and measures the effect of inverting that matrix. A second reference-pressure oracle evaluates the same operators on pressure samples from the independent cold-electron profile, separating particle/kernel interpolation effects from density-estimation bias.
+
+A new benchmark compares the current conservative M4 forces against diagnostic direct and corrected pressure gradients across shell and angular-glass seeds. Wendland C4 is tested at 100, 150, and 200 realized neighbors. No diagnostic force enters the integrator, preserving the existing gravity, EOS, and conservation behavior.
+
+~~~sh
+cargo run --release --bin phy18_bench -- --n 1024 --seeds 0,17 --targets 100,150,200 --csv bg-phy18-n1024.csv
+~~~
+
+See the [BG-PHY-18 workpaper](workpapers/physics/PRESSURE_GRADIENT_CONSISTENCY.md) and [experiment matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy18.yml). The physical radius and three-dynamical-time undamped gates remain tracked in [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8).
+
+## BG-PHY-19: Quadratic reconstruction of white-dwarf pressure and enthalpy
+
+BG-PHY-18 showed that a linear moment correction amplifies the sharply curved hydrostatic pressure profile near the stellar free surface. BG-PHY-19 tests **local weighted quadratic polynomial fits** with the same frozen particle positions and kernel support. The benchmark compares the simulated pressure and enthalpy fields against independent one-dimensional hydrostatic samples.
+
+For a cold barotrope, the pressure acceleration is the negative gradient of specific enthalpy, `a_P = -grad(H)`. This offers a surface diagnostic with a better-conditioned scalar field than a broad pressure fit divided by low surface density. Each particle's polynomial normal matrix is preconditioned and checked for rank deficiencies. Both local linear and quadratic fits are evaluated on shell/angular-glass seeds with M4 and C4 kernels, including 100–200 realized neighbor populations.
+
+~~~sh
+cargo run --release --bin phy19_bench -- --n 1024 --seeds 0,17 --targets 100,150,200 --csv bg-phy19-n1024.csv
+~~~
+
+See the [BG-PHY-19 workpaper](workpapers/physics/QUADRATIC_ENTHALPY_SURFACE.md) and [matrix workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy19.yml). These corrections are frozen diagnostics, leaving the conservative dynamics and [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) unchanged.
+
+## BG-PHY-20: Free-surface density and enthalpy reconstruction
+
+The white-dwarf experiments now compare original SPH density with **Shepard normalization**, local affine and quadratic MLS density estimates, a surface-gated affine MLS blend based on missing kernel support, and a spherical enclosed-mass secant diagnostic. At frozen particle positions, each candidate is scored against the independent cold-electron hydrostatic density. The measured candidate enthalpy is also passed through the BG-PHY-19 quadratic-gradient audit using unchanged SPH volume weights, smoothing lengths, particle coordinates, and reference gravity.
+
+~~~sh
+cargo run --release --bin phy20_bench -- --n 1024 --seeds 0,17 --targets 100,150,200 --csv bg-phy20-n1024.csv
+~~~
+
+The [BG-PHY-20 workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy20.yml) covers N256, 1024, 2048 and a separate N256 snapshot after ordinary 3-second M4 damping. See the [methodology](workpapers/physics/FREE_SURFACE_DENSITY.md). All corrections are diagnostic and [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) remains responsible for physical radius, mass-profile, and undamped stability acceptance.
+
+## BG-PHY-21: Conservative reproducing-kernel pressure pilot
+
+The research branch now contains an **opt-in 3D first-order reproducing kernel** with independently tested analytic spatial-query gradients. It measures constant/linear field reproduction, truncated-support behavior and rotation covariance. The antisymmetrized pair pressure force uses the same baseline SPH volumes as its RK moments and optionally samples the BG-PHY-20 free-surface blended density for the cold-electron pressure.
+
+A pressure-only small-particle integrator uses exactly compatible pair work to evolve an internal-energy reservoir, preserving linear momentum and kinetic-plus-stored internal energy to numerical precision. It separately measures noncentral-force angular-momentum drift and the discrepancy between evolved internal energy and the cold barotropic EOS. This pilot excludes gravity and retains the existing gameplay and stellar physics force paths unchanged.
+
+~~~sh
+cargo run --release --bin phy21_bench -- --n 32 --seed 17 --layout glass --eta 1.7 --steps 16 --dt 0.001 --csv bg-phy21-n32.csv
+~~~
+
+See the [BG-PHY-21 technical workpaper](workpapers/physics/CONSERVATIVE_RK_PILOT.md) and [N32/64/128 conservation matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy21.yml). [Issue #22](https://github.com/patrickdugan/Blighted-Galaxy/issues/22) tracks the required total variable-h, density/MLS and gravity derivatives and thermodynamic compatibility before a full [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) white-dwarf acceptance run.
+
+## BG-PHY-22: Analytic variational force for the surface-gated density
+
+The next pressure-only research solver differentiates the **complete cold-EOS internal energy** through the implicit SPH smoothing length, kernel weights, source volumes, local affine MLS coefficients, and partition-gated density blend. Its analytic reverse accumulation uses a small number of N² passes and is checked against BG-PHY-21B's independent full-coordinate finite-difference energy-gradient oracle.
+
+An opt-in N16/24/32 comparison measures analytic/finite-difference force error, exact scalar energy agreement, total-force/torque invariance, and short reversible Hamiltonian evolution. N64 exercises the faster analytic force without the full-coordinate numerical oracle. This remains a gravity-free pressure pilot and leaves the shipped game physics and [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) hydrostatic stellar gate unchanged.
+
+~~~sh
+cargo run --release --bin phy22_bench -- --n 16 --seed 17 --layout shell --eta 1.7 --steps 3 --dt 0.002 --csv bg-phy22-n16.csv
+~~~
+
+See the [complete analytic derivation](workpapers/physics/ANALYTIC_SURFACE_VARIATION.md) and [BG-PHY-22 numerical workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy22.yml). The reproducing-kernel/thermodynamic research contract remains tracked in [Issue #22](https://github.com/patrickdugan/Blighted-Galaxy/issues/22).
+
+## BG-PHY-23: Gravity-coupled cold-EOS surface Hamiltonian
+
+The opt-in stellar research solver combines the validated BG-PHY-22 analytic pressure force with the original matched-Poisson M4/Wendland C4 self-gravity and its variable-h zeta/Omega terms. Both components derive from a single cold-electron internal plus gravitational potential energy. An independent full-coordinate finite-difference oracle tests the **combined** force, and the unmodified original-density path is a direct control.
+
+A separate white-dwarf pilot compares matched M4/original and Wendland C4/surface-MLS at N128 and N256. Each uses 3.00s constant damping followed by at least 7.88s undamped Hamiltonian evolution and reports the established hydrostatic radius, mass-CDF, energy, momentum, and angular-momentum acceptance checks without changing the gameplay implementation.
+
+~~~sh
+cargo run --release --bin phy23_bench -- --n 24 --steps 4 --csv bg-phy23-n24.csv
+cargo run --release --bin phy23_hold -- --n 256 --kernel c4 --density blend --eta 1.7 --relax-steps 300 --hold-steps 788 --dt 0.01 --csv bg-phy23-hold.csv --trace-csv bg-phy23-hold-trace.csv
+~~~
+
+See the [derivation and physical acceptance protocol](workpapers/physics/GRAVITY_COUPLED_HAMILTONIAN.md), [force-gradient numerical matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy23.yml) and [stellar hold workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy23-hold.yml). This is part of [Issue #25](https://github.com/patrickdugan/Blighted-Galaxy/issues/25); [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) remains the independent physical acceptance gate.
+
+## BG-PHY-24: Why the white-dwarf equilibrium radius contracts
+
+A radial homology benchmark now probes the **complete cold-electron plus Poisson-matched gravity Hamiltonian** at fixed star positions and after the original 3-second damped preparation. It rescales the particle cloud through `0.75 ≤ s ≤ 1.30`, computes independent cold internal and gravitational energies, verifies `dV/ds=-Σ(x_i-C)·F_i` against scalar finite differences, and searches for a bracketed positive-curvature energy minimum. A separate eight-shell virial decomposition measures outer pressure support, inward gravity, tangential force noise, kernel partition and h caps against the independent 1D hydrostatic reference.
+
+Both the M4 and Wendland C4 kernels are compared with original and surface-gated MLS density at matched positions, with separate shell-orientation seeds. The post-damping experiment also crosses density choices at identical relaxed coordinates so geometry changes can be distinguished from direct density effects.
+
+~~~sh
+cargo run --release --bin phy24_bench -- --n 256 --seeds 0,17 --layout both --stage initial --kernel both --density both --csv bg-phy24-summary.csv --profile-csv bg-phy24-homology.csv --shell-csv bg-phy24-shells.csv
+~~~
+
+See the [radial homology derivation](workpapers/physics/RADIAL_HOMOLOGY_VIRIAL.md), [BG-PHY-24 experimental workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy24.yml) and [Issue #27](https://github.com/patrickdugan/Blighted-Galaxy/issues/27). The gameplay solver and the [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) independent stellar radius/stability criteria remain unchanged.
+
+## BG-PHY-25: One-sided vacuum enthalpy at the SPH free surface
+
+The white-dwarf research branch now evaluates an opt-in **geometry-derived free-boundary enthalpy reconstruction**. Each particle estimates its outward surface normal from the first moment of the truncated M4/Wendland C4 kernel, then estimates its distance to a locally planar vacuum boundary by inverting the kernel's normalized 3D half-space mass fraction. A weighted affine enthalpy fit can incorporate a virtual zero-enthalpy vacuum point and convert the resulting value back to density through the unchanged cold-electron EOS.
+
+The new candidates are **frozen scalar-energy diagnostics**. Their outer-shell pressure and gravity are measured through independently re-solved central differences of the complete cold-EOS plus Poisson-matched gravitational potential, including the implicit smoothing length and all MLS/ghost positions. The existing SPH and BG-PHY-20 surface MLS fields are matched controls; none of the new fields is substituted into the playable dynamics.
+
+~~~sh
+cargo run --release --bin phy25_bench -- --n 256 --seeds 0,17 --layout glass --stage initial --kernel both --summary bg-phy25-summary.csv --shells-csv bg-phy25-shells.csv
+~~~
+
+See the [boundary-enthalpy derivation and acceptance gate](workpapers/physics/FREE_BOUNDARY_ENTHALPY_GHOST.md), [N64/128/256 screening matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy25.yml) and [Issue #29](https://github.com/patrickdugan/Blighted-Galaxy/issues/29). The original [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) stellar physical acceptance conditions remain unchanged.
+
+## BG-PHY-26: Three-moment free-surface depth and volume-bias identification
+
+BG-PHY-25 showed that spatially varying SPH volume errors break the uniform-bias invariance of `|Q|/S` and place the inferred vacuum boundary near interior particles. BG-PHY-26 jointly solves the zeroth, first, and second normal kernel moments `(M0, M1, M2)` under a local linear normal volume-bias model `V_est(z) = c(1 + beta z) V_true(z)` using exact piecewise Gauss-Legendre 1D quadratures of `I0..I3(a)` and exact Leibniz derivatives for both Cubic M4 and Wendland C4. Safeguarded root bracketing enforces `c > 0`, nonnegative reconstructed volume `1 + beta z > 0` across the occupied half-space, uniqueness, and Jacobian slope conditioning `|dF/da|`, falling back strictly to the original scalar density whenever the three-moment plane is unidentifiable.
+
+On synthetic planar half-spaces, the three-moment inverse recovers known depths `a` across `0..2`, volume scales `c` across `0.5..1.5`, and normal slopes `beta` across `-0.4..0.4` to machine precision while reproducing the `|Q|/S` bias. On the 0.65-solar-mass white dwarf, it identifies 93.8% of N256 outermost-shell particles and increases inferred boundary depth by 1.8x-4.2x over `|Q|/S` (`0.222h` vs `0.120h` M4; `0.147h` vs `0.035h` C4), cutting last-shell static density log-RMS error in half relative to the BG-PHY-25 moment-ratio ghost. However, spherical cap curvature and steep degenerate radial density curvature keep the inferred planar depth ~59-62% below the continuum reference (`0.540h` M4, `0.385h` C4), failing the Stage-A geometry gate, and conservative Stage-B shell-energy perturbations show that an inter-shell-dependent `a_i` induces an inward variational ghost-spring coupling on the outermost shell. No candidate is promoted to Stage-C dynamics; the validated BG-PHY-23 Hamiltonian and playable solver remain unchanged.
+
+~~~sh
+cargo run --release --bin phy26_bench -- --n 256 --seeds 0,17 --layout glass --stage initial --kernel both --synthetic-csv bg-phy26-synthetic.csv --summary bg-phy26-summary.csv --shells-csv bg-phy26-shells.csv
+~~~
+
+See the [three-moment derivation, failure decomposition, and Stage-B tables](workpapers/physics/THREE_MOMENT_SURFACE_DEPTH.md), [BG-PHY-26 screening matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy26.yml), [Issue #31](https://github.com/patrickdugan/Blighted-Galaxy/issues/31), and [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8).
+
+## BG-PHY-27: Radially graded-mass white-dwarf equilibrium
+
+Instead of adding boundary ghost points, BG-PHY-27 tests **radially graded unequal-mass antipodal shell/angular-glass seeds** (`n_alpha(r) ~ rho(r)^(1-alpha)`, `alpha in [0, 1]`) under the unmodified conservative Price–Monaghan unequal-mass SPH pressure and Poisson-matched M4/Wendland C4 self-gravity Hamiltonian (`src/sph_graded_seed.rs`). Exact unequal-mass variational forces match full-coordinate energy finite differences to `< 5e-5` with `< 1e-13` bulk momentum drift.
+
+At `N=512` (`seed=0`), grading from `alpha=0.00` (equal mass) to `alpha=0.75` (`m_max/m_min = 995`) raises initial last-shell pressure support `P/g` from `0.765` to `0.842`, shrinks initial radius shortfall from `-5.06%` to `-0.54%`, reduces post-damping contraction from `-15.47%` to `-9.82%` (M4) and `-16.04%` to `-10.21%` (C4), cuts max mass-CDF RMS from `0.0292` to `0.0178`, and passes the 3-dynamical-time undamped hold excursion gate (`4.82% / 4.26% <= 5%` for M4, `dE/E = 1.25e-7`). Extreme mass contrast (`alpha=1.0`, `m_max/m_min ~ 4.7e4`) causes seed-dependent light outer-particle splash at `N=256`. Because post-damping radius bias remains `-9.82%` at `N=512`, **[Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) remains open** and playable game physics stays unchanged.
+
+~~~sh
+cargo run --release --bin phy27_bench -- --n 512 --seeds 0 --alphas 0.0,0.50,0.75 --kernel both --relax-steps 300 --hold-steps 788 --dt 0.01 --csv bg-phy27-n512.csv
+~~~
+
+See the [graded-mass equilibrium workpaper](workpapers/physics/GRADED_MASS_EQUILIBRIUM.md), [committed N256/N512 datasets](workpapers/physics/data/bg-phy27/), and [BG-PHY-27 workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy27.yml).
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.
