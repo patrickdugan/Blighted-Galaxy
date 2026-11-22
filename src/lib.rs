@@ -478,3 +478,6 @@ pub mod sph_boundary_potential;
 
 // BG-PHY-26: joint three-moment free-surface depth and volume-bias identification.
 pub mod sph_three_moment;
+
+// BG-PHY-27: radially graded unequal-mass antipodal shells and angular glass.
+pub mod sph_graded_seed;

@@ -1,0 +1,55 @@
+name: BG-PHY-27 radially graded unequal-mass white-dwarf equilibrium
+on:
+  pull_request:
+    paths:
+      - "src/sph_graded_seed.rs"
+      - "src/bin/phy27_bench.rs"
+      - ".github/workflows/bg-phy27.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/sph_graded_seed.rs"
+      - "src/bin/phy27_bench.rs"
+      - ".github/workflows/bg-phy27.yml"
+  workflow_dispatch:
+jobs:
+  graded:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - n: 256
+            seed: "0"
+            alphas: "0.0,0.25,0.50,0.75,1.0"
+            tag: "n256-seed0"
+          - n: 256
+            seed: "17"
+            alphas: "0.0,0.25,0.50,0.75,1.0"
+            tag: "n256-seed17"
+          - n: 512
+            seed: "0"
+            alphas: "0.0,0.50,0.75"
+            tag: "n512-seed0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Graded-mass seed and variational energy-gradient tests
+        run: cargo test --lib sph_graded_seed -- --nocapture
+      - name: Full 3s damping + 3.0 t_dyn undamped hold sweep
+        run: |
+          cargo run --release --bin phy27_bench -- \
+            --n ${{ matrix.n }} --seeds ${{ matrix.seed }} \
+            --alphas ${{ matrix.alphas }} --kernel both \
+            --relax-steps 300 --hold-steps 788 --dt 0.01 \
+            --csv bg-phy27-${{ matrix.tag }}.csv
+      - name: Upload BG-PHY-27 graded-mass equilibrium CSV
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy27-${{ matrix.tag }}
+          path: bg-phy27-${{ matrix.tag }}.csv
+          if-no-files-found: warn
+          retention-days: 30
