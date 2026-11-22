@@ -447,3 +447,10 @@ pub mod campaign_save;
 
 // BG-STR-05: finite-angle, finite-slew Guf relay geometry.
 pub mod guf_geometry;
+
+// BG-STR-06: causal Patricia Trie world simulation, Episodes XVII-XXII, Weena planner.
+pub mod patricia_trie;
+pub mod episodes;
+
+// M3: transhuman close-contact boxing, morphogenesis and uniform-grid swept collisions.
+pub mod morph_boxing;

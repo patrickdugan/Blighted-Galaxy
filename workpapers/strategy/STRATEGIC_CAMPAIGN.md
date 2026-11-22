@@ -16,9 +16,14 @@ Start the game, select a labeled star system, and use:
 | P | Fire the Guf array at the selected system, requiring three powered relays and a full charge |
 | Y | Launch a Drummer Halo strike at a hostile system, consuming one stored kugelblitz and traveling at 0.76c |
 | M (overworld) | Select a Drummer source, then a Drummer destination; each press starts or completes a finite-speed 60-material / 40-energy convoy |
+| Shift+M (overworld) | Broadcast a light-speed memetic reconciliation record into the Patricia Trie from your current star system |
 | 4 (overworld) | Launch a GUF-defense escort mission if a Drummer system faces scheduled incoming energy beams and the ship is already there |
+| 5 (overworld) | Launch a Convoy Escort encounter against bandit raiders threatening a nearby/selected Drummer convoy |
+| 6 (overworld) | Launch a 0.76c tactical Halo Strike against a hostile Blight/Weena system when Drummers hold a stored kugelblitz |
+| 7 (overworld / velocity-matched RKM) | Enter M3 Transhuman Close-Contact Boxing & Morphogenesis (`1-5` morph forms, `Space` strike, `F` memetic pulse, `Tab` debrief) |
 | 4 / 5 / 6 (RKM mission) | Select 2 kg standard, 6 kg siege, or three-round 0.7 kg flak weapon, subject to Drummer industry unlocks and ammunition limits |
 | N | Enable or disable autonomous Blight expansion |
+| Shift+N | Enable or disable Great Aunt Weena's autonomous industrial and Chamber of Guf planner |
 | J | Send Blight replication toward the selected system from the nearest captured source |
 | Space, Q/E | Run/pause strategic calendar and adjust speed |
 | 1/2 | Enter RKM intercept or white-dwarf interdiction; campaign scoring requires the ship to have reached the selected industrial system |
@@ -79,10 +84,11 @@ Site alignments, project prices, system ownership and action rates are balance a
 
 ## Next implementation milestones
 
-1. Add persistent campaign saves and deterministic replay for convoy routes, weapon magazines, Guf screens, and historical events.
-2. Replace schematic Guf shield units with line-of-fire geometry, beam steering, targeted interception and industrial coordination costs.
-3. Introduce escort/bandit missions against actual convoys and specialized Halo-strike engagements.
-4. Build Episode XVII through XXII mission scripts, and an industrial planner for Great Aunt Weena.
+1. ~~Add persistent campaign saves and deterministic replay for convoy routes, weapon magazines, Guf screens, and historical events.~~ (Completed in BG-STR-05 / upgraded to schema v3 in BG-STR-06.)
+2. ~~Replace schematic Guf shield units with line-of-fire geometry, beam steering, targeted interception and industrial coordination costs.~~ (Completed in BG-STR-05.)
+3. ~~Introduce escort/bandit missions against actual convoys and specialized Halo-strike engagements.~~ (Completed in BG-STR-06.)
+4. ~~Build Episode XVII through XXII mission scripts, and an industrial planner for Great Aunt Weena.~~ (Completed in BG-STR-06 alongside the causal Patricia Trie simulation and M3 transhuman contact boxing — see [BG-STR-06 & M3 workpaper](EPISODES_TRIE_AND_BOXING.md).)
+5. Add mid-battle tactical save/restore, moving stellar ephemerides, and GPU compute-particle effects.
 
 ## Verification
 

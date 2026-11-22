@@ -4,6 +4,9 @@
 use crate::overworld::{Front,ORION_OUTBREAK,WAYPOINTS,SectorStatus};
 use crate::V2;
 use crate::guf_geometry::{self,SlewMount};
+use crate::episodes::EpisodeTracker;
+use crate::patricia_trie::{PatriciaTrieWorld,TrieEventKind};
+use crate::morph_boxing::BoxingDebrief;
 use serde::{Serialize,Deserialize};
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq,Serialize,Deserialize)]
@@ -16,8 +19,8 @@ impl Faction {
 }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum Project { Industry, Kugelblitz, GufNode }
-#[derive(Clone,Copy,Debug,PartialEq,Eq)]
-pub enum TacticalKind { Intercept, Tidal, GufDefense }
+#[derive(Clone,Copy,Debug,PartialEq,Eq,Serialize,Deserialize)]
+pub enum TacticalKind { Intercept, Tidal, GufDefense, ConvoyEscort, HaloStrike }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum TacticalOutcome { Victory, Defeat, Withdrawn }
 #[derive(Clone,Debug)]
@@ -42,6 +45,8 @@ pub struct CargoConvoy {
     pub id:u64,pub source:usize,pub target:usize,pub owner:Faction,
     pub material:f64,pub energy:f64,pub launch_year:f64,
     pub arrival_year:f64,pub beta:f64,
+    #[serde(default)]
+    pub escorted:bool,
 }
 impl CargoConvoy {
     pub fn position(&self,year:f64,systems:&[System])->V2{
@@ -61,6 +66,9 @@ pub struct StrategicState {
     pub guf_mounts:Vec<SlewMount>,
     pub historical:bool,
     pub blight_autonomy:bool,
+    pub weena_autonomy:bool,
+    pub episodes:EpisodeTracker,
+    pub patricia_trie:PatriciaTrieWorld,
     /// Incremented whenever a world changes its territorial footprint.
     pub territory_revision:u64,
     /// One settled result per industrial system per 250 galactic years.
@@ -83,13 +91,162 @@ impl StrategicState {
             owner:Faction::Blight,industry:4.0,energy:250.0,material:250.0,
             kugelblitz:0,array_node:false,defense:25.0,guf_ward:0.0});
         let count=systems.len();
+        let patricia_trie=PatriciaTrieWorld::new_for_systems(&systems,year);
         Self{year,systems,signals:vec![],convoys:vec![],next_convoy_id:1,
             events:vec![
             "STRATEGIC SCENARIO: industrial networks online".into()],
             array_charged:0.0,pulses:0,
             guf_mounts:vec![SlewMount::default();count],historical:false,
-            blight_autonomy:true,territory_revision:0,
+            blight_autonomy:true,weena_autonomy:false,
+            episodes:EpisodeTracker::default(),patricia_trie,
+            territory_revision:0,
             last_tactical_year:vec![f64::NEG_INFINITY;count]}
+    }
+    pub fn system_positions(&self)->Vec<V2>{
+        self.systems.iter().map(|s|s.pos).collect()
+    }
+    pub fn evaluate_episodes(&mut self){
+        let dispatches=self.episodes.evaluate(
+            &self.systems,self.pulses,self.year,&self.patricia_trie);
+        self.events.extend(dispatches);
+    }
+    pub fn broadcast_memetic_record(&mut self,source:usize,
+        label:impl Into<String>)->Result<f64,&'static str>{
+        let positions=self.system_positions();
+        let eta=self.patricia_trie.broadcast_memetic_record(
+            source,&positions,self.year,label)?;
+        self.events.push(format!(
+            "MEMETIC BROADCAST from {} / wave horizon T+{eta:.0}",
+            self.systems[source].name));
+        self.evaluate_episodes();
+        Ok(eta)
+    }
+    pub fn record_boxing_debrief(&mut self,debrief:BoxingDebrief)->String{
+        let site=debrief.site.filter(|&i|i<self.systems.len());
+        let positions=self.system_positions();
+        let msg=if let Some(idx)=site {
+            let label=format!("CONTACT DUEL @ {} (pulses:{})",
+                self.systems[idx].name,debrief.memetic_pulses_landed);
+            if debrief.memetic_pulses_landed>0 || debrief.outcome==TacticalOutcome::Victory {
+                let _=self.patricia_trie.record_event(
+                    idx,&positions,self.year,TrieEventKind::ContactDuel,label);
+            }
+            match debrief.outcome {
+                TacticalOutcome::Victory=>{
+                    self.episodes.boxing_duels_won+=1;
+                    self.episodes.tactical_victories+=1;
+                    if self.tactical_ready(idx){
+                        let s=&mut self.systems[idx];
+                        if matches!(s.owner,Faction::Blight|Faction::Weena){
+                            s.defense=(s.defense-2.5).max(0.0);
+                            if s.defense<=0.0 {
+                                s.owner=Faction::Drummers;s.array_node=false;
+                                s.defense=1.0;
+                                self.guf_mounts[idx]=SlewMount::default();
+                            }
+                        }else{
+                            s.defense=(s.defense+1.0).min(18.0);
+                            s.energy=(s.energy+25.0).min(1000.0);
+                        }
+                        self.last_tactical_year[idx]=self.year;
+                        self.territory_revision+=1;
+                    }
+                    format!("{}: CONTACT BOXING victory / Patricia Trie record logged",
+                        self.systems[idx].name)
+                }
+                TacticalOutcome::Defeat=>{
+                    if self.tactical_ready(idx){
+                        self.systems[idx].defense=(self.systems[idx].defense-1.0).max(0.0);
+                        self.last_tactical_year[idx]=self.year;
+                        self.territory_revision+=1;
+                    }
+                    format!("{}: CONTACT BOXING defeat / chassis withdrawn",
+                        self.systems[idx].name)
+                }
+                TacticalOutcome::Withdrawn=>{
+                    format!("{}: CONTACT BOXING disengaged{}",
+                        self.systems[idx].name,
+                        if debrief.memetic_pulses_landed>0{" / memetic contact logged"}else{""})
+                }
+            }
+        }else{
+            match debrief.outcome {
+                TacticalOutcome::Victory=>"SANDBOX CONTACT BOXING victory".into(),
+                TacticalOutcome::Defeat=>"SANDBOX CONTACT BOXING defeat".into(),
+                TacticalOutcome::Withdrawn=>"SANDBOX CONTACT BOXING disengaged".into(),
+            }
+        };
+        self.events.push(msg.clone());
+        self.evaluate_episodes();
+        msg
+    }
+    pub fn plan_weena_expansion(&mut self)->Option<String>{
+        let action=crate::episodes::plan_weena_expansion(self);
+        if let Some(ref msg)=action {
+            self.events.push(msg.clone());
+        }
+        action
+    }
+    pub fn convoy_threatened(&self,convoy:&CargoConvoy)->bool{
+        if convoy.owner!=Faction::Drummers {return false;}
+        let a=self.systems[convoy.source].pos;
+        let b=self.systems[convoy.target].pos;
+        let cur=convoy.position(self.year,&self.systems);
+        let ab=b-a;
+        let ab_len_sq=ab.len_sq().max(1e-9);
+        self.systems.iter().any(|star|{
+            if !matches!(star.owner,Faction::Blight|Faction::Weena){return false;}
+            if (star.pos-cur).len()<=10_000.0 {return true;}
+            let t=((star.pos-a).dot(ab)/ab_len_sq).clamp(0.0,1.0);
+            let closest=a+ab*t;
+            (star.pos-closest).len()<=10_000.0
+        })
+    }
+    /// Finds an active Drummer convoy associated with `site` (origin, destination,
+    /// or within 2,500 ly of `site`), preferring unescorted threatened convoys.
+    pub fn active_convoy_at_site(&self,site:usize)->Option<usize>{
+        let site_pos=self.systems.get(site)?.pos;
+        let mut matches:Vec<(u8,f64,usize)>=self.convoys.iter().enumerate()
+            .filter(|(_,c)|c.owner==Faction::Drummers && (
+                c.source==site || c.target==site ||
+                (c.position(self.year,&self.systems)-site_pos).len()<=2_500.0
+            ))
+            .map(|(idx,c)|{
+                let prio=match (!c.escorted,self.convoy_threatened(c)){
+                    (true,true)=>0,
+                    (true,false)=>1,
+                    (false,true)=>2,
+                    (false,false)=>3,
+                };
+                let dist=(c.position(self.year,&self.systems)-site_pos).len();
+                (prio,dist,idx)
+            }).collect();
+        matches.sort_by(|a,b|a.0.cmp(&b.0).then_with(||a.1.total_cmp(&b.1)));
+        matches.first().map(|x|x.2)
+    }
+    /// Finds an escortable Drummer convoy within intercept range of `ship_pos`
+    /// or tied to `selected_site` when the ship is stationed there.
+    pub fn escortable_convoy_for(&self,ship_pos:V2,selected_site:Option<usize>)->Option<(usize,usize)>{
+        if let Some(site)=selected_site {
+            if let Some(s)=self.systems.get(site) {
+                if (ship_pos-s.pos).len()<=500.0 {
+                    if let Some(cidx)=self.active_convoy_at_site(site){
+                        return Some((site,cidx));
+                    }
+                }
+            }
+        }
+        // Also allow direct mid-route convoy escort if the ship is within 2,500 ly of the convoy.
+        let mut best:Option<(f64,usize,usize)>=None;
+        for (cidx,c) in self.convoys.iter().enumerate(){
+            if c.owner!=Faction::Drummers{continue;}
+            let pos=c.position(self.year,&self.systems);
+            let d=(pos-ship_pos).len();
+            if d<=2_500.0 && best.is_none_or(|b|d<b.0){
+                best=Some((d,c.target,cidx));
+            }
+        }
+        best.map(|(_,site,cidx)|(site,cidx))
     }
     /// Site-scale occupation carved into the procedural historical atlas.
     /// Every resulting Blight pixel remains inside Orion's causal circle.
@@ -133,17 +290,70 @@ impl StrategicState {
         if kind==TacticalKind::GufDefense && !guf_threat {
             return Err("NO ACTIVE GUF THREAT");
         }
-        let s=self.systems.get_mut(site).ok_or("UNKNOWN TACTICAL SYSTEM")?;
-        let name=s.name;
+        let convoy_index=if kind==TacticalKind::ConvoyEscort {
+            Some(self.active_convoy_at_site(site).ok_or("NO ACTIVE DRUMMER CONVOY TO ESCORT")?)
+        }else{None};
+        if kind==TacticalKind::HaloStrike &&
+            !matches!(self.systems[site].owner,Faction::Blight|Faction::Weena) {
+            return Err("HALO STRIKE REQUIRES HOSTILE TARGET");
+        }
+        let halo_supplier=if kind==TacticalKind::HaloStrike && outcome==TacticalOutcome::Victory {
+            let target_pos=self.systems[site].pos;
+            Some(self.systems.iter().enumerate()
+                .filter(|(_,sys)|sys.owner==Faction::Drummers&&sys.kugelblitz>0)
+                .min_by(|a,b|(a.1.pos-target_pos).len().total_cmp(&(b.1.pos-target_pos).len()))
+                .map(|(i,_)|i)
+                .ok_or("NO STORED DRUMMER KUGELBLITZ")?)
+        }else{None};
+
+        let name=self.systems[site].name;
         let descriptor=match kind {
             TacticalKind::Intercept=>"RKM INTERCEPT",
             TacticalKind::Tidal=>"WHITE-DWARF INTERDICTION",
             TacticalKind::GufDefense=>"GUF RELAY INTERCEPTION",
+            TacticalKind::ConvoyEscort=>"CONVOY ESCORT",
+            TacticalKind::HaloStrike=>"HALO STRIKE",
         };
         let message=match outcome {
-            TacticalOutcome::Withdrawn=>format!("{name}: {descriptor} disengaged / no strategic change"),
+            TacticalOutcome::Withdrawn=>{
+                if kind==TacticalKind::HaloStrike {
+                    format!("{name}: {descriptor} disengaged / kugelblitz retained")
+                }else{
+                    format!("{name}: {descriptor} disengaged / no strategic change")
+                }
+            },
             TacticalOutcome::Victory=>{
-                if kind==TacticalKind::GufDefense{
+                if kind==TacticalKind::ConvoyEscort{
+                    let cidx=convoy_index.unwrap();
+                    self.convoys[cidx].escorted=true;
+                    let cid=self.convoys[cidx].id;
+                    let s=&mut self.systems[site];
+                    s.energy=(s.energy+20.0).min(1000.0);
+                    s.material=(s.material+15.0).min(600.0);
+                    s.defense=(s.defense+0.5).min(18.0);
+                    self.episodes.convoy_escorts_won+=1;
+                    self.episodes.tactical_victories+=1;
+                    format!("{name}: CONVOY #{cid} escorted / bandit raiders broken (+escort ward)")
+                }else if kind==TacticalKind::HaloStrike{
+                    let supplier_idx=halo_supplier.unwrap();
+                    self.systems[supplier_idx].kugelblitz-=1;
+                    let s=&mut self.systems[site];
+                    s.defense-=4.5;
+                    s.industry=(s.industry-0.75).max(0.25);
+                    s.material=(s.material-45.0).max(0.0);
+                    self.episodes.halo_strikes_won+=1;
+                    self.episodes.halo_strikes_launched+=1;
+                    self.episodes.tactical_victories+=1;
+                    if s.defense<=0.0{
+                        s.owner=Faction::Drummers;s.array_node=false;
+                        self.guf_mounts[site]=SlewMount::default();
+                        s.defense=1.0;
+                        format!("{name}: HALO STRIKE victory / hostile stronghold shattered")
+                    }else{
+                        format!("{name}: HALO STRIKE victory / enemy defense {:.1}",s.defense)
+                    }
+                }else if kind==TacticalKind::GufDefense{
+                    let s=&mut self.systems[site];
                     if s.owner!=Faction::Drummers{
                         return Err("DEFENSIVE INTERCEPTION REQUIRES DRUMMER CONTROL");
                     }
@@ -154,13 +364,19 @@ impl StrategicState {
                     let screen=(4.0+s.industry*1.5+s.defense.max(0.0)*0.4)
                         .clamp(4.0,18.0);
                     s.guf_ward+=screen;
+                    self.episodes.guf_defenses_won+=1;
+                    self.episodes.tactical_victories+=1;
                     format!("{name}: relay neutralized / GUF interception screen +{screen:.1}")
-                }else if matches!(s.owner,Faction::Blight|Faction::Weena){
+                }else if matches!(self.systems[site].owner,Faction::Blight|Faction::Weena){
+                    let s=&mut self.systems[site];
                     let damage=if kind==TacticalKind::Intercept{3.0}else{2.0};
                     s.defense-=damage;
                     s.material=(s.material-25.0).max(0.0);
+                    if kind==TacticalKind::Tidal {self.episodes.tidal_victories+=1;}
+                    self.episodes.tactical_victories+=1;
                     if s.defense<=0.0{
                         s.owner=Faction::Drummers;s.array_node=false;
+                        self.guf_mounts[site]=SlewMount::default();
                         s.industry=(s.industry*0.6).max(0.25);
                         s.defense=1.0;
                         format!("{name}: {descriptor} victory / hostile control broken")
@@ -168,21 +384,34 @@ impl StrategicState {
                         format!("{name}: {descriptor} victory / enemy defense {:.1}",s.defense)
                     }
                 }else{
+                    let s=&mut self.systems[site];
                     s.defense=(s.defense+1.25).min(18.0);
                     s.energy=(s.energy+20.0).min(1000.0);
+                    if kind==TacticalKind::Tidal {self.episodes.tidal_victories+=1;}
+                    self.episodes.tactical_victories+=1;
                     format!("{name}: {descriptor} victory / defenses reinforced")
                 }
             },
             TacticalOutcome::Defeat=>{
-                s.defense=(s.defense-1.5).max(0.0);
-                s.material=(s.material-18.0).max(0.0);
-                if s.defense<=0.0 && s.owner==Faction::Drummers &&
-                    (s.pos-ORION_OUTBREAK).len()<=Front::new(self.year).reach_ly(){
-                    s.owner=Faction::Blight;s.array_node=false;
-                    s.defense=1.0;
-                    format!("{name}: {descriptor} defeat / site lost to Blight")
+                if kind==TacticalKind::ConvoyEscort{
+                    let cidx=convoy_index.unwrap();
+                    let lost=self.convoys.remove(cidx);
+                    let s=&mut self.systems[site];
+                    s.defense=(s.defense-1.0).max(0.0);
+                    format!("{name}: CONVOY #{} destroyed by bandit raiders",lost.id)
                 }else{
-                    format!("{name}: {descriptor} defeat / defenses damaged")
+                    let s=&mut self.systems[site];
+                    s.defense=(s.defense-1.5).max(0.0);
+                    s.material=(s.material-18.0).max(0.0);
+                    if s.defense<=0.0 && s.owner==Faction::Drummers &&
+                        (s.pos-ORION_OUTBREAK).len()<=Front::new(self.year).reach_ly(){
+                        s.owner=Faction::Blight;s.array_node=false;
+                        self.guf_mounts[site]=SlewMount::default();
+                        s.defense=1.0;
+                        format!("{name}: {descriptor} defeat / site lost to Blight")
+                    }else{
+                        format!("{name}: {descriptor} defeat / defenses damaged")
+                    }
                 }
             },
         };
@@ -191,6 +420,7 @@ impl StrategicState {
             self.last_tactical_year[site]=self.year;
         }
         self.events.push(message.clone());
+        self.evaluate_episodes();
         Ok(message)
     }
     /// Orders a sublight transport between two Drummer-held industrial
@@ -217,6 +447,7 @@ impl StrategicState {
         self.convoys.push(CargoConvoy{
             id,source,target,owner:Faction::Drummers,
             material:60.0,energy:40.0,launch_year:self.year,arrival_year:arrival,beta,
+            escorted:false,
         });
         self.events.push(format!("DRUMMER CONVOY #{id}: {} to {} / ETA T+{arrival:.0}",
             self.systems[source].name,self.systems[target].name));
@@ -270,7 +501,9 @@ impl StrategicState {
             if project==Project::GufNode{
                 self.guf_mounts[site]=SlewMount::default();
             }
-            self.territory_revision+=1;self.events.push(msg.clone());msg
+            self.territory_revision+=1;self.events.push(msg.clone());
+            self.evaluate_episodes();
+            msg
         })
     }
     pub fn set_owner(&mut self,site:usize,owner:Faction){
@@ -323,8 +556,10 @@ impl StrategicState {
         self.signals.push(Signal{kind:SignalKind::HaloStrike,
             source,target,launch_year:self.year,
             arrival_year:arrival,power:5.0,beam_azimuth_rad:None});
+        self.episodes.halo_strikes_launched+=1;
         self.events.push(format!("HALO STRIKE dispatched / target {} / T+{arrival:.0}",
             self.systems[target].name));
+        self.evaluate_episodes();
         Ok(arrival)
     }
     /// Schedule political/industrial takeover, with a light-speed order
@@ -425,7 +660,12 @@ impl StrategicState {
                 arrival_year:arrival,power:4.0,
                 beam_azimuth_rad:Some(self.guf_mounts[source].bearing_at(self.year))});
         }
+        let positions=self.system_positions();
+        let _=self.patricia_trie.record_event(
+            emitters[0],&positions,self.year,TrieEventKind::GufShock,
+            format!("CHAMBER OF GUF DISCHARGE -> {}",self.systems[target].name));
         self.events.push(format!("CHAMBER OF GUF fired; target arrival T+{arrival:.0} yr"));
+        self.evaluate_episodes();
         Ok(arrival)
     }
     /// Slow autonomous swarm campaign. Commands travel on existing 0.10c
@@ -472,6 +712,9 @@ impl StrategicState {
                 if c.arrival_year>self.year && c.arrival_year<next{
                     next=c.arrival_year;
                 }
+            }
+            if let Some(trie_eta)=self.patricia_trie.next_arrival_after(self.year){
+                if trie_eta<next {next=trie_eta;}
             }
             let next_plan=((previous_bin+1) as f64)*2500.0;
             if next_plan>self.year && next_plan<next{next=next_plan;}
@@ -558,30 +801,46 @@ impl StrategicState {
             // Sample traffic at each 250-year substep; a star held by the
             // Blight may destroy a nearby convoy before it can deliver.
             let mut surviving=Vec::new();
-            for convoy in std::mem::take(&mut self.convoys) {
+            for mut convoy in std::mem::take(&mut self.convoys) {
                 let p=convoy.position(self.year,&self.systems);
                 let enemy_near=self.systems.iter().any(|star|
                     star.owner==Faction::Blight&&(star.pos-p).len()<850.0);
-                if enemy_near {
+                if enemy_near && !convoy.escorted {
                     self.events.push(format!("DRUMMER CONVOY #{} interdicted",
                         convoy.id));
-                }else if convoy.arrival_year<=self.year {
-                    let dest=&mut self.systems[convoy.target];
-                    if dest.owner==convoy.owner {
-                        dest.material=(dest.material+convoy.material).min(600.0);
-                        dest.energy=(dest.energy+convoy.energy).min(1000.0);
-                        self.events.push(format!("CONVOY #{} delivered to {}",
-                            convoy.id,dest.name));
-                    }else{
-                        self.events.push(format!("CONVOY #{} lost at hostile destination",
+                }else{
+                    if enemy_near && convoy.escorted {
+                        convoy.escorted=false;
+                        self.events.push(format!("DRUMMER CONVOY #{} escort repelled interdiction",
                             convoy.id));
                     }
-                }else{surviving.push(convoy);}
+                    if convoy.arrival_year<=self.year {
+                        let dest=&mut self.systems[convoy.target];
+                        if dest.owner==convoy.owner {
+                            dest.material=(dest.material+convoy.material).min(600.0);
+                            dest.energy=(dest.energy+convoy.energy).min(1000.0);
+                            self.episodes.convoys_delivered+=1;
+                            self.events.push(format!("CONVOY #{} delivered to {}",
+                                convoy.id,dest.name));
+                        }else{
+                            self.events.push(format!("CONVOY #{} lost at hostile destination",
+                                convoy.id));
+                        }
+                    }else{surviving.push(convoy);}
+                }
             }
             self.convoys=surviving;
-            if self.blight_autonomy && (self.year/2_500.0).floor() as u64>previous_bin {
+            let positions=self.system_positions();
+            let trie_events=self.patricia_trie.advance_to(self.year,&positions);
+            self.events.extend(trie_events);
+            let crossed_plan_bin=(self.year/2_500.0).floor() as u64>previous_bin;
+            if self.blight_autonomy && crossed_plan_bin {
                 self.plan_blight_expansion();
             }
+            if self.weena_autonomy && crossed_plan_bin {
+                self.plan_weena_expansion();
+            }
+            self.evaluate_episodes();
         }
         if self.events.len()>14 {
             let extra=self.events.len()-14;
@@ -839,5 +1098,46 @@ mod tests {
         assert!(s.schedule_blight_seed(9,1).is_ok());
         let arrival=s.signals[0].arrival_year;
         assert!(arrival>=s.year+(s.systems[1].pos-s.systems[9].pos).len());
+    }
+    #[test] fn convoy_escort_victory_shields_convoy_and_defeat_destroys_it(){
+        let mut s=StrategicState::default();
+        s.blight_autonomy=false;
+        s.set_owner(0,Faction::Drummers);
+        s.send_convoy(1,0).unwrap();
+        assert!(!s.convoys[0].escorted);
+        let energy_before=s.systems[1].energy;
+        s.resolve_tactical(1,TacticalKind::ConvoyEscort,TacticalOutcome::Victory).unwrap();
+        assert!(s.convoys[0].escorted);
+        assert!(s.systems[1].energy>energy_before);
+
+        // Escort defeats the first interdiction check cleanly.
+        let mut s2=StrategicState::default();
+        s2.blight_autonomy=false;
+        s2.systems[3].energy=300.0;s2.systems[3].material=300.0;
+        s2.send_convoy(3,5).unwrap();
+        s2.resolve_tactical(3,TacticalKind::ConvoyEscort,TacticalOutcome::Withdrawn).unwrap();
+        assert_eq!(s2.convoys.len(),1);
+        assert!(s2.tactical_ready(3));
+        s2.resolve_tactical(3,TacticalKind::ConvoyEscort,TacticalOutcome::Defeat).unwrap();
+        assert!(s2.convoys.is_empty());
+        assert!(!s2.tactical_ready(3));
+    }
+    #[test] fn tactical_halo_strike_consumes_kugelblitz_once_and_never_on_withdrawal(){
+        let mut s=StrategicState::default();
+        s.blight_autonomy=false;
+        s.systems[5].kugelblitz=1;
+        s.systems[6].defense=6.0;
+        s.systems[6].industry=3.0;
+        // Withdrawal must NOT consume the kugelblitz or lock cooldown.
+        s.resolve_tactical(6,TacticalKind::HaloStrike,TacticalOutcome::Withdrawn).unwrap();
+        assert_eq!(s.systems[5].kugelblitz,1);
+        assert_eq!(s.systems[6].defense,6.0);
+        assert!(s.tactical_ready(6));
+        // Victory consumes 1 kugelblitz and deals 4.5 defense + industry strike damage.
+        s.resolve_tactical(6,TacticalKind::HaloStrike,TacticalOutcome::Victory).unwrap();
+        assert_eq!(s.systems[5].kugelblitz,0);
+        assert!((s.systems[6].defense-1.5).abs()<1e-9);
+        assert!((s.systems[6].industry-2.25).abs()<1e-9);
+        assert!(!s.tactical_ready(6));
     }
 }

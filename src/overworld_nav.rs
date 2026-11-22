@@ -47,7 +47,6 @@ impl Random {
     fn unit(&mut self)->f64 {
         ((self.next()>>11) as f64)/(1u64<<53) as f64
     }
-    fn signed(&mut self)->f64{2.0*self.unit()-1.0}
     fn bell(&mut self)->f64{
         // Irwin-Hall, bounded and stable across platforms.
         (0..6).map(|_|self.unit()).sum::<f64>()-3.0
@@ -375,6 +374,14 @@ impl OverworldNav{
         self.selected.and_then(|point|self.strategy.nearest(point,500.0))
             .filter(|&site|(self.model.position-self.strategy.systems[site].pos).len()<=500.0)
     }
+    pub fn current_ship_site(&self)->Option<usize>{
+        self.strategy.nearest(self.model.position,500.0)
+    }
+    pub fn selected_convoy_escort_site(&self)->Option<usize>{
+        let selected=self.selected.and_then(|p|self.strategy.nearest(p,500.0));
+        self.strategy.escortable_convoy_for(self.model.position,selected)
+            .map(|(site,_)|site)
+    }
     pub fn import_campaign(&mut self,nav:GalacticNavModel,strategy:StrategicState){
         self.model=nav;
         self.strategy=strategy;
@@ -397,6 +404,11 @@ impl OverworldNav{
         });
         self.refresh_occupation();
     }
+    pub fn boxing_result(&mut self,debrief:crate::morph_boxing::BoxingDebrief){
+        let message=self.strategy.record_boxing_debrief(debrief);
+        self.encounter_notice=Some(message);
+        self.refresh_occupation();
+    }
     fn refresh_occupation(&mut self){
         let bucket=(self.model.year/1_000.0).round() as i64;
         if bucket==self.last_front_bucket &&
@@ -408,11 +420,18 @@ impl OverworldNav{
     }
     pub fn update(&mut self,seconds:f64){
         let dt=seconds.clamp(0.0,0.10);
+        let shift=is_key_down(KeyCode::LeftShift)||is_key_down(KeyCode::RightShift);
         if is_key_pressed(KeyCode::T){self.strategy_visible=!self.strategy_visible;}
         if is_key_pressed(KeyCode::N){
-            self.strategy.blight_autonomy=!self.strategy.blight_autonomy;
-            self.encounter_notice=Some(format!("BLIGHT AUTONOMY: {}",
-                if self.strategy.blight_autonomy{"ENABLED"}else{"PAUSED"}));
+            if shift {
+                self.strategy.weena_autonomy=!self.strategy.weena_autonomy;
+                self.encounter_notice=Some(format!("WEENA AUTONOMY: {}",
+                    if self.strategy.weena_autonomy{"ENABLED"}else{"PAUSED"}));
+            }else{
+                self.strategy.blight_autonomy=!self.strategy.blight_autonomy;
+                self.encounter_notice=Some(format!("BLIGHT AUTONOMY: {}",
+                    if self.strategy.blight_autonomy{"ENABLED"}else{"PAUSED"}));
+            }
         }
         // Site-level industrial actions use the selected navigable waypoint.
         // I: capacity, K: kugelblitz, U: Guf node, P: fire at selected site.
@@ -427,7 +446,18 @@ impl OverworldNav{
             }else{self.encounter_notice=Some("SELECT A NAMED INDUSTRIAL SYSTEM".into());}
         }
         if is_key_pressed(KeyCode::M){
-            if let Some(site)=self.selected.and_then(|p|self.strategy.nearest(p,500.0)){
+            if shift {
+                if let Some(site)=self.current_ship_site() {
+                    let label=format!("MEMETIC BROADCAST / {}",self.strategy.systems[site].name);
+                    self.encounter_notice=Some(match self.strategy.broadcast_memetic_record(site,label){
+                        Ok(eta)=>format!("MEMETIC TRIE BROADCAST FROM {} / HORIZON T+{eta:.0}",
+                            self.strategy.systems[site].name),
+                        Err(reason)=>reason.into(),
+                    });
+                }else{
+                    self.report_notice("ARRIVE AT A STAR SYSTEM FOR MEMETIC BROADCAST");
+                }
+            }else if let Some(site)=self.selected.and_then(|p|self.strategy.nearest(p,500.0)){
                 match self.convoy_origin.take(){
                     None=>{
                         if self.strategy.systems[site].owner==Faction::Drummers{
@@ -597,10 +627,12 @@ impl OverworldNav{
         }
         self.model.tick(dt);
         if self.model.year<self.strategy.year {
-            // Historical rewind clears orders but preserves the user's AI setting.
+            // Historical rewind clears orders but preserves the user's AI settings.
             let autonomy=self.strategy.blight_autonomy;
+            let weena_auto=self.strategy.weena_autonomy;
             self.strategy=StrategicState::new(self.model.year);
             self.strategy.blight_autonomy=autonomy;
+            self.strategy.weena_autonomy=weena_auto;
             self.convoy_origin=None;
         }else{self.strategy.advance_to(self.model.year);}
         if let Some(p)=self.model.last_arrival.take(){
@@ -740,6 +772,9 @@ impl OverworldNav{
                 let ship=self.world_to_screen(convoy.position(
                     self.strategy.year,&self.strategy.systems));
                 draw_rectangle(ship.x-3.0,ship.y-3.0,6.0,6.0,CYAN);
+                if convoy.escorted {
+                    draw_circle_lines(ship.x,ship.y,6.5,1.2,GOLD);
+                }
             }
             for (idx,site) in self.strategy.systems.iter().enumerate(){
                 if site.owner!=Faction::Weena||!site.array_node{continue;}
@@ -951,12 +986,17 @@ impl OverworldNav{
             }
             self.panel_line(&format!("GUF {:.0}%  WAVES {}  CARGO {}",
                 self.strategy.array_charged,self.strategy.signals.len(),
-                self.strategy.convoys.len()),x,y,BONE);y+=22.0;
-            self.panel_line(&format!("BLIGHT AUTONOMY {}",if self.strategy.blight_autonomy{"ON"}else{"OFF"}),x,y,REDDIM);
+                self.strategy.convoys.len()),x,y,BONE);y+=20.0;
+            self.panel_line(&format!("AUTO BLIGHT {}  WEENA {}",
+                if self.strategy.blight_autonomy{"ON"}else{"OFF"},
+                if self.strategy.weena_autonomy{"ON"}else{"OFF"}),x,y,REDDIM);y+=20.0;
+            self.panel_line(&format!("TRIE BRANCHES {} / COEX {:.0}%",
+                self.strategy.patricia_trie.branch_divergence_count(),
+                self.strategy.patricia_trie.average_coexist()*100.0),x,y,CYAN);
         }
-        let footer=screen_height()-160.0;
+        let footer=screen_height()-168.0;
         if let Some(msg)=&self.encounter_notice{
-            draw_text(msg,x,footer-21.0,15.0,CYAN);
+            draw_text(msg,x,footer-18.0,14.5,CYAN);
         }
         draw_line(x,footer,right+w-16.0,footer,1.0,
             Color::new(0.6,0.7,0.8,0.31));
@@ -964,16 +1004,36 @@ impl OverworldNav{
             "WASD / DRAG PAN  Z X ZOOM",
             "F ORION  G L GRIDS  B DARK",
             "SPACE PAUSE   Q/E TIME",
-            "I INDUSTRY   K KUGELBLITZ",
-            "U GUF  SHIFT+P AIM  P FIRE",
-            "V WEENA  J BLIGHT Y HALO",
-            "M CONVOY  N AUTO  F5/F9 SAVE",
-            "1 RKM  2 TIDAL  4 GUF DEFEND",
-            "T STRATEGY  F5 SAVE / F9 LOAD",
+            "I IND  K HOLE  U GUF  SH+P/P",
+            "V WEENA  J BLIGHT  Y HALO",
+            "M CONVOY  SH+M TRIE BROADCAST",
+            "N BLIGHT AUTO  SH+N WEENA AUTO",
+            "1 RKM  2 TIDAL  4 GUF  5 ESCORT",
+            "6 HALO  7 BOXING  F5/F9 SAVE",
+            "T STRATEGY   H HELP   ESC QUIT",
         ];
         for (i,line) in hints.iter().enumerate(){
-            draw_text(line,x,footer+18.0+i as f32*15.7,
-                14.5,Color::new(0.58,0.67,0.78,0.89));
+            draw_text(line,x,footer+16.0+i as f32*15.2,
+                14.0,Color::new(0.58,0.67,0.78,0.89));
+        }
+    }
+    fn draw_episode_banner(&self){
+        let x=20.0;
+        let y=102.0;
+        let w=(self.map_width()-40.0).min(640.0).max(360.0);
+        draw_rectangle(x,y,w,52.0,Color::new(0.008,0.017,0.032,0.88));
+        draw_rectangle_lines(x,y,w,52.0,1.0,translucent(GOLD,0.45));
+        let done=self.strategy.episodes.completed_count();
+        if let Some(ep)=self.strategy.episodes.current_spec() {
+            shadow_text(
+                &format!("EPISODE {} ({done}/6): {}",ep.numeral,ep.title),
+                x+11.0,y+21.0,17.0,GOLD);
+            shadow_text(ep.staging_objective,x+11.0,y+41.0,14.0,CYAN);
+        }else{
+            shadow_text("EPISODES XVII-XXII COMPLETE (6/6) / PATRICIA TRIE RECONCILED",
+                x+11.0,y+21.0,17.0,GOLD);
+            shadow_text("Campaign spine completed — sandbox and galactic simulation remain active.",
+                x+11.0,y+41.0,14.0,CYAN);
         }
     }
     fn draw_mission_briefing(&self){
@@ -986,17 +1046,26 @@ impl OverworldNav{
         draw_rectangle(x,y,w,77.0,Color::new(0.008,0.018,0.035,0.93));
         draw_rectangle_lines(x,y,w,77.0,1.0,translucent(BLUE,0.52));
         let onboard=(self.model.position-s.pos).len()<=500.0;
+        let has_convoy=self.strategy.active_convoy_at_site(site).is_some();
+        let has_halo=matches!(s.owner,Faction::Blight|Faction::Weena)
+            && self.strategy.systems.iter().any(|sys|sys.owner==Faction::Drummers&&sys.kugelblitz>0);
         let state=if !onboard {
-            "ROUTE REQUIRED / SELECT SYSTEM + ENTER"
+            "ROUTE REQUIRED / SELECT SYSTEM + ENTER (7 SANDBOX BOXING)".to_string()
         }else if !self.strategy.tactical_ready(site){
-            "SYSTEM REARMING / ENCOUNTERS ARE SANDBOX ONLY"
-        }else if self.strategy.incoming_guf(site).is_some()
-            && s.owner==Faction::Drummers{
-            "MISSION READY / 1 INTERCEPT  2 TIDAL  4 DEFEND GUF"
-        }else{"MISSION READY / 1 INTERCEPT  2 TIDAL"};
+            "SYSTEM REARMING / ENCOUNTERS ARE SANDBOX ONLY".to_string()
+        }else{
+            let mut opts=String::from("MISSION READY / 1 RKM  2 TIDAL");
+            if self.strategy.incoming_guf(site).is_some() && s.owner==Faction::Drummers {
+                opts.push_str("  4 GUF");
+            }
+            if has_convoy {opts.push_str("  5 ESCORT");}
+            if has_halo {opts.push_str("  6 HALO");}
+            opts.push_str("  7 BOXING");
+            opts
+        };
         shadow_text(&format!("CAMPAIGN TARGET: {}",s.name),
             x+12.0,y+24.0,20.0,GOLD);
-        shadow_text(state,x+12.0,y+45.0,16.0,
+        shadow_text(&state,x+12.0,y+45.0,16.0,
             if onboard&&self.strategy.tactical_ready(site){CYAN}else{BONE});
         if let Some((eta,beams,power))=self.strategy.incoming_guf(site){
             shadow_text(&format!(
@@ -1054,6 +1123,7 @@ impl OverworldNav{
         self.draw_waypoints();
         self.draw_travel();
         self.draw_logo();
+        self.draw_episode_banner();
         self.draw_sidebar();
         self.draw_mission_briefing();
         self.timeline();

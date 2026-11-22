@@ -1,9 +1,12 @@
-name: BG-STR-05 persistence and finite-beam targeting checks
+name: BG-STR-06 episodes, Patricia Trie, M3 boxing and persistence checks
 on:
   pull_request:
     paths:
       - 'Cargo.toml'
       - 'src/strategy.rs'
+      - 'src/patricia_trie.rs'
+      - 'src/episodes.rs'
+      - 'src/morph_boxing.rs'
       - 'src/guf_geometry.rs'
       - 'src/campaign_save.rs'
       - 'src/overworld.rs'
@@ -23,4 +26,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --all-targets
-      - run: cargo check --bin blighted-galaxy
+      - run: cargo check --all-targets

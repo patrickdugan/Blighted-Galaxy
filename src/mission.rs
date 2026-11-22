@@ -26,8 +26,10 @@ pub struct MissionProfile {
     pub fan_unlocked:bool,
     pub incoming_guf_power:f64,
     pub incoming_guf_count:usize,
+    pub player_initial_beta: f64,
     pub enemy_initial_beta: f64,
     pub intercept_range_m: f64,
+    pub convoy_id: Option<u64>,
     pub hole_mass_solar: f64,
     pub dwarf_mass_solar: f64,
     pub tidal_separation_m: f64,
@@ -44,6 +46,16 @@ impl MissionProfile {
         if kind==TacticalKind::GufDefense &&
             (s.owner!=Faction::Drummers||incoming.is_none()
                 ||s.material<25.0||s.energy<40.0) {return None;}
+        let convoy_id=if kind==TacticalKind::ConvoyEscort {
+            let cidx=state.active_convoy_at_site(site)?;
+            Some(state.convoys[cidx].id)
+        }else{None};
+        if kind==TacticalKind::HaloStrike {
+            if !matches!(s.owner,Faction::Blight|Faction::Weena){return None;}
+            let has_hole=state.systems.iter()
+                .any(|sys|sys.owner==Faction::Drummers&&sys.kugelblitz>0);
+            if !has_hole {return None;}
+        }
         let (guf_count,guf_power)=incoming
             .map(|(_,n,p)|(n,p)).unwrap_or((0,0.0));
         // Shipboard magazines and weapon unlocks come from the nearest
@@ -62,25 +74,58 @@ impl MissionProfile {
         let support=if s.owner==Faction::Drummers{
             (stock as f64*0.14+industry*0.035).min(0.8)
         }else{0.0};
+        let base_ammo=(35.0+support_industry*9.0+
+            support_material*0.035).round().clamp(25.0,160.0) as u32;
+        let (enemy_shield_j,own_shield_j,enemy_fire_interval_s,escort_count,
+            player_initial_beta,enemy_initial_beta,intercept_range_m,
+            ammo_units,siege_unlocked,fan_unlocked)=match kind {
+            TacticalKind::ConvoyEscort=>(
+                7.0e17*shield_factor*0.65,
+                7.0e17*(1.05+support),
+                (2.0-industry*0.08).clamp(1.25,2.0),
+                ((2.0+industry*0.35).floor() as usize).clamp(2,4) as u8,
+                0.0,
+                (0.028+industry*0.003).clamp(0.028,0.055),
+                (340.0e6+defense*6.0e6).clamp(340.0e6,440.0e6),
+                base_ammo.max(45),
+                support_industry>=2.0,
+                true,
+            ),
+            TacticalKind::HaloStrike=>(
+                7.0e17*shield_factor*1.35,
+                7.0e17*(1.25+support),
+                (2.4-industry*0.12).clamp(1.1,2.4),
+                ((1.0+industry*0.45+defense*0.08).floor() as usize).clamp(1,4) as u8,
+                0.76,
+                (0.015+industry*0.002).clamp(0.015,0.040),
+                1_400.0e6,
+                base_ammo.max(60),
+                true,
+                true,
+            ),
+            _ =>(
+                7.0e17*shield_factor*
+                    if kind==TacticalKind::GufDefense {1.15+0.035*guf_power}else{1.0},
+                7.0e17*(1.0+support),
+                (3.2-industry*0.15-stock as f64*0.055).clamp(1.15,3.2),
+                ((industry*0.55+defense*0.09).floor() as usize+
+                    if kind==TacticalKind::GufDefense {guf_count.min(2)}else{0})
+                    .min(4) as u8,
+                0.0,
+                (0.008+industry*0.0017).clamp(0.008,0.032),
+                (410.0e6+defense*12.0e6).clamp(410.0e6,710.0e6),
+                base_ammo,
+                support_industry>=2.0,
+                support_industry>=1.25,
+            ),
+        };
         Some(Self{
             site,site_name:s.name,kind,owner:s.owner,year:state.year,
             industry,defense,kugelblitz:stock,
-            ammo_units:(35.0+support_industry*9.0+
-                support_material*0.035).round().clamp(25.0,160.0) as u32,
-            siege_unlocked:support_industry>=2.0,
-            fan_unlocked:support_industry>=1.25,
+            ammo_units,siege_unlocked,fan_unlocked,
             incoming_guf_power:guf_power,incoming_guf_count:guf_count,
-            enemy_shield_j:7.0e17*shield_factor*
-                if kind==TacticalKind::GufDefense {1.15+0.035*guf_power}else{1.0},
-            own_shield_j:7.0e17*(1.0+support),
-            enemy_fire_interval_s:(3.2-industry*0.15-stock as f64*0.055)
-                .clamp(1.15,3.2),
-            escort_count:((industry*0.55+defense*0.09).floor() as usize+
-                if kind==TacticalKind::GufDefense {guf_count.min(2)}else{0})
-                .min(4) as u8,
-            enemy_initial_beta:(0.008+industry*0.0017).clamp(0.008,0.032),
-            intercept_range_m:(410.0e6+defense*12.0e6)
-                .clamp(410.0e6,710.0e6),
+            enemy_shield_j,own_shield_j,enemy_fire_interval_s,escort_count,
+            player_initial_beta,enemy_initial_beta,intercept_range_m,convoy_id,
             // Weena's 12-solar-mass remnant corresponds to Episode XIX.
             // Other encounters use plausible stellar-remnant masses.
             hole_mass_solar:if s.owner==Faction::Weena {12.0}
@@ -98,6 +143,7 @@ impl MissionProfile {
         let center=V2::new(AU_M,0.0);
         let offset=V2::new(self.intercept_range_m*0.5,20.0e6);
         g.player.pos_m=center-V2::new(self.intercept_range_m*0.5,20.0e6);
+        g.player.vel_m_s=V2::new(self.player_initial_beta*C_SI,0.0);
         g.opponent.pos_m=center+offset;
         g.opponent.vel_m_s=V2::new(-self.enemy_initial_beta*C_SI,0.0);
         g.opponent.shield_capacity_j=self.enemy_shield_j;
@@ -107,7 +153,9 @@ impl MissionProfile {
         g.player.shield_capacity_j=self.own_shield_j;
         g.player.shield_energy_j=self.own_shield_j;
         g.enemy_fire_interval_s=self.enemy_fire_interval_s;
-        g.player_weapon=WeaponKind::Standard;
+        g.player_weapon=if self.kind==TacticalKind::HaloStrike {
+            WeaponKind::Siege
+        }else{WeaponKind::Standard};
         g.ammo_units=self.ammo_units;
         g.player_history=WorldlineHistory::new(8192);
         g.opponent_history=WorldlineHistory::new(8192);
@@ -117,6 +165,8 @@ impl MissionProfile {
         g.opponent_history.push(WorldlineSample{
             time_s:0.0,pos_m:g.opponent.pos_m,vel_m_s:g.opponent.vel_m_s
         }).expect("valid enemy mission initial history");
+        let escort_speed_factor=if self.kind==TacticalKind::ConvoyEscort {1.05}else{0.85};
+        let escort_radius=if self.kind==TacticalKind::ConvoyEscort {2.8e6}else{3.4e6};
         for i in 0..self.escort_count {
             let lane=i as f64/2.0;
             let flank=if i%2==0 {1.0}else{-1.0};
@@ -124,11 +174,12 @@ impl MissionProfile {
                 -50.0e6-lane.floor()*18.0e6,
                 flank*(70.0e6+lane.floor()*35.0e6));
             let mut escort=Craft::new(pos,
-                g.opponent.vel_m_s*0.85,std::f64::consts::PI);
+                (g.opponent.vel_m_s*escort_speed_factor).clamp_len(0.95*C_SI),
+                std::f64::consts::PI);
             let shield=self.enemy_shield_j*(0.32+0.065*i as f64);
             escort.shield_capacity_j=shield;
             escort.shield_energy_j=shield;
-            escort.cross_section_radius_m=3.4e6;
+            escort.cross_section_radius_m=escort_radius;
             g.escorts.push(FleetEscort {
                 craft:escort,next_shot_s:1.8+i as f64*0.42,
             });
@@ -312,5 +363,46 @@ mod tests {
         let next=MissionProfile::from_strategy(&state,5,TacticalKind::Intercept).unwrap();
         assert!(next.enemy_shield_j>original.enemy_shield_j);
         assert_eq!(original.joust().opponent.shield_energy_j,original.enemy_shield_j);
+    }
+    #[test]
+    fn convoy_escort_mission_requires_active_convoy_and_spawns_fast_raiders() {
+        let mut state=StrategicState::default();
+        assert!(MissionProfile::from_strategy(&state,3,TacticalKind::ConvoyEscort).is_none());
+        state.systems[3].material=300.0;
+        state.systems[3].energy=300.0;
+        let id=state.send_convoy(3,5).unwrap();
+        let p=MissionProfile::from_strategy(&state,3,TacticalKind::ConvoyEscort).unwrap();
+        assert_eq!(p.convoy_id,Some(id));
+        assert!(p.escort_count>=2);
+        assert!(p.enemy_initial_beta>=0.028);
+        assert!(p.fan_unlocked);
+        let j=p.joust();
+        assert!(j.player_history.validate_segments());
+        assert!(j.opponent_history.validate_segments());
+        assert!(j.escorts.len()>=2);
+    }
+    #[test]
+    fn halo_strike_mission_snapshots_076c_approach_with_siege_unlocked() {
+        let mut state=StrategicState::default();
+        // No stored Drummer kugelblitz -> cannot launch tactical Halo Strike.
+        assert!(MissionProfile::from_strategy(&state,6,TacticalKind::HaloStrike).is_none());
+        // Non-hostile target -> rejected even with kugelblitz.
+        state.systems[5].kugelblitz=1;
+        assert!(MissionProfile::from_strategy(&state,5,TacticalKind::HaloStrike).is_none());
+        // Hostile target + stored kugelblitz -> valid 0.76c Siege snapshot (without mutating state).
+        let p=MissionProfile::from_strategy(&state,6,TacticalKind::HaloStrike).unwrap();
+        assert_eq!(state.systems[5].kugelblitz,1);
+        assert!((p.player_initial_beta-0.76).abs()<1e-12);
+        assert!(p.siege_unlocked && p.fan_unlocked);
+        let mut j=p.joust();
+        assert_eq!(j.player_weapon,WeaponKind::Siege);
+        assert!((j.player.vel_m_s.len()/C_SI-0.76).abs()<1e-9);
+        assert!(j.player_history.validate_segments());
+        for _ in 0..120 {
+            j.step(crate::si_bridge::Seconds(1.0/120.0),
+                crate::si_bridge::Control::default());
+        }
+        assert!(j.player_history.validate_segments());
+        assert!(j.player.vel_m_s.len()<C_SI);
     }
 }
