@@ -1,0 +1,53 @@
+name: BG-PHY-15 hydrostatic frozen-force decomposition
+on:
+  pull_request:
+    paths:
+      - "src/sph_force_audit.rs"
+      - "src/bin/phy15_bench.rs"
+      - "src/sph_sampling.rs"
+      - "src/sph_adaptive.rs"
+      - ".github/workflows/bg-phy15.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/sph_force_audit.rs"
+      - "src/bin/phy15_bench.rs"
+      - "src/sph_sampling.rs"
+      - "src/sph_adaptive.rs"
+      - ".github/workflows/bg-phy15.yml"
+  workflow_dispatch:
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - n: 256
+            seeds: "0,17"
+          - n: 512
+            seeds: "0,17"
+          - n: 1024
+            seeds: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Compare seed and post-damping force vectors against 1D hydrostatics
+        run: |
+          cargo run --release --bin phy15_bench -- \
+            --n ${{ matrix.n }} --seeds ${{ matrix.seeds }} \
+            --fixed-eta 1.2 --relax-steps 300 --dt 0.01 --shells 8 \
+            --csv bg-phy15-${{ matrix.n }}.csv \
+            --shell-csv bg-phy15-${{ matrix.n }}-shells.csv
+      - name: Upload BG-PHY-15 pressure, gravity and shell diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy15-n${{ matrix.n }}
+          path: |
+            bg-phy15-${{ matrix.n }}.csv
+            bg-phy15-${{ matrix.n }}-shells.csv
+          if-no-files-found: warn
+          retention-days: 30

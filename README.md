@@ -221,6 +221,18 @@ The [BG-PHY-14 convergence workflow](https://github.com/patrickdugan/Blighted-Ga
 
 Read the [BG-PHY-14 technical workpaper](workpapers/physics/NEIGHBOR_GROWTH_HROOT.md). [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) remains the source of truth for physical white-dwarf equilibrium acceptance.
 
+## BG-PHY-15: Frozen hydrostatic force decomposition
+
+A separate snapshot audit compares numerical SPH pressure and gravity vectors with the independent 1D hydrostatic field, before and after damping. It measures radial support bias, tangential disorder forces, and mass-quantile shell errors without advancing particles during measurement.
+
+The sampler's last particle starts at enclosed-mass fraction `1-1/N`, producing a predictable initial radius shortfall against the continuum surface. BG-PHY-15 reports that finite-sampling offset separately from the **dynamical contraction relative to the initial particle configuration**.
+
+~~~sh
+cargo run --release --bin phy15_bench -- --n 256 --seeds 0,17 --relax-steps 300 --csv bg-phy15-n256.csv --shell-csv bg-phy15-n256-shells.csv
+~~~
+
+The [BG-PHY-15 matrix workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy15.yml) covers N256, N512, and N1024. See the [BG-PHY-15 workpaper](workpapers/physics/FROZEN_FORCE_AUDIT.md). This diagnostic leaves the existing white-dwarf stability and radius acceptance gates unchanged.
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.
