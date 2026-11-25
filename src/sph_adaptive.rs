@@ -15,7 +15,7 @@ use crate::sph3::{
     self,Fluid3,Massive3,Sph3Config,Sph3Eos,V3,
 };
 use std::f64::consts::PI;
-use crate::sph_gravity_kernel;
+use crate::sph_kernel::{self,DensityKernel};
 use crate::sph_hroot;
 use crate::sph_neighbors::CellNeighbors;
 
@@ -45,6 +45,8 @@ pub struct AdaptiveConfig {
     pub gravity_model:GravityModel,
     pub density_iterations:usize,
     pub density_method:DensityMethod,
+    /// SPH density kernel; Poisson-matched gravity uses the same choice.
+    pub kernel:DensityKernel,
 }
 impl AdaptiveConfig {
     pub fn from_star_radius(radius_m:f64)->Self {
@@ -56,6 +58,7 @@ impl AdaptiveConfig {
             gravity_model:GravityModel::FixedPlummer,
             density_iterations:9,
             density_method:DensityMethod::Underrelaxed,
+            kernel:DensityKernel::CubicM4,
         }
     }
     pub fn with_adaptive_gravity(mut self)->Self {
@@ -64,6 +67,14 @@ impl AdaptiveConfig {
         self
     }
     pub fn with_cubic_gravity(mut self)->Self {
+        self.gravity_model=GravityModel::MatchedCubicSpline;
+        self.density_iterations=24;
+        self
+    }
+    /// Opt-in normalized Wendland C4 density, pressure and matched gravity.
+    /// Keeps the original 24-pass closure for controlled kernel comparisons.
+    pub fn with_wendland_c4(mut self)->Self {
+        self.kernel=DensityKernel::WendlandC4;
         self.gravity_model=GravityModel::MatchedCubicSpline;
         self.density_iterations=24;
         self
@@ -122,13 +133,14 @@ fn kernel_and_derivative_h(distance_m:f64,h:f64)->(f64,f64) {
 }
 fn density_of_particle(
     i:usize,particles:&[Fluid3],h:f64,candidates:&[usize],
+    kernel:DensityKernel,
 )->(f64,f64) {
     let mut rho=0.0;
     let mut derivative=0.0;
     for &j in candidates {
         let x=&particles[j];
-        let (w,dwdh)=kernel_and_derivative_h(
-            (particles[i].pos_m-x.pos_m).len(),h);
+        let (w,dwdh)=sph_kernel::kernel_and_dh(
+            (particles[i].pos_m-x.pos_m).len(),h,kernel);
         rho+=x.mass_kg*w;
         derivative+=x.mass_kg*dwdh;
     }
@@ -149,10 +161,10 @@ pub fn update_adaptive_densities(
         let neighbors=CellNeighbors::new(particles,cfg.max_h_m)
             .all_candidates();
         for i in 0..particles.len() {
-            let root=sph_hroot::solve_particle(
+            let root=sph_hroot::solve_particle_with_kernel(
                 i,particles,&neighbors[i],cfg.eta,
                 cfg.min_h_m,cfg.max_h_m,state.smoothing_m[i],
-                1e-9,64);
+                1e-9,64,cfg.kernel);
             state.smoothing_m[i]=root.h_m;
             state.densities_kg_m3[i]=root.density_kg_m3;
             state.omega[i]=root.omega;
@@ -172,7 +184,7 @@ pub fn update_adaptive_densities(
     for _ in 0..cfg.density_iterations {
         for i in 0..particles.len() {
             let h=state.smoothing_m[i];
-            let (rho,_)=density_of_particle(i,particles,h,&candidates[i]);
+            let (rho,_)=density_of_particle(i,particles,h,&candidates[i],cfg.kernel);
             assert!(rho>0.0&&rho.is_finite());
             let target=cfg.eta*
                 (particles[i].mass_kg/rho).cbrt();
@@ -191,7 +203,7 @@ pub fn update_adaptive_densities(
     // A sorted candidate list yields the same summation order as all-pairs.
     for i in 0..particles.len() {
         let h=state.smoothing_m[i];
-        let (rho,drho_dh)=density_of_particle(i,particles,h,&candidates[i]);
+        let (rho,drho_dh)=density_of_particle(i,particles,h,&candidates[i],cfg.kernel);
         state.densities_kg_m3[i]=rho;
         let at_cap=(h-cfg.min_h_m).abs()<cfg.min_h_m*1e-8||
             (h-cfg.max_h_m).abs()<cfg.max_h_m*1e-8;
@@ -249,7 +261,7 @@ pub fn adaptive_gravity_zeta(
                 GravityModel::MatchedAdaptivePlummer=>
                     adaptive_plummer_dphi_dh(r,h),
                 GravityModel::MatchedCubicSpline=>
-                    sph_gravity_kernel::smoothing_derivative(r,h),
+                    sph_kernel::gravity_smoothing_derivative(r,h,cfg.kernel),
             };
             derivative_sum+=q.mass_kg*derivative;
         }
@@ -315,10 +327,10 @@ pub fn forces(
                 }
                 GravityModel::MatchedCubicSpline=>{
                     if r>0.0 {
-                        0.5*(sph_gravity_kernel::radial_derivative(
-                            r,state.smoothing_m[i])+
-                            sph_gravity_kernel::radial_derivative(
-                            r,state.smoothing_m[j]))/r
+                        0.5*(sph_kernel::gravity_radial_derivative(
+                            r,state.smoothing_m[i],cfg.kernel)+
+                            sph_kernel::gravity_radial_derivative(
+                            r,state.smoothing_m[j],cfg.kernel))/r
                     } else {0.0}
                 }
             };
@@ -328,10 +340,10 @@ pub fn forces(
             gravity_acc[i]+=grav*particles[j].mass_kg;
             gravity_acc[j]-=grav*particles[i].mass_kg;
             if r==0.0 {continue;}
-            let grad_i=sph3::spline_radial_derivative_3d(
-                r,state.smoothing_m[i]);
-            let grad_j=sph3::spline_radial_derivative_3d(
-                r,state.smoothing_m[j]);
+            let grad_i=sph_kernel::radial_derivative(
+                r,state.smoothing_m[i],cfg.kernel);
+            let grad_j=sph_kernel::radial_derivative(
+                r,state.smoothing_m[j],cfg.kernel);
             let coeff=pressure_factor[i]*grad_i+
                 pressure_factor[j]*grad_j;
             // ∇_i W_ij=(x_i-x_j)/r * dW/dr; symmetric pair.
@@ -438,10 +450,10 @@ pub fn energy_j_cached(
                          1.0/(r2+state.smoothing_m[j].powi(2)).sqrt()),
                 GravityModel::MatchedCubicSpline=>{
                     let radius=r2.sqrt();
-                    -0.5*(sph_gravity_kernel::potential(
-                        radius,state.smoothing_m[i])+
-                        sph_gravity_kernel::potential(
-                        radius,state.smoothing_m[j]))
+                    -0.5*(sph_kernel::potential(
+                        radius,state.smoothing_m[i],cfg.kernel)+
+                        sph_kernel::potential(
+                        radius,state.smoothing_m[j],cfg.kernel))
                 },
             };
             e-=crate::physics::G_SI*particles[i].mass_kg*

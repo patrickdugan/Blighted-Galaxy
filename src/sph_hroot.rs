@@ -9,7 +9,7 @@
  //! All root and residual diagnostics are independent of the fixed-iteration
  //! underrelaxed method preserved in sph_adaptive.rs.
 use crate::sph3::{Fluid3,V3};
-use std::f64::consts::PI;
+use crate::sph_kernel::{self,DensityKernel};
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum RootLocation { Interior, LowerBound, UpperBound }
@@ -27,30 +27,23 @@ pub struct RootSolve {
     pub residual:f64,
     pub location:RootLocation,
 }
-fn density_and_dh(i:usize,p:&[Fluid3],indices:&[usize],h:f64)->(f64,f64) {
+fn density_and_dh(
+    i:usize,p:&[Fluid3],indices:&[usize],h:f64,kernel:DensityKernel
+)->(f64,f64) {
     let mut density=0.0;
     let mut derivative=0.0;
     for &j in indices {
         let distance=(p[i].pos_m-p[j].pos_m).len();
-        let q=distance/h;
-        if q>=2.0 {continue;}
-        let (kernel,dkdq)=if q<1.0 {
-            (1.0-1.5*q*q+0.75*q.powi(3),
-             -3.0*q+2.25*q*q)
-        } else {
-            (0.25*(2.0-q).powi(3),
-             -0.75*(2.0-q).powi(2))
-        };
-        let norm=1.0/(PI*h.powi(3));
-        let m=p[j].mass_kg;
-        density+=m*norm*kernel;
-        derivative+=-m*norm/h*(3.0*kernel+q*dkdq);
+        let (w,dwdh)=sph_kernel::kernel_and_dh(distance,h,kernel);
+        density+=p[j].mass_kg*w;
+        derivative+=p[j].mass_kg*dwdh;
     }
     (density,derivative)
 }
-fn evaluate(i:usize,p:&[Fluid3],candidates:&[usize],eta:f64,h:f64)
+fn evaluate(i:usize,p:&[Fluid3],candidates:&[usize],eta:f64,h:f64,
+    kernel:DensityKernel)
     ->(f64,f64,f64,f64) {
-    let (rho,drho)=density_and_dh(i,p,candidates,h);
+    let (rho,drho)=density_and_dh(i,p,candidates,h,kernel);
     assert!(rho.is_finite()&&rho>0.0);
     let normalization=(eta.powi(3)*p[i].mass_kg).max(1e-50);
     let f=h.powi(3)*rho/normalization-1.0;
@@ -58,8 +51,9 @@ fn evaluate(i:usize,p:&[Fluid3],candidates:&[usize],eta:f64,h:f64)
     (f,fp,rho,drho)
 }
 fn finish(i:usize,p:&[Fluid3],candidates:&[usize],
-    eta:f64,h:f64,n:usize,location:RootLocation)->RootSolve {
-    let (f,_,rho,drho)=evaluate(i,p,candidates,eta,h);
+    eta:f64,h:f64,n:usize,location:RootLocation,
+    kernel:DensityKernel)->RootSolve {
+    let (f,_,rho,drho)=evaluate(i,p,candidates,eta,h,kernel);
     let omega=if location==RootLocation::Interior {
         (1.0+h*drho/(3.0*rho)).max(0.02)
     } else {1.0};
@@ -77,27 +71,36 @@ pub fn solve_particle(
     eta:f64,h_min:f64,h_max:f64,h_initial:f64,
     relative_tolerance:f64,max_iter:usize,
 )->RootSolve {
+    solve_particle_with_kernel(i,p,candidates,eta,h_min,h_max,h_initial,
+        relative_tolerance,max_iter,DensityKernel::CubicM4)
+}
+/// Independent kernel selection while retaining the M4 entry point.
+pub fn solve_particle_with_kernel(
+    i:usize,p:&[Fluid3],candidates:&[usize],
+    eta:f64,h_min:f64,h_max:f64,h_initial:f64,
+    relative_tolerance:f64,max_iter:usize,kernel:DensityKernel,
+)->RootSolve {
     assert!(i<p.len()&&p[i].mass_kg>0.0&&
         p[i].pos_m.finite()&&h_min>0.0&&h_max>h_min&&
         eta.is_finite()&&eta>0.5&&
         relative_tolerance.is_finite()&&relative_tolerance>0.0&&
         relative_tolerance<=1e-3&&max_iter>0);
-    let (flo,_,_,_)=evaluate(i,p,candidates,eta,h_min);
+    let (flo,_,_,_)=evaluate(i,p,candidates,eta,h_min,kernel);
     if flo>=0.0 {
-        return finish(i,p,candidates,eta,h_min,0,RootLocation::LowerBound);
+        return finish(i,p,candidates,eta,h_min,0,RootLocation::LowerBound,kernel);
     }
-    let (fhi,_,_,_)=evaluate(i,p,candidates,eta,h_max);
+    let (fhi,_,_,_)=evaluate(i,p,candidates,eta,h_max,kernel);
     if fhi<=0.0 {
-        return finish(i,p,candidates,eta,h_max,0,RootLocation::UpperBound);
+        return finish(i,p,candidates,eta,h_max,0,RootLocation::UpperBound,kernel);
     }
     let mut lo=h_min;let mut hi=h_max;
     let mut h=h_initial.clamp(lo,hi);
     let mut iterations=0;
     for step in 0..max_iter {
-        let (f,fp,_,_)=evaluate(i,p,candidates,eta,h);
+        let (f,fp,_,_)=evaluate(i,p,candidates,eta,h,kernel);
         iterations=step+1;
         if f.abs()<=relative_tolerance {
-            return finish(i,p,candidates,eta,h,iterations,RootLocation::Interior);
+            return finish(i,p,candidates,eta,h,iterations,RootLocation::Interior,kernel);
         }
         if f>0.0 {hi=h;} else {lo=h;}
         let newton=if fp.is_finite()&&fp>0.0 {h-f/fp}
@@ -110,14 +113,20 @@ pub fn solve_particle(
             newton<hi-0.01*(hi-lo) {newton}
             else {0.5*(lo+hi)};
     }
-    finish(i,p,candidates,eta,h,iterations,RootLocation::Interior)
+    finish(i,p,candidates,eta,h,iterations,RootLocation::Interior,kernel)
 }
 
 /// Residual of the h-rho constraint at a preexisting smoothing length.
 pub fn closure_residual(
     i:usize,p:&[Fluid3],candidates:&[usize],eta:f64,h:f64
 )->f64 {
-    evaluate(i,p,candidates,eta,h).0.abs()
+    closure_residual_with_kernel(i,p,candidates,eta,h,DensityKernel::CubicM4)
+}
+pub fn closure_residual_with_kernel(
+    i:usize,p:&[Fluid3],candidates:&[usize],eta:f64,h:f64,
+    kernel:DensityKernel,
+)->f64 {
+    evaluate(i,p,candidates,eta,h,kernel).0.abs()
 }
 
 #[derive(Clone,Copy,Debug)]

@@ -436,3 +436,9 @@ pub mod sph_hroot;
 
 // BG-PHY-15: frozen 1D-hydrostatic pressure/gravity vector error audit.
 pub mod sph_force_audit;
+
+// BG-PHY-16: Wendland C4 density and matched Poisson gravity kernels.
+pub mod sph_kernel;
+
+// BG-PHY-16: deterministic antipodal angular-glass seed optimizer.
+pub mod sph_glass;
