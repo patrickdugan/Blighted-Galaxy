@@ -446,3 +446,6 @@ pub mod sph_glass;
 // BG-PHY-17: realized-neighbour eta calibration and discrete E0/E1 consistency.
 pub mod sph_neighbor_calibration;
 pub mod sph_consistency;
+
+// BG-PHY-18: diagnostic-only linear-consistent gradient and pressure-field audit.
+pub mod sph_gradient_audit;
