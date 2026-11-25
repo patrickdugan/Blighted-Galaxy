@@ -9,7 +9,7 @@
 //! truncation error and fallback/cap non-smoothness.
 //!
 //! The resulting -dU/dx is a finite-difference Hamiltonian reference.
-//! It is expensive O(N coordinate probes × whole density solve), so N<=32.
+//! It is expensive O(N coordinate probes × whole density solve), so N<=64.
 //! It is a research oracle, not a scalable analytic CRKSPH algorithm.
 //! The existing game/stellar integrators and gravity remain untouched.
 use crate::sph3::{self,Fluid3,Massive3,Sph3Config,V3};
@@ -48,7 +48,8 @@ pub fn internal_energy_j(
     p:&[Fluid3],physics:Sph3Config,
     cfg:AdaptiveConfig,reference_radius_m:f64,mode:DensityChoice,
 )->f64{
-    assert!(p.len()>=16&&p.len()<=32);
+    // N64 provides the uncapped-h cross-check for the analytic adjoint.
+    assert!(p.len()>=16&&p.len()<=64);
     let mut state=AdaptiveState::new(p,reference_radius_m,
         cfg.with_newton_density());
     sph_adaptive::update_adaptive_densities(p,&mut state,
