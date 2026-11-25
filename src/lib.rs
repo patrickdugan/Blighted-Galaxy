@@ -465,3 +465,6 @@ pub mod sph_rk_variational;
 
 // BG-PHY-22: analytic cold-barotropic surface-density variation and Hamiltonian pilot.
 pub mod sph_surface_variation;
+
+// BG-PHY-23: opt-in complete cold EOS plus Poisson-matched gravity Hamiltonian.
+pub mod sph_surface_gravity;

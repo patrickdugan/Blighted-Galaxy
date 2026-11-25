@@ -318,6 +318,19 @@ cargo run --release --bin phy22_bench -- --n 16 --seed 17 --layout shell --eta 1
 
 See the [complete analytic derivation](workpapers/physics/ANALYTIC_SURFACE_VARIATION.md) and [BG-PHY-22 numerical workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy22.yml). The reproducing-kernel/thermodynamic research contract remains tracked in [Issue #22](https://github.com/patrickdugan/Blighted-Galaxy/issues/22).
 
+## BG-PHY-23: Gravity-coupled cold-EOS surface Hamiltonian
+
+The opt-in stellar research solver combines the validated BG-PHY-22 analytic pressure force with the original matched-Poisson M4/Wendland C4 self-gravity and its variable-h zeta/Omega terms. Both components derive from a single cold-electron internal plus gravitational potential energy. An independent full-coordinate finite-difference oracle tests the **combined** force, and the unmodified original-density path is a direct control.
+
+A separate white-dwarf pilot compares matched M4/original and Wendland C4/surface-MLS at N128 and N256. Each uses 3.00s constant damping followed by at least 7.88s undamped Hamiltonian evolution and reports the established hydrostatic radius, mass-CDF, energy, momentum, and angular-momentum acceptance checks without changing the gameplay implementation.
+
+~~~sh
+cargo run --release --bin phy23_bench -- --n 24 --steps 4 --csv bg-phy23-n24.csv
+cargo run --release --bin phy23_hold -- --n 256 --kernel c4 --density blend --eta 1.7 --relax-steps 300 --hold-steps 788 --dt 0.01 --csv bg-phy23-hold.csv --trace-csv bg-phy23-hold-trace.csv
+~~~
+
+See the [derivation and physical acceptance protocol](workpapers/physics/GRAVITY_COUPLED_HAMILTONIAN.md), [force-gradient numerical matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy23.yml) and [stellar hold workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy23-hold.yml). This is part of [Issue #25](https://github.com/patrickdugan/Blighted-Galaxy/issues/25); [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) remains the independent physical acceptance gate.
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.

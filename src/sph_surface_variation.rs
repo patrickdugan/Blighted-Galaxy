@@ -138,7 +138,9 @@ pub fn total_energy_gradient(
     reference_radius_m:f64,mode:DensityChoice,
 )->AnalyticEnergyGradient {
     let n=p.len();
-    assert!((16..=128).contains(&n)&&cfg.valid()&&
+    // BG-PHY-23 extends the validated analytic adjoint to the N256
+    // research-only stellar pilot. Gameplay paths are unchanged.
+    assert!((16..=256).contains(&n)&&cfg.valid()&&
         physics.valid()&&reference_radius_m>0.0);
     let exact_cfg=cfg.with_newton_density();
     let mut state=AdaptiveState::new(p,reference_radius_m,exact_cfg);

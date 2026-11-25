@@ -46,6 +46,18 @@ jobs:
       - run: cargo run --release --bin phy21_bench -- --n 32 --seed 17 --layout shell --eta 1.7 --steps 4 --dt 0.001 --csv bg-phy21-smoke.csv
       - run: cargo run --release --bin phy21_variational_bench -- --n 16 --seed 17 --layout shell --eta 1.7 --steps 1 --dt 0.002 --fd-fraction 0.0001 --csv bg-phy21b-smoke.csv
       - run: cargo run --release --bin phy22_bench -- --n 16 --seed 17 --layout shell --eta 1.7 --steps 1 --dt 0.002 --fd-fraction 0.0001 --csv bg-phy22-smoke.csv
+      - run: cargo run --release --bin phy23_bench -- --n 16 --seed 17 --layout shell --eta 1.7 --steps 2 --dt 0.002 --fd-fraction 0.0001 --csv bg-phy23-smoke.csv
+      - run: cargo run --release --bin phy23_hold -- --n 32 --seed 17 --layout shell --kernel c4 --density blend --eta 1.7 --relax-steps 3 --hold-steps 6 --dt 0.01 --csv bg-phy23-hold-smoke.csv --trace-csv bg-phy23-hold-smoke-trace.csv
+      - name: Upload BG-PHY-23 combined Hamiltonian smokes
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy23-smokes
+          path: |
+            bg-phy23-smoke.csv
+            bg-phy23-hold-smoke.csv
+            bg-phy23-hold-smoke-trace.csv
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload BG-PHY-22 analytic total-variation smoke
         uses: actions/upload-artifact@v4
         with:
@@ -237,6 +249,8 @@ jobs:
             target/release/phy21_bench.exe
             target/release/phy21_variational_bench.exe
             target/release/phy22_bench.exe
+            target/release/phy23_bench.exe
+            target/release/phy23_hold.exe
             target/release/kerr_moving_lab.exe
             target/release/white_dwarf_bench.exe
           if-no-files-found: error
