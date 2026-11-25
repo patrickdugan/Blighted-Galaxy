@@ -1,0 +1,55 @@
+name: BG-PHY-17 calibrated high-neighbor consistency sweep
+on:
+  pull_request:
+    paths:
+      - "src/sph_neighbor_calibration.rs"
+      - "src/sph_consistency.rs"
+      - "src/bin/phy17_bench.rs"
+      - "src/sph_glass.rs"
+      - "src/sph_kernel.rs"
+      - "src/sph_adaptive.rs"
+      - ".github/workflows/bg-phy17.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/sph_neighbor_calibration.rs"
+      - "src/sph_consistency.rs"
+      - "src/bin/phy17_bench.rs"
+      - ".github/workflows/bg-phy17.yml"
+  workflow_dispatch:
+jobs:
+  frozen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - n: 1024
+            seeds: "0,17"
+            suffix: "n1024"
+          - n: 2048
+            seeds: "0"
+            suffix: "n2048"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Exact-root neighbour-target calibration and force audit
+        run: |
+          cargo run --release --bin phy17_bench -- \
+            --n ${{ matrix.n }} --seeds ${{ matrix.seeds }} \
+            --targets 100,150,200 --calibration-steps 12 \
+            --eta-min 0.75 --eta-max 2.85 --glass-sweeps 20 --shells 8 \
+            --csv bg-phy17-${{ matrix.suffix }}.csv \
+            --shell-csv bg-phy17-${{ matrix.suffix }}-shells.csv
+      - name: Upload calibrated force consistency CSVs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy17-${{ matrix.suffix }}
+          path: |
+            bg-phy17-${{ matrix.suffix }}.csv
+            bg-phy17-${{ matrix.suffix }}-shells.csv
+          if-no-files-found: warn
+          retention-days: 30

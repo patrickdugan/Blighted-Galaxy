@@ -246,6 +246,20 @@ cargo run --release --bin phy16_bench -- --n 256 --seeds 0 --relax-steps 300 --c
 
 The [BG-PHY-16 workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy16.yml) covers N256, N512, N1024 frozen comparisons and a matched N256 3-second dynamics pilot. See the [technical workpaper](workpapers/physics/WENDLAND_GLASS_SEEDS.md). [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) remains open until the independent stellar radius and undamped stability gates pass.
 
+## BG-PHY-17: Realized-neighbor Wendland C4 consistency sweep
+
+The follow-up to BG-PHY-16 calibrates the smoothing parameter `eta` against **measured 100, 150 and 200 neighbors** in the actual three-dimensional white-dwarf particle layout. The code uses exact h/rho roots while tuning eta, then compares exact-root and original underrelaxed pressure/gravity accelerations on the same frozen particle positions. Each kernel's discrete zeroth-order (`E0`) gradient error and first-moment (`E1`) trace are measured to separate angular particle disorder from surface pressure-gradient bias.
+
+The matrix pairs N1024 seeds 0/17 and N2048 seed 0 with the original antipodal shell initializer and fixed-geometry angular glass. Both matched M4 and Wendland C4 are evaluated at realized neighbor counts, with a common cold-electron EOS, hydrostatic reference and Poisson-consistent gravity.
+
+~~~sh
+cargo run --release --bin phy17_bench -- --n 1024 --seeds 0,17 --targets 100,150,200 --calibration-steps 12 --glass-sweeps 20 --csv bg-phy17-n1024.csv --shell-csv bg-phy17-n1024-shells.csv
+~~~
+
+The calibrated N1024/N2048 frozen-force matrix passed and found that Wendland C4 glass improves markedly at 150–200 realized neighbors, while outer pressure-gradient support becomes weaker as the smoothing volume grows. A [separate full-duration BG-PHY-17 workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy17-hold.yml) tests 150- and 200-neighbor C4 against the M4 control using 3s damping followed by a 7.88s undamped hold.
+
+See the [high-neighbor workpaper](workpapers/physics/HIGH_NEIGHBOR_C4_SWEEP.md), [frozen-sweep matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy17.yml), and [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) for unchanged physical acceptance criteria.
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.

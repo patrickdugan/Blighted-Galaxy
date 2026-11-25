@@ -442,3 +442,7 @@ pub mod sph_kernel;
 
 // BG-PHY-16: deterministic antipodal angular-glass seed optimizer.
 pub mod sph_glass;
+
+// BG-PHY-17: realized-neighbour eta calibration and discrete E0/E1 consistency.
+pub mod sph_neighbor_calibration;
+pub mod sph_consistency;
