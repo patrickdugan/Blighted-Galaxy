@@ -331,6 +331,18 @@ cargo run --release --bin phy23_hold -- --n 256 --kernel c4 --density blend --et
 
 See the [derivation and physical acceptance protocol](workpapers/physics/GRAVITY_COUPLED_HAMILTONIAN.md), [force-gradient numerical matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy23.yml) and [stellar hold workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy23-hold.yml). This is part of [Issue #25](https://github.com/patrickdugan/Blighted-Galaxy/issues/25); [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) remains the independent physical acceptance gate.
 
+## BG-PHY-24: Why the white-dwarf equilibrium radius contracts
+
+A radial homology benchmark now probes the **complete cold-electron plus Poisson-matched gravity Hamiltonian** at fixed star positions and after the original 3-second damped preparation. It rescales the particle cloud through `0.75 ≤ s ≤ 1.30`, computes independent cold internal and gravitational energies, verifies `dV/ds=-Σ(x_i-C)·F_i` against scalar finite differences, and searches for a bracketed positive-curvature energy minimum. A separate eight-shell virial decomposition measures outer pressure support, inward gravity, tangential force noise, kernel partition and h caps against the independent 1D hydrostatic reference.
+
+Both the M4 and Wendland C4 kernels are compared with original and surface-gated MLS density at matched positions, with separate shell-orientation seeds. The post-damping experiment also crosses density choices at identical relaxed coordinates so geometry changes can be distinguished from direct density effects.
+
+~~~sh
+cargo run --release --bin phy24_bench -- --n 256 --seeds 0,17 --layout both --stage initial --kernel both --density both --csv bg-phy24-summary.csv --profile-csv bg-phy24-homology.csv --shell-csv bg-phy24-shells.csv
+~~~
+
+See the [radial homology derivation](workpapers/physics/RADIAL_HOMOLOGY_VIRIAL.md), [BG-PHY-24 experimental workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy24.yml) and [Issue #27](https://github.com/patrickdugan/Blighted-Galaxy/issues/27). The gameplay solver and the [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) independent stellar radius/stability criteria remain unchanged.
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.

@@ -1,0 +1,73 @@
+name: BG-PHY-24 radial homology and outer-shell virial
+on:
+  pull_request:
+    paths:
+      - "src/sph_homology.rs"
+      - "src/bin/phy24_bench.rs"
+      - "src/sph_surface_gravity.rs"
+      - ".github/workflows/bg-phy24.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/sph_homology.rs"
+      - "src/bin/phy24_bench.rs"
+      - ".github/workflows/bg-phy24.yml"
+  workflow_dispatch:
+jobs:
+  homology:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - n: 256
+            seed: "0"
+            layout: "both"
+            stage: "initial"
+            tag: "n256-seed0-initial"
+          - n: 256
+            seed: "17"
+            layout: "both"
+            stage: "initial"
+            tag: "n256-seed17-initial"
+          - n: 256
+            seed: "0"
+            layout: "glass"
+            stage: "post"
+            tag: "n256-seed0-post"
+          - n: 256
+            seed: "17"
+            layout: "glass"
+            stage: "post"
+            tag: "n256-seed17-post"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Verify virial identity and total scalar homology derivative
+        run: cargo test --lib sph_homology -- --nocapture
+      - name: Independent scalar homology and eight-shell virial survey
+        run: |
+          cargo run --release --bin phy24_bench -- \
+            --n ${{ matrix.n }} --seeds ${{ matrix.seed }} \
+            --layout ${{ matrix.layout }} --stage ${{ matrix.stage }} \
+            --kernel both --density both \
+            --s-lower 0.75 --s-upper 1.30 --s-step 0.05 --fd-eps 0.0001 \
+            --glass-sweeps 20 --damp-steps 300 --dt 0.01 --damp-tau 0.7 \
+            --csv bg-phy24-${{ matrix.tag }}-summary.csv \
+            --profile-csv bg-phy24-${{ matrix.tag }}-profile.csv \
+            --shell-csv bg-phy24-${{ matrix.tag }}-shells.csv \
+            --cross-csv bg-phy24-${{ matrix.tag }}-cross.csv
+      - name: Upload radial energy and shell force comparisons
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy24-${{ matrix.tag }}
+          path: |
+            bg-phy24-${{ matrix.tag }}-summary.csv
+            bg-phy24-${{ matrix.tag }}-profile.csv
+            bg-phy24-${{ matrix.tag }}-shells.csv
+            bg-phy24-${{ matrix.tag }}-cross.csv
+          if-no-files-found: warn
+          retention-days: 30
