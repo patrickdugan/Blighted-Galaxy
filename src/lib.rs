@@ -452,3 +452,6 @@ pub mod sph_gradient_audit;
 
 // BG-PHY-19: frozen quadratic pressure and barotropic enthalpy gradient fits.
 pub mod sph_quadratic_audit;
+
+// BG-PHY-20: frozen density reconstruction and free-surface bias audits.
+pub mod sph_density_audit;
