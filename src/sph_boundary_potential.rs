@@ -1,5 +1,5 @@
-//! BG-PHY-25: independently re-solved scalar cold-EOS plus matched-gravity
-//! potential for candidate boundary enthalpy density fields.
+//! BG-PHY-25 / BG-PHY-26: independently re-solved scalar cold-EOS plus
+//! matched-gravity potential for candidate boundary enthalpy density fields.
 //!
 //! Scalar energy is a diagnostic only. The candidate pressure force is
 //! measured via central differences of the SAME physical cold-EOS energy,
@@ -9,8 +9,11 @@
 use crate::physics::G_SI;
 use crate::sph3::{self,Fluid3,Sph3Config,V3};
 use crate::sph_adaptive::{self,AdaptiveConfig,AdaptiveState};
-use crate::sph_kernel;
 use crate::sph_free_boundary::{self,EnthalpyCandidate,BoundaryGeometry};
+use crate::sph_three_moment::{
+    self,ThreeMomentCandidate,ThreeMomentGeometry,ThreeMomentStatus,
+    GEOMETRY_GATE_MIN_IDENTIFIED_FRACTION,GEOMETRY_GATE_MAX_DEPTH_ABS_ERROR_H,
+};
 use crate::sph_density_audit::{self,DensityEstimator};
 use crate::sph_surface_gravity;
 use crate::sph_quadratic_audit;
@@ -23,6 +26,9 @@ pub enum Candidate {
     EnthalpyAffineBlend,
     VacuumGhostBlend,
     MomentRatioGhostBlend,
+    ThreeMomentGhostBlend,
+    ThreeMomentDebiasedGhostBlend,
+    ThreeMomentDebiasedAffineBlend,
 }
 impl Candidate {
     pub fn label(self)->&'static str{
@@ -32,11 +38,21 @@ impl Candidate {
             Self::EnthalpyAffineBlend=>"enthalpy_affine_blend",
             Self::VacuumGhostBlend=>"vacuum_ghost_blend",
             Self::MomentRatioGhostBlend=>"moment_ratio_ghost_blend",
+            Self::ThreeMomentGhostBlend=>"three_moment_ghost_blend",
+            Self::ThreeMomentDebiasedGhostBlend=>"three_moment_debiased_ghost_blend",
+            Self::ThreeMomentDebiasedAffineBlend=>"three_moment_debiased_affine_blend",
         }
     }
+    /// Original five BG-PHY-25 candidates, preserved unchanged for phy25_bench.
     pub fn all()->[Self;5]{
         [Self::Original,Self::SurfaceMls,Self::EnthalpyAffineBlend,
             Self::VacuumGhostBlend,Self::MomentRatioGhostBlend]
+    }
+    /// BG-PHY-26 comparison set: controls + prior moment-ratio ghost + three-moment candidates.
+    pub fn phy26_all()->[Self;6]{
+        [Self::Original,Self::SurfaceMls,Self::MomentRatioGhostBlend,
+            Self::ThreeMomentDebiasedAffineBlend,Self::ThreeMomentGhostBlend,
+            Self::ThreeMomentDebiasedGhostBlend]
     }
 }
 fn centroid(p:&[Fluid3])->V3{
@@ -54,10 +70,12 @@ fn gradient_mode(mode:Candidate)->Option<crate::sph_rk_compatible::DensityChoice
 pub struct ScalarState{
     pub rho:Vec<f64>,
     pub geometry:Vec<BoundaryGeometry>,
+    pub three_moment_geometry:Vec<ThreeMomentGeometry>,
     pub scalar_internal_j:f64,
     pub matched_gravity_j:f64,
     pub total_j:f64,
     pub fallback_fraction:f64,
+    pub unidentified_fraction:f64,
     pub minimum_omega:f64,
     pub h_cap_fraction:f64,
     pub density_global_log_rms:f64,
@@ -75,6 +93,17 @@ pub struct ScalarState{
     pub last_shell_true_reference_depth_h:f64,
     pub last_shell_partition_depth_abs_error_h:f64,
     pub last_shell_moment_depth_abs_error_h:f64,
+    /// BG-PHY-26 three-moment last-shell diagnostics and Stage B geometry gate.
+    pub last_shell_three_moment_identified_fraction:f64,
+    pub last_shell_three_moment_no_root_fraction:f64,
+    pub last_shell_three_moment_ill_conditioned_fraction:f64,
+    pub last_shell_three_moment_ambiguous_fraction:f64,
+    pub last_shell_three_moment_depth_h:Option<f64>,
+    pub last_shell_three_moment_depth_abs_error_h:Option<f64>,
+    pub last_shell_three_moment_mean_c:Option<f64>,
+    pub last_shell_three_moment_mean_beta:Option<f64>,
+    pub last_shell_three_moment_mean_sensitivity:Option<f64>,
+    pub last_shell_geometry_gate_pass:bool,
 }
 /// A full state evaluated from scratch for the supplied geometry.
 /// The reference density and gravity are used *only for scoring*.
@@ -86,17 +115,14 @@ pub fn state(
     let cfg=cfg.with_newton_density();
     let mut adaptive=AdaptiveState::new(p,star.radius_m,cfg);
     sph_adaptive::update_adaptive_densities(p,&mut adaptive,cfg);
-    // The original and BG-PHY-20 scalars do not require ghost geometry
-    // during a scalar-energy perturbation. Reserve the expensive boundary
-    // moment calculation for new candidates and diagnostic snapshots.
-    let (rho,fallback,geometry)=match mode{
+    let (rho,fallback,unidentified,geometry,three_moment_geometry)=match mode{
         Candidate::Original=>(
-            adaptive.densities_kg_m3.clone(),0.0,Vec::new()),
+            adaptive.densities_kg_m3.clone(),0.0,0.0,Vec::new(),Vec::new()),
         Candidate::SurfaceMls=>{
             let batch=sph_density_audit::estimate(p,&adaptive,cfg.kernel);
             let field=batch.fields.iter().find(|x|
                 x.method==DensityEstimator::SurfaceBlendedMls).unwrap();
-            (field.rho.clone(),field.fallback_fraction,Vec::new())
+            (field.rho.clone(),field.fallback_fraction,0.0,Vec::new(),Vec::new())
         }
         Candidate::EnthalpyAffineBlend|
         Candidate::VacuumGhostBlend|
@@ -112,7 +138,26 @@ pub fn state(
             };
             let field=batch.fields.iter().find(|x|
                 x.mode==wanted).unwrap();
-            (field.rho.clone(),field.fallback_fraction,batch.geometry)
+            (field.rho.clone(),field.fallback_fraction,0.0,batch.geometry,Vec::new())
+        }
+        Candidate::ThreeMomentGhostBlend|
+        Candidate::ThreeMomentDebiasedGhostBlend|
+        Candidate::ThreeMomentDebiasedAffineBlend=>{
+            let batch=sph_three_moment::reconstruct_three_moment(
+                p,&adaptive,cfg.kernel,star.eos);
+            let wanted=match mode{
+                Candidate::ThreeMomentGhostBlend=>
+                    ThreeMomentCandidate::ThreeMomentGhostBlend,
+                Candidate::ThreeMomentDebiasedGhostBlend=>
+                    ThreeMomentCandidate::ThreeMomentDebiasedGhostBlend,
+                Candidate::ThreeMomentDebiasedAffineBlend=>
+                    ThreeMomentCandidate::ThreeMomentDebiasedAffineBlend,
+                _=>unreachable!(),
+            };
+            let field=batch.fields.iter().find(|x|
+                x.mode==wanted).unwrap();
+            (field.rho.clone(),field.fit_fallback_fraction,
+                field.unidentified_fraction,Vec::new(),batch.geometry)
         }
     };
     let internal=p.iter().zip(&rho).map(|(x,r)|
@@ -125,9 +170,10 @@ pub fn state(
         (h-cfg.min_h_m).abs()<=cfg.min_h_m*1e-8||
         (h-cfg.max_h_m).abs()<=cfg.max_h_m*1e-8).count();
     let mut result=ScalarState{
-        rho,geometry,scalar_internal_j:internal,
+        rho,geometry,three_moment_geometry,scalar_internal_j:internal,
         matched_gravity_j:gravity,total_j:internal+gravity,
         fallback_fraction:fallback,
+        unidentified_fraction:unidentified,
         minimum_omega:adaptive.omega.iter().copied().fold(
             f64::INFINITY,f64::min),
         h_cap_fraction:cap as f64/n as f64,
@@ -142,10 +188,24 @@ pub fn state(
         last_shell_true_reference_depth_h:0.0,
         last_shell_partition_depth_abs_error_h:0.0,
         last_shell_moment_depth_abs_error_h:0.0,
+        last_shell_three_moment_identified_fraction:0.0,
+        last_shell_three_moment_no_root_fraction:0.0,
+        last_shell_three_moment_ill_conditioned_fraction:0.0,
+        last_shell_three_moment_ambiguous_fraction:0.0,
+        last_shell_three_moment_depth_h:None,
+        last_shell_three_moment_depth_abs_error_h:None,
+        last_shell_three_moment_mean_c:None,
+        last_shell_three_moment_mean_beta:None,
+        last_shell_three_moment_mean_sensitivity:None,
+        last_shell_geometry_gate_pass:false,
     };
     if with_diagnostics {
         if result.geometry.is_empty() {
             result.geometry=sph_free_boundary::reconstruct(
+                p,&adaptive,cfg.kernel,star.eos).geometry;
+        }
+        if result.three_moment_geometry.is_empty() {
+            result.three_moment_geometry=sph_three_moment::reconstruct_three_moment(
                 p,&adaptive,cfg.kernel,star.eos).geometry;
         }
         let c=centroid(p);
@@ -190,6 +250,9 @@ pub fn state(
             (0.0,0.0,0.0,0.0);
         let (mut reference_depth,mut s_depth_error,mut ratio_depth_error)=
             (0.0,0.0,0.0);
+        let (mut tm_id,mut tm_no_root,mut tm_ill,mut tm_amb)=(0usize,0usize,0usize,0usize);
+        let (mut tm_d_sum,mut tm_err_sum,mut tm_c_sum,mut tm_b_sum,mut tm_sens_sum)=
+            (0.0,0.0,0.0,0.0,0.0);
         for &i in &rank[n-last..] {
             let radial=(p[i].pos_m-c).normalized();
             let g=result.geometry[i];
@@ -206,6 +269,23 @@ pub fn state(
             s_depth_error+=(g.plane_distance_h-reference).abs();
             ratio_depth_error+=
                 (g.ratio_plane_distance_h-reference).abs();
+
+            let tg=result.three_moment_geometry[i];
+            match tg.status {
+                ThreeMomentStatus::Identified=>{
+                    tm_id+=1;
+                    let d=tg.inferred_depth_h.unwrap();
+                    tm_d_sum+=d;
+                    tm_err_sum+=(d-reference).abs();
+                    tm_c_sum+=tg.inferred_c.unwrap();
+                    tm_b_sum+=tg.inferred_beta.unwrap();
+                    tm_sens_sum+=tg.depth_sensitivity.unwrap();
+                }
+                ThreeMomentStatus::NoPhysicalRoot=>{tm_no_root+=1;}
+                ThreeMomentStatus::IllConditionedInterior=>{tm_ill+=1;}
+                ThreeMomentStatus::AmbiguousMultipleRoots=>{tm_amb+=1;}
+                ThreeMomentStatus::InvalidMoments=>{}
+            }
         }
         result.last_shell_partition=part/last as f64;
         result.last_shell_normal_alignment=align/last as f64;
@@ -220,6 +300,27 @@ pub fn state(
             s_depth_error/last as f64;
         result.last_shell_moment_depth_abs_error_h=
             ratio_depth_error/last as f64;
+        result.last_shell_three_moment_identified_fraction=
+            tm_id as f64/last as f64;
+        result.last_shell_three_moment_no_root_fraction=
+            tm_no_root as f64/last as f64;
+        result.last_shell_three_moment_ill_conditioned_fraction=
+            tm_ill as f64/last as f64;
+        result.last_shell_three_moment_ambiguous_fraction=
+            tm_amb as f64/last as f64;
+        if tm_id>0 {
+            let inv=1.0/tm_id as f64;
+            let mean_err=tm_err_sum*inv;
+            result.last_shell_three_moment_depth_h=Some(tm_d_sum*inv);
+            result.last_shell_three_moment_depth_abs_error_h=Some(mean_err);
+            result.last_shell_three_moment_mean_c=Some(tm_c_sum*inv);
+            result.last_shell_three_moment_mean_beta=Some(tm_b_sum*inv);
+            result.last_shell_three_moment_mean_sensitivity=Some(tm_sens_sum*inv);
+            result.last_shell_geometry_gate_pass=
+                result.last_shell_three_moment_identified_fraction>=
+                    GEOMETRY_GATE_MIN_IDENTIFIED_FRACTION &&
+                mean_err<=GEOMETRY_GATE_MAX_DEPTH_ABS_ERROR_H;
+        }
     }
     result
 }
@@ -357,8 +458,6 @@ pub fn shell_radial_forces(
         let (um,gm)=energy(&minus,star,physics,cfg,mode);
         let dp=-(up-um)/(2.0*scale);
         let dg=-(gp-gm)/(2.0*scale);
-        // A second probe displaces only this shell proportionally
-        // to its physical radius, measuring the exact virial.
         let mut plus_v=p.to_vec();
         let mut minus_v=p.to_vec();
         for &i in q {
@@ -440,6 +539,26 @@ mod tests{
             let error=validated_control_error(&p,&star,phys,cfg,mode,1e-4)
                 .unwrap();
             assert!(error<2e-4,"shell finite-difference mismatch: {error}");
+        }
+    }
+    #[test]
+    fn three_moment_scalar_potential_is_finite_and_tracks_geometry_gate(){
+        let star=profile_for_mass(0.65*SOLAR_MASS_KG,
+            DegenerateElectrons::new(2.0).unwrap(),10_000.0).unwrap();
+        let p=seed_cubic_shells_oriented(&star,
+            V3::new(1e8,0.0,0.0),V3::default(),64,0).0;
+        let mut cfg=AdaptiveConfig::from_star_radius(star.radius_m)
+            .with_wendland_c4().with_newton_density();
+        cfg.eta=1.7;
+        let phys=Sph3Config::cold_white_dwarf(2.0).unwrap();
+        for mode in [
+            Candidate::ThreeMomentGhostBlend,
+            Candidate::ThreeMomentDebiasedGhostBlend,
+            Candidate::ThreeMomentDebiasedAffineBlend,
+        ]{
+            let st=state(&p,&star,phys,cfg,mode,true);
+            assert!(st.total_j.is_finite());
+            assert!(st.last_shell_three_moment_identified_fraction>=0.0);
         }
     }
 }

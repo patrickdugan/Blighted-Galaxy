@@ -355,6 +355,30 @@ cargo run --release --bin phy25_bench -- --n 256 --seeds 0,17 --layout glass --s
 
 See the [boundary-enthalpy derivation and acceptance gate](workpapers/physics/FREE_BOUNDARY_ENTHALPY_GHOST.md), [N64/128/256 screening matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy25.yml) and [Issue #29](https://github.com/patrickdugan/Blighted-Galaxy/issues/29). The original [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) stellar physical acceptance conditions remain unchanged.
 
+## BG-PHY-26: Three-moment free-surface depth and volume-bias identification
+
+BG-PHY-25 showed that spatially varying SPH volume errors break the uniform-bias invariance of `|Q|/S` and place the inferred vacuum boundary near interior particles. BG-PHY-26 jointly solves the zeroth, first, and second normal kernel moments `(M0, M1, M2)` under a local linear normal volume-bias model `V_est(z) = c(1 + beta z) V_true(z)` using exact piecewise Gauss-Legendre 1D quadratures of `I0..I3(a)` and exact Leibniz derivatives for both Cubic M4 and Wendland C4. Safeguarded root bracketing enforces `c > 0`, nonnegative reconstructed volume `1 + beta z > 0` across the occupied half-space, uniqueness, and Jacobian slope conditioning `|dF/da|`, falling back strictly to the original scalar density whenever the three-moment plane is unidentifiable.
+
+On synthetic planar half-spaces, the three-moment inverse recovers known depths `a` across `0..2`, volume scales `c` across `0.5..1.5`, and normal slopes `beta` across `-0.4..0.4` to machine precision while reproducing the `|Q|/S` bias. On the 0.65-solar-mass white dwarf, it identifies 93.8% of N256 outermost-shell particles and increases inferred boundary depth by 1.8x-4.2x over `|Q|/S` (`0.222h` vs `0.120h` M4; `0.147h` vs `0.035h` C4), cutting last-shell static density log-RMS error in half relative to the BG-PHY-25 moment-ratio ghost. However, spherical cap curvature and steep degenerate radial density curvature keep the inferred planar depth ~59-62% below the continuum reference (`0.540h` M4, `0.385h` C4), failing the Stage-A geometry gate, and conservative Stage-B shell-energy perturbations show that an inter-shell-dependent `a_i` induces an inward variational ghost-spring coupling on the outermost shell. No candidate is promoted to Stage-C dynamics; the validated BG-PHY-23 Hamiltonian and playable solver remain unchanged.
+
+~~~sh
+cargo run --release --bin phy26_bench -- --n 256 --seeds 0,17 --layout glass --stage initial --kernel both --synthetic-csv bg-phy26-synthetic.csv --summary bg-phy26-summary.csv --shells-csv bg-phy26-shells.csv
+~~~
+
+See the [three-moment derivation, failure decomposition, and Stage-B tables](workpapers/physics/THREE_MOMENT_SURFACE_DEPTH.md), [BG-PHY-26 screening matrix](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy26.yml), [Issue #31](https://github.com/patrickdugan/Blighted-Galaxy/issues/31), and [Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8).
+
+## BG-PHY-27: Radially graded-mass white-dwarf equilibrium
+
+Instead of adding boundary ghost points, BG-PHY-27 tests **radially graded unequal-mass antipodal shell/angular-glass seeds** (`n_alpha(r) ~ rho(r)^(1-alpha)`, `alpha in [0, 1]`) under the unmodified conservative Price–Monaghan unequal-mass SPH pressure and Poisson-matched M4/Wendland C4 self-gravity Hamiltonian (`src/sph_graded_seed.rs`). Exact unequal-mass variational forces match full-coordinate energy finite differences to `< 5e-5` with `< 1e-13` bulk momentum drift.
+
+At `N=512` (`seed=0`), grading from `alpha=0.00` (equal mass) to `alpha=0.75` (`m_max/m_min = 995`) raises initial last-shell pressure support `P/g` from `0.765` to `0.842`, shrinks initial radius shortfall from `-5.06%` to `-0.54%`, reduces post-damping contraction from `-15.47%` to `-9.82%` (M4) and `-16.04%` to `-10.21%` (C4), cuts max mass-CDF RMS from `0.0292` to `0.0178`, and passes the 3-dynamical-time undamped hold excursion gate (`4.82% / 4.26% <= 5%` for M4, `dE/E = 1.25e-7`). Extreme mass contrast (`alpha=1.0`, `m_max/m_min ~ 4.7e4`) causes seed-dependent light outer-particle splash at `N=256`. Because post-damping radius bias remains `-9.82%` at `N=512`, **[Issue #8](https://github.com/patrickdugan/Blighted-Galaxy/issues/8) remains open** and playable game physics stays unchanged.
+
+~~~sh
+cargo run --release --bin phy27_bench -- --n 512 --seeds 0 --alphas 0.0,0.50,0.75 --kernel both --relax-steps 300 --hold-steps 788 --dt 0.01 --csv bg-phy27-n512.csv
+~~~
+
+See the [graded-mass equilibrium workpaper](workpapers/physics/GRADED_MASS_EQUILIBRIUM.md), [committed N256/N512 datasets](workpapers/physics/data/bg-phy27/), and [BG-PHY-27 workflow](https://github.com/patrickdugan/Blighted-Galaxy/actions/workflows/bg-phy27.yml).
+
 ## Simulation modules
 
 - Reproducible seeded nanoswarm scatter.
