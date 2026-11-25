@@ -49,6 +49,16 @@ jobs:
       - run: cargo run --release --bin phy23_bench -- --n 16 --seed 17 --layout shell --eta 1.7 --steps 2 --dt 0.002 --fd-fraction 0.0001 --csv bg-phy23-smoke.csv
       - run: cargo run --release --bin phy23_hold -- --n 32 --seed 17 --layout shell --kernel c4 --density blend --eta 1.7 --relax-steps 3 --hold-steps 6 --dt 0.01 --csv bg-phy23-hold-smoke.csv --trace-csv bg-phy23-hold-smoke-trace.csv
       - run: cargo run --release --bin phy24_bench -- --n 64 --seeds 0 --layout shell --stage initial --kernel m4 --density original --s-lower 0.8 --s-upper 1.2 --s-step 0.1 --fd-eps 0.0001 --csv bg-phy24-smoke-summary.csv --profile-csv bg-phy24-smoke-profile.csv --shell-csv bg-phy24-smoke-shells.csv
+      - run: cargo run --release --bin phy25_bench -- --n 32 --seeds 0 --layout shell --stage initial --kernel m4 --intervals 4 --lower 0.8 --upper 1.2 --eps 0.0001 --summary bg-phy25-smoke-summary.csv --shells-csv bg-phy25-smoke-shells.csv
+      - name: Upload BG-PHY-25 boundary enthalpy frozen-energy smoke
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy25-smoke
+          path: |
+            bg-phy25-smoke-summary.csv
+            bg-phy25-smoke-shells.csv
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload BG-PHY-24 radial homology smoke
         uses: actions/upload-artifact@v4
         with:
@@ -263,6 +273,7 @@ jobs:
             target/release/phy23_bench.exe
             target/release/phy23_hold.exe
             target/release/phy24_bench.exe
+            target/release/phy25_bench.exe
             target/release/kerr_moving_lab.exe
             target/release/white_dwarf_bench.exe
           if-no-files-found: error

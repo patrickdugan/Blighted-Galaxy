@@ -1,0 +1,70 @@
+name: BG-PHY-25 one-sided enthalpy free-surface screening
+on:
+  pull_request:
+    paths:
+      - "src/sph_free_boundary.rs"
+      - "src/sph_boundary_potential.rs"
+      - "src/bin/phy25_bench.rs"
+      - ".github/workflows/bg-phy25.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/sph_free_boundary.rs"
+      - "src/sph_boundary_potential.rs"
+      - "src/bin/phy25_bench.rs"
+      - ".github/workflows/bg-phy25.yml"
+  workflow_dispatch:
+jobs:
+  frozen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - n: 64
+            seed: "0"
+            layout: "glass"
+            stage: "initial"
+            tag: "n64-seed0"
+          - n: 128
+            seed: "17"
+            layout: "glass"
+            stage: "initial"
+            tag: "n128-seed17"
+          - n: 256
+            seed: "0"
+            layout: "glass"
+            stage: "initial"
+            tag: "n256-seed0"
+          - n: 256
+            seed: "17"
+            layout: "glass"
+            stage: "initial"
+            tag: "n256-seed17"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Synthetic planar support and one-sided enthalpy reproducibility
+        run: |
+          cargo test --lib sph_free_boundary -- --nocapture
+          cargo test --lib sph_boundary_potential -- --nocapture
+      - name: Original/MLS versus geometry-only free-surface enthalpy energy
+        run: |
+          cargo run --release --bin phy25_bench -- \
+            --n ${{ matrix.n }} --seeds ${{ matrix.seed }} \
+            --layout ${{ matrix.layout }} --stage ${{ matrix.stage }} \
+            --kernel both --intervals 8 --lower 0.75 --upper 1.30 \
+            --eps 0.0001 --summary bg-phy25-${{ matrix.tag }}-summary.csv \
+            --shells-csv bg-phy25-${{ matrix.tag }}-shells.csv
+      - name: Upload energy-minimum and last-shell radial-force diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bg-phy25-${{ matrix.tag }}
+          path: |
+            bg-phy25-${{ matrix.tag }}-summary.csv
+            bg-phy25-${{ matrix.tag }}-shells.csv
+          if-no-files-found: warn
+          retention-days: 30

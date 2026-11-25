@@ -471,3 +471,7 @@ pub mod sph_surface_gravity;
 
 // BG-PHY-24: radial homology energy minima and eight-shell virial diagnostics.
 pub mod sph_homology;
+
+// BG-PHY-25: boundary-normal enthalpy ghosts and independent cold-EOS scalar screening.
+pub mod sph_free_boundary;
+pub mod sph_boundary_potential;
